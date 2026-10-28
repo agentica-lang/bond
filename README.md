@@ -1,8 +1,8 @@
 # Bond
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
-Work in progress: this is the first version, with the router, filters, custom handlers and the helpers to answer. Query and form
-parsing, JSON bodies, cookies and static files come later (see
+Work in progress: this is the first version, with the router, filters, custom handlers and the helpers to answer.
+Query and form parsing, JSON bodies, cookies and static files come later (see
 [the design](https://github.com/agentica-lang/bond/issues/1)).
 
 Needs Agentica 0.14.0 or later.
@@ -83,8 +83,8 @@ a block for one that needs more.
   Agentica.
 - Routes are tried in the order they were added, so put `/todos/latest` before `/todos/:id`.
 - A trailing slash does not matter: `/todos/` is `/todos`.
-- A path with no route is a 404 with the body `not found` (see `Bond.not_found` below). A path with a route for other methods only is a 405 with
-  an `Allow` header that lists the methods.
+- A path with no route is a 404 with the body `not found` (see `Bond.not_found` below). A path with a route for
+  other methods only is a 405 with an `Allow` header that lists the methods.
 - `HEAD` uses the route of `GET` (the server drops the body), and `Allow` lists `HEAD` where it lists `GET`.
   `OPTIONS` is not answered by Bond: it is a 405 unless you add the route.
 - A pattern must start with `/` and name each param once, or the program stops when the route is added.

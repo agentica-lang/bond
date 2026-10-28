@@ -16,6 +16,14 @@ Feature: Filters
     Then the status is 200
     And the body is "secret page"
 
+  Scenario: A header name in a request is read without regard to case
+    When I send "GET" to "/private" with the header "X-Token" set to "letmein"
+    Then the status is 200
+
+  Scenario: Filters run in the order they were added, the before ones first
+    When I send "GET" to "/hello"
+    Then the header "x-trace" is "abc"
+
   Scenario Outline: An after filter adds a header to every answer (<path>)
     When I send "GET" to "<path>"
     Then the status is <status>

@@ -50,6 +50,7 @@ def main() -> Void
     end,
     BDD.step("the JSON body is:", &json_body_is),
     BDD.step("the server listens on a free port", &start_server),
+    BDD.step("I get {string} over the socket", &get_over_socket),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
   ])
 end
@@ -96,10 +97,18 @@ def start_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return BDD.set(started, PORT, JSON.from(line.replace("listening on ", "").to_i!))
 end
 
+def get_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return over_socket(ctx, "GET", args[0], "")
+end
+
 def post_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return over_socket(ctx, "POST", args[1], args[0])
+end
+
+def over_socket(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
   client = HTTP.client(HTTP.client_options()).unwrap!
-  response = HTTP.post(client, "http://127.0.0.1:#{port}#{args[1]}", [], args[0])
+  response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", [], body)
   HTTP.close_client(client)
   return BDD.set(ctx, REPLY, JSON.from(reply_of(response.unwrap!)))
 end

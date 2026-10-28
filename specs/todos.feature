@@ -38,3 +38,8 @@ Feature: Todos
     When I send "GET" to "/todos/abc"
     Then the status is 400
     And the body is "id must be an integer"
+
+  Scenario: A todo with no title is a 400 that says why
+    When I send "POST" to "/todos" with the body ""
+    Then the status is 400
+    And the body is "title is empty"

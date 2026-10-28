@@ -27,6 +27,19 @@ Feature: Routing
     Then the status is 200
     And the body is "the latest todo"
 
+  Scenario Outline: A route and a path are compared as written, without decoding (<path>)
+    When I send "GET" to "<path>"
+    Then the status is <status>
+
+    Examples:
+      | path       | status |
+      | /café      | 200    |
+      | /caf%C3%A9 | 404    |
+
+  Scenario: HEAD uses the route of GET
+    When I send "HEAD" to "/hello"
+    Then the status is 200
+
   Scenario: A path with no route is a 404
     When I send "GET" to "/nothing"
     Then the status is 404
@@ -38,6 +51,7 @@ Feature: Routing
     And the header "allow" is "<allow>"
 
     Examples:
-      | method | path   | allow     |
-      | POST   | /hello | GET       |
-      | DELETE | /todos | GET, POST |
+      | method  | path   | allow           |
+      | POST    | /hello | GET, HEAD       |
+      | DELETE  | /todos | GET, HEAD, POST |
+      | OPTIONS | /hello | GET, HEAD       |

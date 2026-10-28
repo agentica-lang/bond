@@ -10,3 +10,12 @@ Feature: Server
       """
       {"id": 1, "title": "buy milk"}
       """
+
+  Scenario: A handler that crashes is a 500 over a socket and the server goes on
+    Given the server listens on a free port
+    When I get "/crash" over the socket
+    Then the status is 500
+    And the body is "Internal Server Error"
+    When I get "/hello" over the socket
+    Then the status is 200
+    And the body is "hello"

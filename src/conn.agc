@@ -10,6 +10,12 @@ export INTERNAL_ERROR = "Internal Server Error"
 
 REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 
+# The characters besides letters and digits that the server accepts in a header name (RFC 9110 token).
+TOKEN_SYMBOLS = "!#$%&'*+-.^_`|~"
+
+ASCII_LIMIT = 127
+LATIN1_LIMIT = 255
+
 export type Handler = Fn[Conn, Result[Conn]]
 
 export type ErrorHandler = Fn[Conn, String, Result[Conn]]
@@ -68,14 +74,18 @@ export def status(conn: Conn, code: Int) -> Conn
 end
 
 ## Answers with a redirect to `location`: a 302, or `code` when it is 301, 303, 307 or 308. It sets `Location`,
-## clears the body and halts, so a `before` filter can use it. Another `code` stops the program with an error.
+## clears the body and the content type and halts, so a `before` filter can use it. Another `code` is a runtime
+## error in the handler, so a 500. `location` must be ASCII (percent-encode anything else): the answer is a 500
+## otherwise. Do not build it from text a client sent without checking it, or the redirect is open to any site.
 export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
   if not REDIRECT_STATUSES.any? do |allowed| allowed == code end
     bad: Result[Conn] = error("bond: #{code} is not a redirect status (301, 302, 303, 307 or 308)")
     return bad.unwrap!
   end
 
-  return header(conn, "location", location).with(status: code, response_body: "", halted: true)
+  kept = conn.response_headers.select do |field| field.name.downcase != "content-type" end
+  untyped = conn.with(response_headers: kept)
+  return header(untyped, "location", location).with(status: code, response_body: "", halted: true)
 end
 
 ## Answers `value` encoded as JSON. It sets `Content-Type`; call `header` after it to use another.
@@ -125,7 +135,9 @@ export def param_int(conn: Conn, name: String) -> Result[Int]
 end
 
 ## The response of the `Conn`, as `std/http` sends it. The server refuses a status outside 200 to 599, a
-## `Content-Length` or `Transfer-Encoding` header and a body with a 204 or 304, so this checks the same: a 204 or
+## `Content-Length` or `Transfer-Encoding` header, a header name that is not a token, a value that is not Latin-1
+## text without control characters, and a body with a 204 or 304, so this checks the same (and that `Location` is
+## ASCII, since a Latin-1 byte there is not a URL): a 204 or
 ## 304 loses its body, and the other cases are a 500 with a warning on stderr. Both `Bond.run` and
 ## `Testing.request` come through here, so a test sees what a client would.
 export def to_response(conn: Conn) -> HttpResponse
@@ -157,5 +169,36 @@ def refusal(conn: Conn) -> String
     return "Content-Length and Transfer-Encoding are set by the server"
   end
 
+  for field in conn.response_headers
+    if not token?(field.name)
+      return "the header name #{field.name.inspect} is not a token"
+    end
+
+    if not field.value.split("").all? do |ch| value_char?(ch) end
+      return "the value of the header #{field.name} has a control or non-Latin-1 character"
+    end
+
+    if field.name.downcase == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
+      return "the Location header must be ASCII: percent-encode it"
+    end
+  end
+
   return ""
+end
+
+def token?(name: String) -> Bool
+  return not name.empty? and name.split("").all? do |ch| token_char?(ch) end
+end
+
+def token_char?(ch: String) -> Bool
+  code = ch.code
+  digit = code >= 48 and code <= 57
+  upper = code >= 65 and code <= 90
+  lower = code >= 97 and code <= 122
+  return digit or upper or lower or TOKEN_SYMBOLS.index_of(ch).ok?
+end
+
+def value_char?(ch: String) -> Bool
+  code = ch.code
+  return code == 9 or (code >= 32 and code != 127 and code <= LATIN1_LIMIT)
 end

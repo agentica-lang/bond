@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  AGENTICA_VERSION: 0.14.0
+  AGENTICA_SHA256: 492035091c596537637a9c7c9db5c917eed6b92bb85ec99068c1b26fa62fb3e6
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Agentica release
+        run: |
+          archive="agentica-${AGENTICA_VERSION}-linux-x86_64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/agentica-lang/agentica/releases/download/${AGENTICA_VERSION}/$archive"
+          echo "${AGENTICA_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/agentica-${AGENTICA_VERSION}-linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: Check
+        run: |
+          agentica --version
+          for file in *.agc src/*.agc examples/*.agc specs/*.agc specs/fixtures/*.agc test/*.agc; do
+            agentica check "$file"
+          done
+
+      # The features of specs/ (they listen on 127.0.0.1 only) and the unit tests of test/.
+      - name: Test
+        run: agentica test

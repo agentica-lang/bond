@@ -5,18 +5,17 @@ import Apps from "app"
 import {App} from "app"
 
 ## Serves `app` in the background and returns at once. The server belongs to the task that calls this, so call it
-## from the task that keeps it, such as `main`. Port 0 picks a free port (`local_port`).
+## from the task that keeps it, such as `main`. Port 0 picks a free port (`local_port`). It uses the default
+## options of `std/http`; `start_with` takes others.
 export def start(app: App, host: String, port: Int) -> Result[HttpServer]
-  handler = answering() do |request| ok(Apps.handle(app, request)) end
-  return HTTP.listen(host, port, handler, HTTP.server_options())
+  return start_with(app, host, port, HTTP.server_options())
 end
 
+## Like `start`, with the options of the server of `std/http` (`HttpServerOptions`: the timeouts, the connections
+## at once and the body limit), such as `HTTP.server_options().with(max_body_bytes: 4_194_304)`.
 export def start_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[HttpServer]
-  return start(app, host, port)
-end
-
-export def run_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[Void]
-  return run(app, host, port)
+  handler = answering() do |request| ok(Apps.handle(app, request)) end
+  return HTTP.listen(host, port, handler, options)
 end
 
 export def local_port(server: HttpServer) -> Int
@@ -34,7 +33,12 @@ end
 
 ## Serves `app` and waits: it returns only when the server closes or fails to start.
 export def run(app: App, host: String, port: Int) -> Result[Void]
-  server = try start(app, host, port)
+  return run_with(app, host, port, HTTP.server_options())
+end
+
+## Like `run`, with the options of `start_with`.
+export def run_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[Void]
+  server = try start_with(app, host, port, options)
   return wait(server)
 end
 

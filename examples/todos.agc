@@ -43,6 +43,10 @@ end
 
 # The body is the title. A JSON body waits for `JSON.codec` (Agentica 0.15.0).
 def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
+  if conn.body.empty?
+    return Bond.bad_request("title is empty")
+  end
+
   todo = Todo(id: store.next_id.add("todo", 1), title: conn.body)
   store.todos.put(todo.id, todo)
   return ok(Bond.json(conn, 201, JSON.from(todo)))

@@ -1,0 +1,104 @@
+## The steps of the features. A scenario drives the app of `fixtures/app.agc` in process through `Testing.request`
+## (no socket), except the steps of the server, which talk to the program of `fixtures/server.agc` over a socket.
+
+import BDD from "std/bdd"
+import HTTP from "std/http"
+import Fixture from "fixtures/app"
+import Testing from "../testing"
+
+APP = "app"
+REPLY = "reply"
+PORT = "port"
+SOCKET_MS = 5_000
+
+struct Ask
+  method: String
+  path: String
+  headers: Map[String, String]
+  body: String
+end
+
+struct Reply
+  status: Int
+  headers: Map[String, String]
+  body: String
+end
+
+def main() -> Void
+  BDD.run([
+    BDD.step("the todo app", &keep_app),
+    BDD.step("I send {string} to {string}") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: {}, body: ""))
+    end,
+    BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: {}, body: args[2]))
+    end,
+    BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: {args[2]: args[3]}, body: ""))
+    end,
+    BDD.step("the status is {int}") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
+    end,
+    BDD.step("the body is {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body.inspect}")
+    end,
+    BDD.step("the header {string} is {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.headers.get(args[0].downcase, "") == args[1], "the headers are #{reply.headers}")
+    end,
+    BDD.step("the JSON body is:", &json_body_is),
+    BDD.step("the server listens on a free port", &start_server),
+    BDD.step("I post {string} to {string} over the socket", &post_over_socket),
+  ])
+end
+
+def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  app = Fixture.build()
+  return BDD.keep(ctx, APP) do |request|
+    ask = try JSON.decode(request, Ask)
+    response = try Testing.request(app, ask.method, ask.path, headers_of(ask.headers), ask.body)
+    ok(JSON.from(reply_of(response)))
+  end
+end
+
+def send(ctx: BDD.Context, ask: Ask) -> BDD.Context
+  reply = BDD.call(ctx, APP, JSON.from(ask))
+  return BDD.set(ctx, REPLY, reply.unwrap!)
+end
+
+def headers_of(fields: Map[String, String]) -> List[Header]
+  return fields.keys.map do |name| Header(name: name, value: fields[name]) end
+end
+
+def reply_of(response: HttpResponse) -> Reply
+  fields = response.headers.reduce({}) do |acc, header| acc.put(header.name.downcase, header.value) end
+  return Reply(status: response.status, headers: fields, body: response.body)
+end
+
+def last_reply(ctx: BDD.Context) -> Reply
+  return JSON.decode(BDD.get(ctx, REPLY).unwrap!, Reply).unwrap!
+end
+
+def json_body_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  body = JSON.parse(reply.body)
+  expected = JSON.parse(BDD.doc_string(ctx)).unwrap!
+  # The canonical text of a parsed value has sorted keys, so the key order does not matter.
+  return BDD.assert(ctx, body.ok? and JSON.encode(body.unwrap!) == JSON.encode(expected), "the body is #{reply.body}")
+end
+
+def start_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  started = BDD.given_program(ctx, "fixtures/server.agc")
+  line = BDD.read_line(started, SOCKET_MS).unwrap!
+  return BDD.set(started, PORT, JSON.from(line.delete_prefix("listening on ").to_i!))
+end
+
+def post_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  client = HTTP.client(HTTP.client_options()).unwrap!
+  response = HTTP.post(client, "http://127.0.0.1:#{port}#{args[1]}", [], args[0])
+  HTTP.close_client(client)
+  return BDD.set(ctx, REPLY, JSON.from(reply_of(response.unwrap!)))
+end

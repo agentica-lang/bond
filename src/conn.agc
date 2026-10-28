@@ -8,7 +8,11 @@ export BAD_REQUEST = "bad request: "
 
 export INTERNAL_ERROR = "Internal Server Error"
 
+REDIRECT_STATUSES = [301, 302, 303, 307, 308]
+
 export type Handler = Fn[Conn, Result[Conn]]
+
+export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 
 ## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
 ## names are in lowercase. A new `Conn` answers 200 with no body.
@@ -52,16 +56,26 @@ export def text(conn: Conn, status: Int, body: String) -> Conn
   return header(conn, "content-type", "text/plain; charset=utf-8").with(status: status, response_body: body)
 end
 
+## Answers `body` as HTML. It sets `Content-Type`; call `header` after it to use another. The text is sent as it is,
+## with no escaping: escape what comes from a client before you put it in `body`.
 export def html(conn: Conn, status: Int, body: String) -> Conn
-  return conn
+  return header(conn, "content-type", "text/html; charset=utf-8").with(status: status, response_body: body)
 end
 
+## Sets the status of the answer and nothing else.
 export def status(conn: Conn, code: Int) -> Conn
-  return conn
+  return conn.with(status: code)
 end
 
+## Answers with a redirect to `location`: a 302, or `code` when it is 301, 303, 307 or 308. It sets `Location`,
+## clears the body and halts, so a `before` filter can use it. Another `code` stops the program with an error.
 export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
-  return conn
+  if not REDIRECT_STATUSES.any? do |allowed| allowed == code end
+    bad: Result[Conn] = error("bond: #{code} is not a redirect status (301, 302, 303, 307 or 308)")
+    return bad.unwrap!
+  end
+
+  return header(conn, "location", location).with(status: code, response_body: "", halted: true)
 end
 
 ## Answers `value` encoded as JSON. It sets `Content-Type`; call `header` after it to use another.

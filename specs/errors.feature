@@ -17,8 +17,14 @@ Feature: Errors
     When I send "GET" to "/crash"
     Then the status is 500
     And the body is "Internal Server Error"
+    And the header "x-powered-by" is not set
     When I send "GET" to "/hello"
     Then the status is 200
+
+  Scenario: A 500 does not keep the headers the before filters set (only the after filters add theirs)
+    When I send "GET" to "/boom"
+    Then the status is 500
+    And the header "x-trace" is "c"
 
   Scenario: A before filter that gives an error is a 500
     When I send "GET" to "/filter-error"
@@ -31,8 +37,11 @@ Feature: Errors
     And the body is "<body>"
 
     Examples:
-      | path               | status | body                  |
-      | /not-modified      | 304    |                       |
-      | /status-99         | 500    | Internal Server Error |
-      | /content-length    | 500    | Internal Server Error |
-      | /transfer-encoding | 500    | Internal Server Error |
+      | path                | status | body                  |
+      | /not-modified       | 304    |                       |
+      | /status-99          | 500    | Internal Server Error |
+      | /content-length     | 500    | Internal Server Error |
+      | /transfer-encoding  | 500    | Internal Server Error |
+      | /location-non-ascii | 500    | Internal Server Error |
+      | /location-newline   | 500    | Internal Server Error |
+      | /header-bad-name    | 500    | Internal Server Error |

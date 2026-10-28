@@ -22,9 +22,11 @@ def main() -> Void
   app = (
     Bond.app()
     |> Bond.before(&Bond.log_request)
+    |> Bond.get("/") do |conn| ok(Bond.redirect(conn, "/todos")) end
     |> Bond.get("/todos") do |conn| list_todos(store, conn) end
     |> Bond.get("/todos/:id") do |conn| show_todo(store, conn) end
     |> Bond.post("/todos") do |conn| create_todo(store, conn) end
+    |> Bond.not_found() do |conn| ok(Bond.text(conn, 404, "there is nothing at #{conn.path}")) end
   )
   Bond.run(app, "127.0.0.1", PORT).unwrap!
 end

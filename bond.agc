@@ -32,6 +32,7 @@ export Apps.after
 export Apps.handle
 export Conns.Conn
 export Conns.Handler
+export Conns.ErrorHandler
 export Conns.text
 export Conns.json
 export Conns.halt

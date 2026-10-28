@@ -42,7 +42,7 @@ def main() -> Void
     end,
     BDD.step("the body is {string}") do |ctx, args|
       reply = last_reply(ctx)
-      BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body.inspect}")
+      BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
     end,
     BDD.step("the header {string} is {string}") do |ctx, args|
       reply = last_reply(ctx)
@@ -58,7 +58,7 @@ def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   app = Fixture.build()
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
-    response = try Testing.request(app, ask.method, ask.path, headers_of(ask.headers), ask.body)
+    response = Testing.request(app, ask.method, ask.path, headers_of(ask.headers), ask.body)
     ok(JSON.from(reply_of(response)))
   end
 end
@@ -73,7 +73,8 @@ def headers_of(fields: Map[String, String]) -> List[Header]
 end
 
 def reply_of(response: HttpResponse) -> Reply
-  fields = response.headers.reduce({}) do |acc, header| acc.put(header.name.downcase, header.value) end
+  start: Map[String, String] = {}
+  fields = response.headers.reduce(start) do |acc, header| acc.put(header.name.downcase, header.value) end
   return Reply(status: response.status, headers: fields, body: response.body)
 end
 
@@ -92,7 +93,7 @@ end
 def start_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "fixtures/server.agc")
   line = BDD.read_line(started, SOCKET_MS).unwrap!
-  return BDD.set(started, PORT, JSON.from(line.delete_prefix("listening on ").to_i!))
+  return BDD.set(started, PORT, JSON.from(line.replace("listening on ", "").to_i!))
 end
 
 def post_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context

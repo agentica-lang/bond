@@ -1,8 +1,12 @@
 ## The connection: the request being served and the response being built. A `Conn` never changes; every helper
 ## gives a new one.
 
-## An `error` that starts with this text is a 400, and the text after it is the body (`param_int` uses it).
+# An `error` whose message starts with this text is a 400, and the rest is the body. `bad_request` is the way to
+# make one; the text is not part of the API. Once Bond decodes request data, take care that no error message that
+# echoes a client's text can start with it.
 export BAD_REQUEST = "bad request: "
+
+export INTERNAL_ERROR = "Internal Server Error"
 
 export type Handler = Fn[Conn, Result[Conn]]
 
@@ -43,12 +47,12 @@ export def from_request(request: HttpRequest) -> Conn
   )
 end
 
-## Answers `body` as plain text.
+## Answers `body` as plain text. It sets `Content-Type`; call `header` after it to use another.
 export def text(conn: Conn, status: Int, body: String) -> Conn
   return header(conn, "content-type", "text/plain; charset=utf-8").with(status: status, response_body: body)
 end
 
-## Answers `value` encoded as JSON.
+## Answers `value` encoded as JSON. It sets `Content-Type`; call `header` after it to use another.
 export def json(conn: Conn, status: Int, value: Json) -> Conn
   return header(conn, "content-type", "application/json").with(status: status, response_body: JSON.encode(value))
 end
@@ -79,16 +83,53 @@ export def param(conn: Conn, name: String) -> Result[String]
   return conn.params.get(name)
 end
 
-## Like `param`, for a whole number. Text that is not one is a 400 (`BAD_REQUEST`).
+## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
+## with `try`).
+export def bad_request[T](message: String) -> Result[T]
+  return error("#{BAD_REQUEST}#{message}")
+end
+
+## Like `param`, for a whole number. Text that is not one is a 400 (see `bad_request`).
 export def param_int(conn: Conn, name: String) -> Result[Int]
   text = try param(conn, name)
   case text.to_i
     ok(number) -> return ok(number)
-    error(_) -> return error("#{BAD_REQUEST}#{name} must be an integer")
+    error(_) -> return bad_request("#{name} must be an integer")
   end
 end
 
-## The response of the `Conn`, as `std/http` sends it.
+## The response of the `Conn`, as `std/http` sends it. The server refuses a status outside 200 to 599, a
+## `Content-Length` or `Transfer-Encoding` header and a body with a 204 or 304, so this checks the same: a 204 or
+## 304 loses its body, and the other cases are a 500 with a warning on stderr. Both `Bond.run` and
+## `Testing.request` come through here, so a test sees what a client would.
 export def to_response(conn: Conn) -> HttpResponse
+  problem = refusal(conn)
+  if not problem.empty?
+    IO.warn("bond: #{conn.method} #{conn.path}: invalid response: #{problem}")
+    return HttpResponse(
+      status: 500,
+      headers: [Header(name: "content-type", value: "text/plain; charset=utf-8")],
+      body: INTERNAL_ERROR,
+    )
+  end
+
+  if conn.status == 204 or conn.status == 304
+    return HttpResponse(status: conn.status, headers: conn.response_headers, body: "")
+  end
+
   return HttpResponse(status: conn.status, headers: conn.response_headers, body: conn.response_body)
+end
+
+# Why the server would refuse the response, or "" when it would not.
+def refusal(conn: Conn) -> String
+  if conn.status < 200 or conn.status > 599
+    return "the status #{conn.status} is outside 200 to 599"
+  end
+
+  names = conn.response_headers.map do |header| header.name.downcase end
+  if names.any? do |name| name == "content-length" or name == "transfer-encoding" end
+    return "Content-Length and Transfer-Encoding are set by the server"
+  end
+
+  return ""
 end

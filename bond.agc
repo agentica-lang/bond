@@ -35,6 +35,7 @@ export Conns.json
 export Conns.halt
 export Conns.header
 export Conns.request_header
+export Conns.bad_request
 export Conns.param
 export Conns.param_int
 export Filters.log_request

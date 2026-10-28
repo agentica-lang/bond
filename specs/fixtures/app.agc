@@ -21,7 +21,7 @@ export def build_custom() -> Bond.App
   return (
     build()
     |> Bond.get("/boom-again", &boom)
-    |> Bond.not_found() do |conn| ok(Bond.html(conn, 404, "<h1>No page at #{conn.path}</h1>")) end
+    |> Bond.not_found(&custom_not_found)
     |> Bond.on_error(&custom_error)
   )
 end
@@ -55,6 +55,9 @@ export def build() -> Bond.App
     |> Bond.get("/accepted", &accepted)
     |> Bond.get("/redirect", &redirect_default)
     |> Bond.get("/redirect/:status", &redirect_with)
+    |> Bond.get("/location-non-ascii", &location_non_ascii)
+    |> Bond.get("/location-newline", &location_newline)
+    |> Bond.get("/header-bad-name", &header_bad_name)
   )
 end
 
@@ -179,8 +182,30 @@ def accepted(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.status(conn, 202))
 end
 
+# The text is answered first so that the scenario sees the redirect drop its content type and body.
 def redirect_default(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.redirect(conn, "/hello"))
+  return ok(Bond.redirect(Bond.text(conn, 200, "moved"), "/hello"))
+end
+
+def location_non_ascii(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.redirect(conn, "/café"))
+end
+
+def location_newline(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.redirect(conn, "/hello\r\nx-evil: 1"))
+end
+
+def header_bad_name(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.header(conn, "x bad", "1"))
+end
+
+# A path that ends in -bad makes the handler fail, to see the error handler answer it.
+def custom_not_found(conn: Bond.Conn) -> Result[Bond.Conn]
+  if conn.path.end_with?("-bad")
+    return error("the not found handler failed")
+  end
+
+  return ok(Bond.html(conn, 404, "<h1>No page at #{conn.path}</h1>"))
 end
 
 def redirect_with(conn: Bond.Conn) -> Result[Bond.Conn]

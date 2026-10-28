@@ -16,24 +16,29 @@ Feature: Responses
     Then the status is 202
     And the body is ""
 
-  Scenario: A redirect is a 302 with a Location header and no body
+  Scenario: A redirect is a 302 with a Location header, no body and no content type
     When I send "GET" to "/redirect"
     Then the status is 302
     And the header "location" is "/hello"
+    And the header "content-type" is not set
     And the body is ""
 
   Scenario Outline: A redirect takes the status of the redirect (<status>)
     When I send "GET" to "/redirect/<status>"
-    Then the status is <answer>
-    And the header "location" is "<location>"
+    Then the status is <status>
+    And the header "location" is "/hello"
 
     Examples:
-      | status | answer | location |
-      | 301    | 301    | /hello   |
-      | 303    | 303    | /hello   |
-      | 307    | 307    | /hello   |
-      | 308    | 308    | /hello   |
-      | 200    | 500    |          |
+      | status |
+      | 301    |
+      | 303    |
+      | 307    |
+      | 308    |
+
+  Scenario: A status that is not a redirect is a 500
+    When I send "GET" to "/redirect/200"
+    Then the status is 500
+    And the header "location" is not set
 
   Scenario: A redirect in a before filter stops the handler
     When I send "GET" to "/legacy"

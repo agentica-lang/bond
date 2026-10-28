@@ -37,6 +37,12 @@ Feature: Custom handlers
     When I send "GET" to "/boom"
     Then the header "x-error" is "secret details"
 
+  Scenario: A not found handler that fails is a failure for the error handler
+    When I send "GET" to "/nothing-bad"
+    Then the status is 500
+    And the body is "Something went wrong"
+    And the header "x-error" is "the not found handler failed"
+
   Scenario Outline: A failure of the error handler is the plain 500 (<path>)
     When I send "GET" to "<path>"
     Then the status is 500

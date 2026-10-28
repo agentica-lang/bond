@@ -19,3 +19,13 @@ Feature: Server
     When I get "/hello" over the socket
     Then the status is 200
     And the body is "hello"
+
+  Scenario Outline: The server options of `Bond.start_with` apply (a body of <size>)
+    Given the server with a small body limit listens on a free port
+    When I post "<body>" to "/todos" over the socket
+    Then the status is <status>
+
+    Examples:
+      | size              | body              | status |
+      | 4 bytes           | milk              | 201    |
+      | more than 8 bytes | buy a lot of milk | 413    |

@@ -20,6 +20,11 @@ Feature: Errors
     When I send "GET" to "/hello"
     Then the status is 200
 
+  Scenario: A handler that crashes skips the after filters
+    When I send "GET" to "/crash"
+    Then the status is 500
+    And the header "x-powered-by" is not set
+
   Scenario: A before filter that gives an error is a 500
     When I send "GET" to "/filter-error"
     Then the status is 500

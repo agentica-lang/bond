@@ -48,6 +48,14 @@ export def delete(app: App, pattern: String, handler: Handler) -> App
   return route(app, "DELETE", pattern, handler)
 end
 
+export def not_found(app: App, handler: Handler) -> App
+  return app
+end
+
+export def on_error(app: App, handler: Fn[Conn, String, Result[Conn]]) -> App
+  return app
+end
+
 ## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
 ## handler that come after it.
 export def before(app: App, filter: Handler) -> App

@@ -15,11 +15,23 @@ struct Store
   next_id: ATS[String, Int]
 end
 
+# The same app with custom handlers for a path with no route and for a failure. The error handler answers by path so
+# that one app shows each case: it gives an error for /filter-error and crashes for /boom-again.
+export def build_custom() -> Bond.App
+  return (
+    build()
+    |> Bond.get("/boom-again", &boom)
+    |> Bond.not_found() do |conn| ok(Bond.html(conn, 404, "<h1>No page at #{conn.path}</h1>")) end
+    |> Bond.on_error(&custom_error)
+  )
+end
+
 export def build() -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
   return (
     Bond.app()
     |> Bond.before(&fail_on_request)
+    |> Bond.before(&redirect_legacy)
     |> Bond.before(&require_token)
     |> Bond.before(&trace_a)
     |> Bond.before(&trace_b)
@@ -39,12 +51,25 @@ export def build() -> Bond.App
     |> Bond.get("/content-length", &content_length)
     |> Bond.get("/transfer-encoding", &transfer_encoding)
     |> Bond.get("/café", &hello)
+    |> Bond.get("/page", &page)
+    |> Bond.get("/accepted", &accepted)
+    |> Bond.get("/redirect", &redirect_default)
+    |> Bond.get("/redirect/:status", &redirect_with)
   )
 end
 
 def fail_on_request(conn: Bond.Conn) -> Result[Bond.Conn]
   if conn.path == "/filter-error"
     return error("a filter failed")
+  end
+
+  return ok(conn)
+end
+
+# A before filter that redirects: the redirect halts, so no route is needed for /legacy.
+def redirect_legacy(conn: Bond.Conn) -> Result[Bond.Conn]
+  if conn.path == "/legacy"
+    return ok(Bond.redirect(conn, "/hello"))
   end
 
   return ok(conn)
@@ -144,4 +169,35 @@ end
 
 def transfer_encoding(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.header(Bond.text(conn, 200, "x"), "transfer-encoding", "chunked"))
+end
+
+def page(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.html(conn, 200, "<p>hi</p>"))
+end
+
+def accepted(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.status(conn, 202))
+end
+
+def redirect_default(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.redirect(conn, "/hello"))
+end
+
+def redirect_with(conn: Bond.Conn) -> Result[Bond.Conn]
+  code = try Bond.param_int(conn, "status")
+  return ok(Bond.redirect(conn, "/hello", code))
+end
+
+# Shows the message to the test as a header; a real handler would log it and keep it from the client.
+def custom_error(conn: Bond.Conn, message: String) -> Result[Bond.Conn]
+  if conn.path == "/filter-error"
+    return error("the error handler failed")
+  end
+
+  if conn.path == "/boom-again"
+    nothing: List[String] = []
+    return ok(Bond.html(conn, 500, nothing[0]))
+  end
+
+  return ok(Bond.header(Bond.html(conn, 500, "Something went wrong"), "x-error", message))
 end

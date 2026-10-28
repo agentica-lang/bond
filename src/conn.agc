@@ -52,6 +52,18 @@ export def text(conn: Conn, status: Int, body: String) -> Conn
   return header(conn, "content-type", "text/plain; charset=utf-8").with(status: status, response_body: body)
 end
 
+export def html(conn: Conn, status: Int, body: String) -> Conn
+  return conn
+end
+
+export def status(conn: Conn, code: Int) -> Conn
+  return conn
+end
+
+export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
+  return conn
+end
+
 ## Answers `value` encoded as JSON. It sets `Content-Type`; call `header` after it to use another.
 export def json(conn: Conn, status: Int, value: Json) -> Conn
   return header(conn, "content-type", "application/json").with(status: status, response_body: JSON.encode(value))

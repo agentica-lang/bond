@@ -25,6 +25,8 @@ export Apps.post
 export Apps.put
 export Apps.patch
 export Apps.delete
+export Apps.not_found
+export Apps.on_error
 export Apps.before
 export Apps.after
 export Apps.handle
@@ -33,6 +35,9 @@ export Conns.Handler
 export Conns.text
 export Conns.json
 export Conns.halt
+export Conns.html
+export Conns.status
+export Conns.redirect
 export Conns.header
 export Conns.request_header
 export Conns.bad_request
@@ -40,6 +45,8 @@ export Conns.param
 export Conns.param_int
 export Filters.log_request
 export Servers.start
+export Servers.start_with
+export Servers.run_with
 export Servers.local_port
 export Servers.wait
 export Servers.stop

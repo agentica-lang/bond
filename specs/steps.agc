@@ -3,6 +3,7 @@
 
 import BDD from "std/bdd"
 import HTTP from "std/http"
+import Bond from "../bond"
 import Fixture from "fixtures/app"
 import Testing from "../testing"
 
@@ -27,6 +28,7 @@ end
 def main() -> Void
   BDD.run([
     BDD.step("the todo app", &keep_app),
+    BDD.step("the todo app with custom handlers", &keep_custom_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: {}, body: ""))
     end,
@@ -48,15 +50,27 @@ def main() -> Void
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.headers.get(args[0].downcase, "") == args[1], "the headers are #{reply.headers}")
     end,
+    BDD.step("the header {string} is not set") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, not reply.headers.key?(args[0].downcase), "the headers are #{reply.headers}")
+    end,
     BDD.step("the JSON body is:", &json_body_is),
     BDD.step("the server listens on a free port", &start_server),
+    BDD.step("the server with a small body limit listens on a free port", &start_limited_server),
     BDD.step("I get {string} over the socket", &get_over_socket),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
   ])
 end
 
 def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  app = Fixture.build()
+  return keep(ctx, Fixture.build())
+end
+
+def keep_custom_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return keep(ctx, Fixture.build_custom())
+end
+
+def keep(ctx: BDD.Context, app: Bond.App) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
     response = Testing.request(app, ask.method, ask.path, headers_of(ask.headers), ask.body)
@@ -92,7 +106,15 @@ def json_body_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 def start_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  started = BDD.given_program(ctx, "fixtures/server.agc")
+  return start_program(ctx, "fixtures/server.agc")
+end
+
+def start_limited_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return start_program(ctx, "fixtures/limited_server.agc")
+end
+
+def start_program(ctx: BDD.Context, program: String) -> BDD.Context
+  started = BDD.given_program(ctx, program)
   line = BDD.read_line(started, SOCKET_MS).unwrap!
   return BDD.set(started, PORT, JSON.from(line.replace("listening on ", "").to_i!))
 end

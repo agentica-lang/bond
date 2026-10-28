@@ -11,6 +11,14 @@ export def start(app: App, host: String, port: Int) -> Result[HttpServer]
   return HTTP.listen(host, port, handler, HTTP.server_options())
 end
 
+export def start_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[HttpServer]
+  return start(app, host, port)
+end
+
+export def run_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[Void]
+  return run(app, host, port)
+end
+
 export def local_port(server: HttpServer) -> Int
   return HTTP.local_port(server)
 end

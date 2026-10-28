@@ -186,15 +186,17 @@ def failure(app: App, conn: Conn, message: String) -> Conn
   return answer_error(app, conn, message)
 end
 
-# The error handler runs in a task of its own, like the chain: if it crashes, the request still gets an answer.
+# The error handler runs in a task of its own, like the chain: if it crashes, the request still gets an answer. It
+# gets the request with nothing of the answer built so far, in both paths, so that no header of a filter or of the
+# handler that failed is in a 500.
 def answer_error(app: App, conn: Conn, message: String) -> Conn
-  failing = conn.with(status: 500)
+  failing = conn.with(status: 500, response_headers: [], response_body: "")
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> return answer.with(halted: true)
     error(reason) ->
       IO.warn("bond: #{conn.method} #{conn.path}: the error handler failed: #{reason}")
-      return Conns.halt(conn, 500, Conns.INTERNAL_ERROR)
+      return Conns.halt(failing, 500, Conns.INTERNAL_ERROR)
   end
 end
 

@@ -101,7 +101,7 @@ a block for one that needs more.
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`. The text is sent as it is, with no escaping (Bond has no escaping yet): escape what a client sent before you put it in `text` |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todo)`) as JSON; sets `Content-Type` |
 | `Bond.status(conn, code)` | sets the status and nothing else |
-| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header and no body, and halts. `Bond.redirect(conn, location, code)` takes 301, 303, 307 or 308 as well; another code stops the program with an error |
+| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts. `Bond.redirect(conn, location, code)` takes 301, 303, 307 or 308 as well; another code is a runtime error in the handler, so a 500. `location` must be ASCII (percent-encode the rest) or the answer is a 500. Never build it from text a client sent without checking it: it would be an open redirect to any site |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
@@ -141,8 +141,9 @@ app = (
   an ordinary handler; it gets the `Conn` with the status 404 and the `after` filters run after it. It does not
   answer a 405, and not a 404 that a handler gives itself (`Bond.halt(conn, 404, ...)`).
 - `Bond.on_error(app, handler)` answers a failure (an `error` or a crash in a handler or filter, a `not_found`
-  handler included) in place of the plain 500. The handler gets the `Conn`, with the status 500, and the message
-  of the failure. Bond has already written the message to stderr, and nothing sends it to the client unless the
+  handler included) in place of the plain 500. The handler gets the request `Conn` with the status 500 and nothing
+  of the answer built so far (no response headers or body, so a header of a filter does not reach a 500), and the
+  message of the failure. Bond has already written the message to stderr, and nothing sends it to the client unless the
   handler does: keep it out of the answer.
 - If the error handler gives an `error` or crashes, the answer is the plain 500 (and a line on stderr). It is
   never called for a `bad_request` (a 400), nor for a response that the server would refuse (see below): those
@@ -150,8 +151,9 @@ app = (
 - Both are set once per app; a second call replaces the first.
 
 A response that the HTTP server of `std/http` would refuse is a plain 500, with a warning on stderr: a status outside
-200 to 599, or a `Content-Length` or `Transfer-Encoding` header (the server sets them). A 204 or 304 loses its
-body. `Testing.request` does the same, so a test sees what a client would.
+200 to 599, a `Content-Length` or `Transfer-Encoding` header (the server sets them), a header name that is not an
+HTTP token (as `x bad`), or a value with a control character or a character beyond Latin-1 (a line break in a
+`Location`, for example). A 204 or 304 loses its body. `Testing.request` does the same, so a test sees what a client would.
 
 ## Running
 

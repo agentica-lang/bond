@@ -1,0 +1,6 @@
+*.agc text eol=lf linguist-language=Ruby
+*.feature text eol=lf
+
+# The static files of the specs are served byte for byte, and their sizes are asserted (17 bytes, 10 bytes), so no
+# checkout may change their line endings.
+specs/fixtures/public/** -text

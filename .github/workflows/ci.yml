@@ -31,9 +31,7 @@ jobs:
       - name: Check
         run: |
           agentica --version
-          for file in *.agc src/*.agc examples/*.agc specs/*.agc specs/fixtures/*.agc test/*.agc; do
-            agentica check "$file"
-          done
+          make check
 
       # The features of specs/ (they listen on 127.0.0.1 only) and the unit tests of test/.
       - name: Test

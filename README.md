@@ -43,7 +43,7 @@ The tests are BDD first: the behavior is a Gherkin scenario in `specs/*.feature`
 a socket, on 127.0.0.1 and a free port. `test/` has the unit test of the route pattern matcher.
 
 ```sh
-for file in *.agc src/*.agc examples/*.agc specs/*.agc specs/fixtures/*.agc test/*.agc; do agentica check "$file"; done
+make check     # agentica check on every .agc file
 agentica test
 ```
 

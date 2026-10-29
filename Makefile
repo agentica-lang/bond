@@ -1,8 +1,14 @@
-# The documentation site (Hugo) and the check of its samples.
+# The check of the sources, the documentation site (Hugo) and the check of its samples.
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
-.PHONY: site site-serve site-sass site-samples
+.PHONY: check site site-serve site-sass site-samples
+
+# Every .agc file of the package, its examples, specs and tests. `agentica check` takes one file at a time.
+AGC_FILES := $(wildcard *.agc src/*.agc examples/*.agc specs/*.agc specs/fixtures/*.agc test/*.agc)
+
+check:
+	@for f in $(AGC_FILES); do agentica check "$$f" || exit 1; done
 
 site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
 

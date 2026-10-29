@@ -143,6 +143,17 @@ export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
   end
 end
 
+## The media type of the request in lowercase, without its parameters (`; charset=utf-8`), or "" when the request
+## has no `Content-Type` or more than one.
+export def media_type(conn: Conn) -> String
+  values = conn.headers.select do |field| field.name.downcase == "content-type" end
+  if values.size != 1
+    return ""
+  end
+
+  return values[0].value.split(";")[0].strip().downcase
+end
+
 ## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
 ## with `try`).
 export def bad_request[T](message: String) -> Result[T]
@@ -227,14 +238,9 @@ def value_char?(ch: String) -> Bool
   return code == 9 or (code >= 32 and code != 127 and code <= LATIN1_LIMIT)
 end
 
-# One Content-Type, application/json or type/name+json, in any case, with or without parameters (`; charset=utf-8`).
+# application/json or type/name+json, in any case, with or without parameters (`; charset=utf-8`).
 def json_content_type?(conn: Conn) -> Bool
-  values = conn.headers.select do |field| field.name.downcase == "content-type" end
-  if values.size != 1
-    return false
-  end
-
-  media = values[0].value.split(";")[0].strip().downcase
+  media = media_type(conn)
   if media == "application/json"
     return true
   end

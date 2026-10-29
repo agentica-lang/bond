@@ -13,9 +13,9 @@ same change.
 - Title and voice: "Bond", the docs of a small web framework for Agentica.
   `site/hugo.toml` has the title, the description and the base URL
   (`https://agentica-lang.github.io/bond/`).
-- Icon: the favicon is a white "B" on a rounded square. It has the same light
-  and dark mechanism as Agentica (the colors are `--accent` of both themes), but
-  its own shape. It is in `site/layouts/baseof.html`.
+- Icon: the favicon is a "B" cut out of an accent-colored rounded square. It
+  has the same light and dark mechanism as Agentica (the colors are `--accent`
+  of both themes), but its own shape. It is in `site/layouts/baseof.html`.
 - Trimmed features, which Bond does not need:
   - no version in the header or footer, and no release links (Bond has no
     release yet);

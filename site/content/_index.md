@@ -3,8 +3,6 @@ title: Bond
 description: Bond is a small web framework for Agentica, in the spirit of Sinatra.
 ---
 
-# Bond
-
 Bond is a small web framework for [Agentica](https://agentica-lang.github.io/agentica/), in the spirit of Sinatra. You add routes to an app, the app is an immutable value, and a handler is a function from a `Conn` to a `Result[Conn]`.
 
 ```agentica

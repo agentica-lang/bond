@@ -68,6 +68,8 @@ export def build() -> Bond.App
     |> Bond.get("/café", &hello)
     |> Bond.get("/search", &search)
     |> Bond.get("/items", &items)
+    |> Bond.get("/params", &query_fields)
+    |> Bond.post("/form-params", &form_fields)
     |> Bond.post("/signup", &signup)
     |> Bond.post("/tags", &tags)
     |> Bond.post("/users", &create_user)
@@ -282,4 +284,19 @@ end
 def tags(conn: Bond.Conn) -> Result[Bond.Conn]
   found = try Bond.form_all(conn, "tag")
   return ok(Bond.text(conn, 200, "tags=#{found.join(",")}"))
+end
+
+# Every name with its values, in the order of the first appearance: `a=1|2;b=x`.
+def query_fields(conn: Bond.Conn) -> Result[Bond.Conn]
+  fields = try Bond.query_params(conn)
+  return ok(Bond.text(conn, 200, describe(fields)))
+end
+
+def form_fields(conn: Bond.Conn) -> Result[Bond.Conn]
+  fields = try Bond.form_params(conn)
+  return ok(Bond.text(conn, 200, describe(fields)))
+end
+
+def describe(fields: Map[String, List[String]]) -> String
+  return fields.keys.map do |name| "#{name}=#{fields[name].join("|")}" end.join(";")
 end

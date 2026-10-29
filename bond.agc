@@ -50,6 +50,8 @@ export Filters.log_request
 export Queries.query
 export Queries.query_int
 export Queries.query_all
+export Queries.query_params
+export Queries.form_params
 export Queries.form
 export Queries.form_int
 export Queries.form_all

@@ -35,7 +35,41 @@ Feature: Query strings
       | not a number | /items?n=many  | n must be an integer          |
       | no number    | /items         | query parameter n is missing  |
 
-  Scenario: A number is read from the query string
-    When I send "GET" to "/items?n=5"
+  Scenario Outline: A number is read from the query string (<target>)
+    When I send "GET" to "<target>"
+    Then the status is <status>
+    And the body is "<body>"
+
+    Examples:
+      | target                        | status | body                 |
+      | /items?n=5                    | 200    | 5 items              |
+      | /items?n=-3                   | 200    | -3 items             |
+      | /items?n=%2B5                 | 200    | 5 items              |
+      | /items?n=+5                   | 400    | n must be an integer |
+      | /items?n=99999999999999999999 | 400    | n must be an integer |
+
+  Scenario: An empty value is a value
+    When I send "GET" to "/search?q="
     Then the status is 200
-    And the body is "5 items"
+    And the body is "q= page=1 tags="
+
+  Scenario Outline: A bad percent anywhere makes the whole query string invalid (<where>)
+    When I send "GET" to "<target>"
+    Then the status is 400
+    And the body is "the query string is not valid"
+
+    Examples:
+      | where            | target             |
+      | in another value | /search?q=hi&x=%zz |
+      | in a name        | /search?q=hi&%zz=1 |
+
+  Scenario Outline: All the fields are read at once with query_params (<target>)
+    When I send "GET" to "<target>"
+    Then the status is <status>
+    And the body is "<body>"
+
+    Examples:
+      | target                | status | body                          |
+      | /params?a=1&b=x+y&a=2 | 200    | a=1\|2;b=x y                  |
+      | /params               | 200    |                               |
+      | /params?a=1&b=%zz     | 400    | the query string is not valid |

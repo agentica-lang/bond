@@ -29,6 +29,14 @@ end
 ## The first value of `name` in the body of a form (`application/x-www-form-urlencoded`), decoded like `query`. The
 ## request must have exactly one `Content-Type`, and it must be that type; otherwise, and for a field that is not
 ## there or a body that does not decode, it is an error that makes a 400.
+export def query_params(conn: Conn) -> Result[Map[String, List[String]]]
+  return error("not written yet")
+end
+
+export def form_params(conn: Conn) -> Result[Map[String, List[String]]]
+  return error("not written yet")
+end
+
 export def form(conn: Conn, name: String) -> Result[String]
   pairs = try form_pairs(conn)
   return one(pairs, name, "form field")

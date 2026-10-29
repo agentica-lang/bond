@@ -1,6 +1,6 @@
 ## A todo list over HTTP. Run it with `agentica examples/todos.agc` and try:
 ##
-##   curl -X POST -d 'buy milk' http://127.0.0.1:4567/todos
+##   curl -X POST -H 'content-type: application/json' -d '{"title": "buy milk"}' http://127.0.0.1:4567/todos
 ##   curl http://127.0.0.1:4567/todos/1
 
 import Bond from "../bond"
@@ -9,6 +9,10 @@ PORT = 4567
 
 struct Todo
   id: Int
+  title: String
+end
+
+struct NewTodo
   title: String
 end
 
@@ -43,13 +47,14 @@ def show_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   end
 end
 
-# The body is the title. A JSON body waits for `JSON.codec` (Agentica 0.15.0).
+# The body is JSON: `{"title": "buy milk"}`. A body that is not, or has no title, is a 400.
 def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.body.empty?
+  input = try Bond.json_body(conn, JSON.codec(NewTodo))
+  if input.title.empty?
     return Bond.bad_request("title is empty")
   end
 
-  todo = Todo(id: store.next_id.add("todo", 1), title: conn.body)
+  todo = Todo(id: store.next_id.add("todo", 1), title: input.title)
   store.todos.put(todo.id, todo)
   return ok(Bond.json(conn, 201, JSON.from(todo)))
 end

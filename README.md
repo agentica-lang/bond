@@ -1,8 +1,8 @@
 # Bond
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
-Work in progress: this is the first version, with the router, filters, custom handlers and the helpers to answer.
-Query and form parsing, JSON bodies, cookies and static files come later (see
+Work in progress: this is the first version, with the router, filters, custom handlers, JSON bodies and the helpers to answer.
+Query and form parsing, cookies and static files come later (see
 [the design](https://github.com/agentica-lang/bond/issues/1)).
 
 Needs Agentica 0.15.0 or later.

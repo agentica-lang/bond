@@ -39,7 +39,8 @@ def main() -> Void
       send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: args[2], value: args[3])], body: ""))
     end,
     BDD.step("I send {string} to {string} with the header {string} set to {string} and the body:") do |ctx, args|
-      send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: args[2], value: args[3])], body: BDD.doc_string(ctx)))
+      headers = [Header(name: args[2], value: args[3])]
+      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: BDD.doc_string(ctx)))
     end,
     BDD.step(
       "I send {string} to {string} with the content types {string} and {string} and the body:",

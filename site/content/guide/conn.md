@@ -14,9 +14,9 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 |---|---|
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
-| `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todo)`) as JSON |
+| `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todo)`) as JSON; sets `Content-Type` |
 | `Bond.status(conn, code)` | sets the status and nothing else |
-| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header and halts; a third argument gives 301, 303, 307 or 308 |
+| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308 |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
@@ -30,7 +30,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 ## Redirects
 
-`Bond.redirect` sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. A redirect to an address built from client input is an open redirect: check it first.
+`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308. It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. Any other status is a runtime error in the handler, so a 500. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. A redirect to an address built from client input is an open redirect: check it first.
 
 ```agentica
 import HTTP from "std/http"
@@ -45,17 +45,28 @@ def new_page(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.html(conn, 200, "<p>the new page</p>"))
 end
 
+def not_a_redirect(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.redirect(conn, "/new", 200))
+end
+
 def main() -> Void
-  app = Bond.app() |> Bond.get("/old", &old_page) |> Bond.get("/new", &new_page)
+  app = (
+    Bond.app()
+    |> Bond.get("/old", &old_page)
+    |> Bond.get("/new", &new_page)
+    |> Bond.get("/wrong", &not_a_redirect)
+  )
   moved = Testing.request(app, "GET", "/old", [], "")
   puts("#{moved.status} #{HTTP.header_values(moved.headers, "location")[0]}")
   puts(Testing.request(app, "GET", "/new", [], "").body)
+  puts(Testing.request(app, "GET", "/wrong", [], "").status)
 end
 ```
 
 ```output
 301 /new
 <p>the new page</p>
+500
 ```
 
 ## Bad requests

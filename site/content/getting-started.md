@@ -27,7 +27,7 @@ Then import it from your program with `pkg/bond/bond`.
 
 An app starts with `Bond.app()`. Each `Bond.get`, `Bond.post` and so on takes the app, a path pattern and a handler, and gives the app back, so they chain with `|>`. A handler is a function that takes a `Conn` and gives `ok(conn)` with the answer in it.
 
-The app does not hold your state. A handler that needs a store gets it from a closure: write it as a block, as `show` does below.
+The app does not hold your state. A handler that needs a store gets it from a closure: write it as a block, as `show` does below. That is simpler than making the app generic over the state.
 
 ```agentica
 import Bond from "pkg/bond/bond"
@@ -65,4 +65,4 @@ agentica app.agc
 curl http://127.0.0.1:4567/names/1
 ```
 
-The full todo list program is [examples/todos.agc](https://github.com/agentica-lang/bond/blob/main/examples/todos.agc). To try an app without a socket, see [Testing](/guide/testing/).
+The full todo list program is [examples/todos.agc](https://github.com/agentica-lang/bond/blob/main/examples/todos.agc). It keeps its todos in an `ATS` table and takes the ids from `ATS.add(key, n)`, which is atomic. To try an app without a socket, see [Testing](/guide/testing/).

@@ -58,3 +58,8 @@ Feature: Custom handlers
     When I send "POST" to "/todos"
     Then the status is 400
     And the body is "title is empty"
+
+  Scenario: The not found handler answers a missing static file
+    When I send "GET" to "/assets/missing.txt"
+    Then the status is 404
+    And the body is "<h1>No page at /assets/missing.txt</h1>"

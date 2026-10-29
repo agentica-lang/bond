@@ -71,6 +71,10 @@ export def on_error(app: App, handler: ErrorHandler) -> App
   return app.with(on_error: handler)
 end
 
+export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_048_576) -> App
+  return app
+end
+
 ## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
 ## handler that come after it.
 export def before(app: App, filter: Handler) -> App

@@ -29,6 +29,7 @@ export Apps.patch
 export Apps.delete
 export Apps.not_found
 export Apps.on_error
+export Apps.static
 export Apps.before
 export Apps.after
 export Apps.handle

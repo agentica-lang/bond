@@ -1,6 +1,8 @@
 ## The routes as a tree of path segments, as in the compiled router of Falcon. A node holds the routes that end at it
 ## (a handler for each method), its literal children by name, and at most one param child. A request walks the tree
-## once, so the work depends on the length of the path and not on the number of routes.
+## once, so the work typically depends on the length of the path and not on the number of routes. (When a literal
+## branch fails deep, the walk goes back to a param branch, so a hostile path can visit more branches; the most it
+## can visit is bounded by the size of the tree.)
 
 import Pattern from "pattern"
 import {Handler} from "conn"

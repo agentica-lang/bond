@@ -16,13 +16,14 @@ Neither the params nor the literal segments are decoded: `%20` stays `%20`, and 
 
 ## How routes match
 
-The routes are kept as a tree of path segments, and a request walks the tree once, so a lookup depends on the length of the path and not on the number of routes. A trailing or a double slash does not matter: `/posts/` and `//posts` are `/posts`.
+The routes are kept as a tree of path segments, and a request walks the tree once, so a lookup typically depends on the length of the path and not on the number of routes. A path can make the walk go back from a literal branch to a param branch, so in the worst case it visits more branches, never more than the tree has. A trailing or a double slash does not matter: `/posts/` and `//posts` are `/posts`.
 
 - A literal segment wins over a `:param` at the same place, whatever the order the routes were added in: `/posts/latest` is not taken by `/posts/:id`, even when `/posts/:id` was added first.
 - When the literal branch has no route to the end of the path, the walk goes back to the param: with `/docs/guide/intro` and `/docs/:page/edit`, the path `/docs/guide/edit` is `/docs/:page/edit` with `page` set to `guide`.
-- The path is chosen first, then the method. If the route that the path reaches has no handler for the method, the answer is a 405 and `Allow` lists the methods of that route only. The methods of `/posts/:id` are not borrowed for `/posts/latest`.
+- The path is chosen first, then the method. If the route that the path reaches has no handler for the method, the answer is a 405 and `Allow` lists the methods of that route only. The methods of `/posts/:id` are not borrowed for `/posts/latest`. This differs from Sinatra, which tries the next route: with `GET /users/me` and `PUT /users/:id`, a `PUT /users/me` is a 405 here, and it would reach `:id` there.
+- The routes of one path share one param name, whatever their methods: `GET /users/:id` and `POST /users/:uid` stop the program. Use `:id` for both.
 
-Three mistakes stop the program when the route is added, like a bad pattern: the same method and pattern twice (`/posts` and `/posts/` are the same pattern), and two names for the param at the same place, such as `/users/:id` with `/users/:name/posts`. Use one name at each place.
+Two mistakes stop the program when the route is added, like a bad pattern: the same method and pattern twice (`/posts` and `/posts/` are the same pattern), and two names for the param at the same place, such as `/users/:id` with `/users/:name/posts` or with `POST /users/:uid`. Use one name at each place.
 
 ```agentica
 import HTTP from "std/http"

@@ -123,6 +123,7 @@ Feature: Routing
       | duplicate_route    |
       | duplicate_trailing |
       | param_names        |
+      | param_methods      |
 
   Scenario: The same pattern with another method, and the same param name, are not a conflict
     Given the Agentica program "fixtures/same_param.agc"

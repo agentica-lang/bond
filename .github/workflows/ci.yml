@@ -38,3 +38,7 @@ jobs:
       # The features of specs/ (they listen on 127.0.0.1 only) and the unit tests of test/.
       - name: Test
         run: agentica test
+
+      # Every agentica block of the site must check, and run when an output block follows it.
+      - name: Site samples
+        run: make site-samples

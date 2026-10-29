@@ -1,11 +1,11 @@
 # Bond
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
-Work in progress: this is the first version, with the router, filters, custom handlers, JSON bodies, query strings and forms, cookies, static files, a guide to HTML escaping, and the helpers to answer.
-WebSockets come later (see
+Version 0.1.0 has the router, filters, custom handlers, JSON bodies, query strings and forms, cookies, static files, and the helpers to answer.
+Limits: static files are text only until Agentica has bodies of bytes, and WebSockets come later (see
 [the design](https://github.com/agentica-lang/bond/issues/1)).
 
-Needs Agentica 0.16.0 or later.
+Bond 0.1.0 needs Agentica 0.16.0 or later.
 
 Documentation: https://agentica-lang.github.io/bond/
 
@@ -15,12 +15,11 @@ In your `agentica.toml`:
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", ref = "COMMIT" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.1.0" }
 ```
 
-There is no release yet, so pin a commit (`--ref COMMIT`, the whole id) until the first tag. Then
-`agentica add bond https://github.com/agentica-lang/bond --ref COMMIT` (or `agentica install` for a manifest you
-edited) writes `agentica.lock` and `deps/bond/`.
+Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.1.0`. Both (and `agentica install` for a
+manifest you edited) write `agentica.lock` and `deps/bond/`.
 
 ## Example
 

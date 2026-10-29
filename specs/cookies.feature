@@ -70,3 +70,51 @@ Feature: Cookies
     Then the status is 500
     And the body is "Internal Server Error"
     And the header "set-cookie" appears 0 times
+
+  Scenario: header with Set-Cookie adds a header and keeps the cookies set before it
+    When I send "GET" to "/raw-cookie"
+    Then the header "set-cookie" appears 3 times
+    And the header "set-cookie" has the value "a=1; Path=/; HttpOnly; SameSite=Lax"
+    And the header "set-cookie" has the value "b=2; Path=/; HttpOnly; SameSite=Lax"
+    And the header "set-cookie" has the value "raw=1"
+
+  Scenario: try on a cookie that is not there is a 500, and an unwrap_or is the way
+    When I send "GET" to "/require-sid"
+    Then the status is 500
+    And the body is "Internal Server Error"
+    When I send "GET" to "/require-sid" with the cookie "sid=abc"
+    Then the status is 200
+    And the body is "sid=abc"
+
+  Scenario Outline: A name or value that std/cookie refuses is a 500 and sets no cookie (<why>)
+    When I send "GET" to "/set-cookie?name=<name>&value=<value>"
+    Then the status is 500
+    And the body is "Internal Server Error"
+    And the header "set-cookie" appears 0 times
+
+    Examples:
+      | why                        | name       | value     |
+      | a line break               | sid        | a%0D%0Ab  |
+      | a semicolon                | sid        | a%3Bb     |
+      | a comma                    | sid        | a%2Cb     |
+      | a space                    | sid        | a%20b     |
+      | a quote                    | sid        | %22q%22   |
+      | non-ASCII                  | sid        | caf%C3%A9 |
+      | a name that is not a token | bad%20name | x         |
+      | a __Host- name             | __Host-id  | x         |
+
+  Scenario: An empty value is a cookie
+    When I send "GET" to "/set-cookie?name=sid&value="
+    Then the status is 200
+    And the header "set-cookie" has the value "sid=; Path=/; HttpOnly; SameSite=Lax"
+
+  Scenario Outline: A cookie set by a filter stays on a 404 and is lost on a 500 (<path>)
+    When I send "GET" to "<path>"
+    Then the status is <status>
+    And the header "set-cookie" appears <count> times
+
+    Examples:
+      | path        | status | count |
+      | /track/ok   | 200    | 1     |
+      | /track/none | 404    | 1     |
+      | /track/fail | 500    | 0     |

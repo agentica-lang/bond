@@ -47,6 +47,7 @@ export def build() -> Bond.App
   return (
     Bond.app()
     |> Bond.before(&fail_on_request)
+    |> Bond.before(&track_visit)
     |> Bond.before(&redirect_legacy)
     |> Bond.before(&require_token)
     |> Bond.before(&trace_a)
@@ -75,6 +76,11 @@ export def build() -> Bond.App
     |> Bond.get("/logout", &logout)
     |> Bond.get("/logout-host", &logout_host)
     |> Bond.get("/bad-cookie", &bad_cookie)
+    |> Bond.get("/raw-cookie", &raw_cookie)
+    |> Bond.get("/require-sid", &require_sid)
+    |> Bond.get("/set-cookie", &set_from_query)
+    |> Bond.get("/track/ok", &hello)
+    |> Bond.get("/track/fail", &boom)
     |> Bond.get("/params", &query_fields)
     |> Bond.post("/form-params", &form_fields)
     |> Bond.post("/signup", &signup)
@@ -351,4 +357,34 @@ end
 def bad_cookie(conn: Bond.Conn) -> Result[Bond.Conn]
   bad = try Bond.set_cookie(conn, "sid", "has a space")
   return ok(Bond.text(bad, 200, "not reached"))
+end
+
+# `header` with Set-Cookie adds to the cookies set before it and does not replace them.
+def raw_cookie(conn: Bond.Conn) -> Result[Bond.Conn]
+  first = try Bond.set_cookie(conn, "a", "1")
+  second = try Bond.set_cookie(first, "b", "2")
+  return ok(Bond.header(second, "Set-Cookie", "raw=1"))
+end
+
+# `try` on a cookie that is not there is a 500, unlike `try` on a query value that is not there.
+def require_sid(conn: Bond.Conn) -> Result[Bond.Conn]
+  sid = try Bond.cookie(conn, "sid")
+  return ok(Bond.text(conn, 200, "sid=#{sid}"))
+end
+
+# The name and the value come from the query, to try the ones that std/cookie refuses.
+def set_from_query(conn: Bond.Conn) -> Result[Bond.Conn]
+  name = try Bond.query(conn, "name")
+  value = try Bond.query(conn, "value")
+  cookie = try Bond.set_cookie(conn, name, value)
+  return ok(Bond.text(cookie, 200, "set"))
+end
+
+# A before filter that sets a cookie for the paths under /track.
+def track_visit(conn: Bond.Conn) -> Result[Bond.Conn]
+  if conn.path.start_with?("/track")
+    return Bond.set_cookie(conn, "visit", "1")
+  end
+
+  return ok(conn)
 end

@@ -66,6 +66,10 @@ export def build() -> Bond.App
     |> Bond.get("/content-length", &content_length)
     |> Bond.get("/transfer-encoding", &transfer_encoding)
     |> Bond.get("/café", &hello)
+    |> Bond.get("/search", &search)
+    |> Bond.get("/items", &items)
+    |> Bond.post("/signup", &signup)
+    |> Bond.post("/tags", &tags)
     |> Bond.post("/users", &create_user)
     |> Bond.post("/accounts", &create_account)
     |> Bond.get("/page", &page)
@@ -253,4 +257,29 @@ end
 def create_account(conn: Bond.Conn) -> Result[Bond.Conn]
   account = try Bond.json_body(conn, JSON.codec(Account))
   return ok(Bond.text(conn, 201, "zip #{account.address.zip}"))
+end
+
+# The query string: a required `q`, an optional `page` and every `tag`.
+def search(conn: Bond.Conn) -> Result[Bond.Conn]
+  q = try Bond.query(conn, "q")
+  page = Bond.query_int(conn, "page").unwrap_or(1)
+  found = try Bond.query_all(conn, "tag")
+  return ok(Bond.text(conn, 200, "q=#{q} page=#{page} tags=#{found.join(",")}"))
+end
+
+def items(conn: Bond.Conn) -> Result[Bond.Conn]
+  count = try Bond.query_int(conn, "n")
+  return ok(Bond.text(conn, 200, "#{count} items"))
+end
+
+# A form body: `name` and `age` are required.
+def signup(conn: Bond.Conn) -> Result[Bond.Conn]
+  name = try Bond.form(conn, "name")
+  age = try Bond.form_int(conn, "age")
+  return ok(Bond.text(conn, 201, "welcome #{name}, #{age}"))
+end
+
+def tags(conn: Bond.Conn) -> Result[Bond.Conn]
+  found = try Bond.form_all(conn, "tag")
+  return ok(Bond.text(conn, 200, "tags=#{found.join(",")}"))
 end

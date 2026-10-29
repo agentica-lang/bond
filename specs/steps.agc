@@ -46,6 +46,14 @@ def main() -> Void
       "I send {string} to {string} with the content types {string} and {string} and the body:",
       &send_two_types,
     ),
+    BDD.step("I post to {string} as {string}:") do |ctx, args|
+      headers = [Header(name: "content-type", value: args[1])]
+      send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
+    end,
+    BDD.step("I post to {string} as {string} and {string}:") do |ctx, args|
+      headers = [Header(name: "content-type", value: args[1]), Header(name: "content-type", value: args[2])]
+      send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
+    end,
     BDD.step("the status is {int}") do |ctx, args|
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")

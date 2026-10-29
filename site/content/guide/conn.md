@@ -30,6 +30,9 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.form_int(conn, name)` | the same, as a whole number |
 | `Bond.form_all(conn, name)` | every value of a field, in order |
 | `Bond.form_params(conn)` | the whole form body decoded once, like `query_params` |
+| `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; see [Cookies](/guide/cookies/) |
+| `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` with `Path=/`, `HttpOnly` and `SameSite=Lax`, as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` with every attribute |
+| `Bond.delete_cookie(conn, name)` | adds a `Set-Cookie` that deletes the cookie (`Max-Age=0`) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
 

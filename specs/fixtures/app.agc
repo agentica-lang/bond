@@ -61,6 +61,7 @@ export def build_in(public: String) -> Bond.App
     |> Bond.after(&trace_c)
     |> Bond.after(&sign)
     |> Bond.get("/hello", &hello)
+    |> Bond.get("/greet", &greet)
     |> Bond.get("/users/:user_id/posts/:post_id", &show_post)
     |> Bond.get("/todos") do |conn| list_todos(store, conn) end
     |> Bond.post("/todos") do |conn| create_todo(store, conn) end
@@ -156,6 +157,12 @@ end
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.text(conn, 200, "hello"))
+end
+
+# The pattern of the guide: a value of the client is escaped before it goes into HTML.
+def greet(conn: Bond.Conn) -> Result[Bond.Conn]
+  name = try Bond.query(conn, "name")
+  return ok(Bond.html(conn, 200, "<p>Hello, #{name}</p>"))
 end
 
 def show_post(conn: Bond.Conn) -> Result[Bond.Conn]

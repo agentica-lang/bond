@@ -8,17 +8,17 @@ description: Add Bond to a project, write a first app and run it.
 
 Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.16.0 or later. Bond is a package: you add it to the `agentica.toml` of your project as a dependency on its git repository.
 
-There is no release yet, so pin a commit (`--ref`, the whole id) until the first tag:
+Pin a release by its tag (Bond 0.1.0 needs Agentica 0.16.0 or later):
 
 ```sh
-agentica add bond https://github.com/agentica-lang/bond --ref COMMIT
+agentica add bond https://github.com/agentica-lang/bond --tag 0.1.0
 ```
 
 This writes the dependency in `agentica.toml` and `agentica.lock`, and puts the files of Bond in `deps/bond/`. For a manifest you edited by hand, run `agentica install`.
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", ref = "COMMIT" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.1.0" }
 ```
 
 Then import it from your program with `pkg/bond/bond`.

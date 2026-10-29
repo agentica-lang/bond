@@ -52,9 +52,11 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: site/highlight/package-lock.json
+      # A pull request only builds: it needs no Pages setting, and the base URL of hugo.toml is enough.
       - id: pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
-      - run: make site HUGO_FLAGS="--baseURL ${{ steps.pages.outputs.base_url }}/"
+      - run: make site HUGO_FLAGS="${{ github.event_name != 'pull_request' && format('--baseURL {0}/', steps.pages.outputs.base_url) || '' }}"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site/public

@@ -1,6 +1,6 @@
 ---
 title: Errors
-weight: 5
+weight: 7
 description: What a failure answers, and the not_found and on_error handlers.
 ---
 

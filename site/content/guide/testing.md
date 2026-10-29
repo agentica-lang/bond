@@ -1,6 +1,6 @@
 ---
 title: Testing
-weight: 7
+weight: 9
 description: Run an app in process with Testing.request, with no socket.
 ---
 

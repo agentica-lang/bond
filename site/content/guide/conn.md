@@ -22,6 +22,8 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
 | `Bond.param(conn, name)` | the text of a `:name` segment, as a `Result[String]` |
 | `Bond.param_int(conn, name)` | the same, as a whole number; text that is not one is a 400 |
+| `Bond.query(conn, name)` | the first value of `name` in the query string, decoded, as a `Result`; see [Query and forms](/guide/query/) |
+| `Bond.form(conn, name)` | the first value of a field of a form body, decoded, as a `Result` |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
 

@@ -21,4 +21,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A crash writes one line on stderr after the stack trace of the VM, not its message again.
 - A documentation site (Hugo, GitHub Pages) in `site/`, with `make site`, and `make site-samples`, which checks (and runs, when an output block follows) every code sample of the site.
 - `Bond.json_body(conn, JSON.codec(User))` decodes a JSON request body into a struct; a wrong or missing content type, an empty body or a body that does not fit is a 400 with a short message. A guide page on the site.
-- Needs Agentica 0.15.0 (README and site). CI runs on Agentica 0.16.0, and the specs and the site samples pass on it.
+- `Bond.query`, `query_int` and `query_all` read the query string, and `Bond.form`, `form_int` and `form_all` read an `application/x-www-form-urlencoded` body, decoded with `std/uri`. A missing name, a number that is not one, a bad `%` and a wrong content type are a 400. A guide page on the site.
+- Needs Agentica 0.16.0 (README and site), and CI runs on it.

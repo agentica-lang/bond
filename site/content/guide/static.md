@@ -6,13 +6,13 @@ description: Serve the files of a folder under a path, with the type from std/mi
 
 # Static files
 
-`Bond.static(app, "/assets", "public")` serves the files of the folder `public` under the path `/assets`: `/assets/app.css` is the file `public/app.css`, and `/assets/img/logo.svg` is `public/img/logo.svg`. The folder is relative to the working directory of the program, or an absolute path, and it must exist. A program that starts in another folder gets 404 for every file, so use an absolute path when it can.
+`Bond.static(app, "/assets", "public")` serves the files of the folder `public` under the path `/assets`: `/assets/app.css` is the file `public/app.css`, and `/assets/img/logo.svg` is `public/img/logo.svg`. The folder is relative to the working directory of the program, or an absolute path. It must be a folder that exists when the app is built: if not, the program stops at once, like a bad route pattern, and the real path of the folder is kept from then on. A program that starts in another folder would not find a relative one, so use an absolute path when it can.
 
-Only `GET` and `HEAD` read a file. Any other method on a path under the prefix is a 405 with `Allow: GET, HEAD`. A route of the app wins over a file: if you add `Bond.get("/assets/special.txt", ...)`, the handler answers, and the file is never read. Call `Bond.static` more than once for more folders, each with its own prefix. The first prefix that holds the path decides, so a second folder under the same prefix is never read.
+Only `GET` and `HEAD` read a file. Any other method on a path under the prefix is a 405 with `Allow: GET, HEAD`. A route of the app wins over a file: if you add `Bond.get("/assets/special.txt", ...)`, the handler answers, and the file is never read. Call `Bond.static` more than once for more folders, each with its own prefix. The first prefix that holds the path decides, so a second folder under the same prefix is never read. Put the longer prefix first: `Bond.static("/assets/vendor", "vendor")` before `Bond.static("/assets", "public")`, or `/assets/vendor/x.js` is looked up in `public/vendor/`.
 
 ## What the answer has
 
-- `Content-Type` from `std/mime` by the extension of the file (`text/css`, `application/json`, `image/svg+xml`), and `application/octet-stream` for an extension it does not know. A text type gets `; charset=utf-8`.
+- `Content-Type` from `std/mime` by the extension of the file (`text/css`, `application/json`, `image/svg+xml`), always with `; charset=utf-8`, since only text is served (see below).
 - `X-Content-Type-Options: nosniff`, so a browser uses the type that Bond sent and does not guess a script from a text file.
 - `Content-Length` is added by the HTTP server, as for every answer of Bond. A `HEAD` answer has the same headers, with the length of the file, and the HTTP server sends no body for it (`Testing.request` shows the body, since it has no socket).
 
@@ -23,17 +23,23 @@ Bond sets no cache headers: no `ETag`, no `Last-Modified`, no `Cache-Control` an
 A path is the answer of a file only when it names a plain file of the folder. All the other paths are answered as a path with no route, so a [custom `not_found` handler](/guide/errors/) applies and nothing says why the file was refused:
 
 - A file that is missing, and a folder (Bond lists no folder).
-- A name that starts with a dot: `.git`, `.env` and `..` itself.
-- A way out of the folder: `..`, `%2e%2e`, an encoded slash (`..%2F`), a backslash (`..%5C`), a colon, an absolute path (`%2Fetc%2Fpasswd`), a NUL or another control character, and a bad percent escape. Each segment is decoded first and then checked, so the encoded forms are refused the same as the plain ones.
+- A name that starts with a dot: `.git`, `.env` and `..` itself. The rule also applies to the real path of the file below the folder, so a link to `.env`, or into a folder such as `.git/`, is a 404 too.
+- A name that Windows opens as a device (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`), with any extension and in any case.
+- A way out of the folder: `..`, `%2e%2e` (a path with `%252e` is only a name with a percent sign, and a file that is not there), an encoded slash (`..%2F`), a backslash (`..%5C`), a colon, an absolute path (`%2Fetc%2Fpasswd`), a NUL or another control character, and a bad percent escape. Each segment is decoded first and then checked, so the encoded forms are refused the same as the plain ones.
 - A symbolic link whose target is outside the folder. The real path of the file, with the links followed, must be inside the real path of the folder. A link to another file inside the folder is served.
 
 There is a short time between this check and the read of the file. Do not let untrusted users create links in the folder.
 
-## Size and text only
+## Text only, and the size
 
-`File.read_text` gives the body, and the body of an `HttpResponse` is a UTF-8 text, so Bond serves files that are UTF-8 text: HTML, CSS, JavaScript, JSON, SVG, plain text. A binary file, such as a PNG or a font, is not valid UTF-8 and is a 500. It will be served when `std/http` has bodies of bytes. Until then, serve images and fonts from a CDN or a web server in front of Bond.
+`File.read_text` gives the body, and the body of an `HttpResponse` is a UTF-8 text, so Bond serves files that are text: HTML, CSS, JavaScript, JSON, SVG, plain text. The type decides, before the file is read:
 
-A file over `max_bytes` is a 500 too. The default is 1 MiB, which is also the most `File.read_text` reads: `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` that is 0 or over 1 MiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built, like a bad route pattern. A 500 for a file has the fixed text of every 500, and the reason goes to stderr.
+- A file whose type is not text (`MIME.text?`) is a **501 Not Implemented** with the fixed body `Not Implemented`. That is every image, font, archive and PDF, and also a file with an extension that `std/mime` does not know or with none (`LICENSE`, `Makefile`). Bond writes one line to stderr about it, once and not for each request. Binary files will be served when `std/http` has bodies of bytes (Agentica #805, then #803). Until then, serve images and fonts from a CDN or a web server in front of Bond.
+- A text file that is not valid UTF-8 is a 500, and so is a text file over `max_bytes`. A file of exactly `max_bytes` is served. The default is 1 MiB, which is also the most `File.read_text` reads: `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` that is 0 or over 1 MiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built, like a bad route pattern.
+
+A 500 for a file is a failure like the `error` of a handler: it goes to the [`on_error` handler](/guide/errors/), which gets the reason in words (`the static file app.css is over 10 bytes`), and the reason is written to stderr. The default handler answers the fixed text of every 500.
+
+Only regular files are served (a folder and other kinds of entry are a 404). `File.stat` cannot tell a FIFO from a file, so a FIFO in the folder is not refused; the read gives up after five seconds with a 500. Do not put one there.
 
 ## An example
 

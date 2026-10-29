@@ -136,8 +136,10 @@ Feature: Static files
       """
       501
       501
+
       """
     And stderr is:
       """
       bond: a static file is not text, and a binary file needs a body of bytes in std/http (Agentica #805, #803)
+
       """

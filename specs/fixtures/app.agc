@@ -10,6 +10,11 @@ struct Todo
   title: String
 end
 
+struct NewUser
+  name: String
+  age: Int
+end
+
 struct Store
   todos: ATS[Int, Todo]
   next_id: ATS[String, Int]
@@ -51,6 +56,7 @@ export def build() -> Bond.App
     |> Bond.get("/content-length", &content_length)
     |> Bond.get("/transfer-encoding", &transfer_encoding)
     |> Bond.get("/café", &hello)
+    |> Bond.post("/users", &create_user)
     |> Bond.get("/page", &page)
     |> Bond.get("/accepted", &accepted)
     |> Bond.get("/redirect", &redirect_default)
@@ -225,4 +231,10 @@ def custom_error(conn: Bond.Conn, message: String) -> Result[Bond.Conn]
   end
 
   return ok(Bond.header(Bond.html(conn, 500, "Something went wrong"), "x-error", message))
+end
+
+# A JSON body is decoded into a struct; a body that does not fit is a 400.
+def create_user(conn: Bond.Conn) -> Result[Bond.Conn]
+  user = try Bond.json_body(conn, JSON.codec(NewUser))
+  return ok(Bond.text(conn, 201, "hello #{user.name}, #{user.age}"))
 end

@@ -38,6 +38,9 @@ def main() -> Void
     BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: {args[2]: args[3]}, body: ""))
     end,
+    BDD.step("I send {string} to {string} with the header {string} set to {string} and the body:") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: {args[2]: args[3]}, body: BDD.doc_string(ctx)))
+    end,
     BDD.step("the status is {int}") do |ctx, args|
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
@@ -45,6 +48,14 @@ def main() -> Void
     BDD.step("the body is {string}") do |ctx, args|
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
+    end,
+    BDD.step("the body starts with {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.body.start_with?(args[0]), "the body is #{reply.body}")
+    end,
+    BDD.step("the body contains {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.body.include?(args[0]), "the body is #{reply.body}")
     end,
     BDD.step("the header {string} is {string}") do |ctx, args|
       reply = last_reply(ctx)

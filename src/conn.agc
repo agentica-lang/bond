@@ -119,6 +119,10 @@ export def param(conn: Conn, name: String) -> Result[String]
   return conn.params.get(name)
 end
 
+export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
+  return error("not written yet")
+end
+
 ## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
 ## with `try`).
 export def bad_request[T](message: String) -> Result[T]

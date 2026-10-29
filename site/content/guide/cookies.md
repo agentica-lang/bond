@@ -8,7 +8,9 @@ description: Read the cookies of a request and set or delete them in the answer,
 
 `Bond.cookies(conn)` reads the `Cookie` header into a `Map[String, String]`, with `std/cookie`. The first value of a name wins, and the values are as the client sent them: they are not decoded or unquoted. More than one `Cookie` header is read as one. A handler that needs several cookies reads the map once; `Bond.cookie(conn, "sid")` gives one value as a `Result`.
 
-A cookie that is not there is an `error`, but a plain one: a first visit has no cookie, and that is not a mistake of the client. Use `unwrap_or` or `case`. Passed on with `try` it is a 500.
+A cookie that is not there is an `error`, but a plain one, like `Bond.param` and `Bond.request_header`: a first visit has no cookie, and that is not a mistake of the client. This is different from `Bond.query`, where a missing name is a 400. So `try Bond.cookie(conn, "sid")` on a first visit is a 500: use `unwrap_or` or `case` and answer it yourself, for example with a redirect to the login page.
+
+A value is as the client sent it, and `Bond.cookies` does not decode it. Encode a value with `URI.encode_www_form_component` (from `std/uri`) before you set it, and read it back with `URI.decode_www_form_component`.
 
 ## Setting a cookie
 
@@ -21,9 +23,31 @@ A cookie that is not there is an `error`, but a plain one: a first visit has no 
 
 `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` of `std/cookie` (`import Cookie from "std/cookie"`) with the attributes you give: `path`, `domain`, `max_age`, `expires`, `secure`, `http_only` and `same_site`. Bond adds none of its own there, so write `http_only: true` and `same_site: "Lax"` when you want them.
 
-Both give a `Result[Conn]`: use `try`. A name that is not a token, or a value with a space, a comma, a semicolon, a quote, a control or a non-ASCII character, is an `error` (a 500 when it is passed on), so encode the value first: `std/cookie` never encodes or decodes.
+Both give a `Result[Conn]`: use `try`. A name that is not a token, or a value with a space, a comma, a semicolon, a quote, a control or a non-ASCII character, is an `error` (a 500 when it is passed on), and no cookie is set. `std/cookie` never encodes or decodes, so a value that comes from a client must be encoded first, as above.
 
-Each cookie is a header of its own: Bond never joins two `Set-Cookie` headers with a comma, and the HTTP server writes each one. Set a cookie once per answer, since the headers are not merged by name. A `before` filter can set a cookie and a later `Bond.redirect` keeps it. A 500 does not: it is a new answer with no header of the failed one.
+`set_cookie` has no other arguments: `set_cookie_with` covers `Secure` and `Max-Age`. In production, one cookie of a year, over HTTPS, is:
+
+```agentica
+import Cookie from "std/cookie"
+import Bond from "pkg/bond/bond"
+
+def remember(conn: Bond.Conn, id: String) -> Result[Bond.Conn]
+  year = Cookie.Cookie(
+    name: "sid",
+    value: id,
+    path: "/",
+    max_age: 31_536_000,
+    secure: true,
+    http_only: true,
+    same_site: "Lax",
+  )
+  return Bond.set_cookie_with(conn, year)
+end
+```
+
+A name that starts with `__Host-` or `__Secure-` needs `secure: true`, so `set_cookie` always fails for it: use `set_cookie_with`. `__Host-` also needs `path: "/"` and no domain.
+
+Each cookie is a header of its own: Bond never joins two `Set-Cookie` headers with a comma, and the HTTP server writes each one. `Bond.header(conn, "Set-Cookie", value)` is the one exception to "a header replaces the one of the same name": it adds a header too, so it never wipes the cookies set before it. Set a cookie once per answer, since the headers are not merged by name. A `before` filter can set a cookie and a later `Bond.redirect` keeps it. A 500 does not: it is a new answer with no header of the failed one.
 
 ## Deleting a cookie
 

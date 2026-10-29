@@ -28,6 +28,7 @@ Feature: JSON request bodies
       | application/json; charset=utf-8 |
       | Application/JSON                |
       | application/vnd.api+json        |
+      | application/json;               |
 
   Scenario Outline: A body that is not marked as JSON is a 400 (<type>)
     When I send "POST" to "/users" with the header "content-type" set to "<type>" and the body:
@@ -41,6 +42,9 @@ Feature: JSON request bodies
       | type              |
       | text/plain        |
       | application/jsonx |
+      | text/json         |
+      | application/+json |
+      | /+json            |
 
   Scenario: A request with no content type is a 400
     When I send "POST" to "/users" with the body "{}"
@@ -52,17 +56,48 @@ Feature: JSON request bodies
     Then the status is 400
     And the body is "the body is empty"
 
+  Scenario: More than one content type is a 400
+    When I send "POST" to "/users" with the content types "application/json" and "application/json" and the body:
+      """
+      {"name": "Ana", "age": 30}
+      """
+    Then the status is 400
+    And the body is "content type must be application/json"
+
   Scenario Outline: A body that does not fit the struct is a 400 that says why (<why>)
     When I send "POST" to "/users" with the header "content-type" set to "application/json" and the body:
       """
       <body>
       """
     Then the status is 400
-    And the body starts with "invalid body: "
-    And the body contains "<field>"
+    And the body is "<message>"
 
     Examples:
-      | why        | body                             | field |
-      | malformed  | {"name": "Ana", "age": 30        | JSON  |
-      | no field   | {"name": "Ana"}                  | age   |
-      | wrong type | {"name": "Ana", "age": "thirty"} | age   |
+      | why        | body                             | message                                       |
+      | malformed  | {"name": "Ana", "age": 30        | invalid body: invalid JSON                    |
+      | no field   | {"name": "Ana"}                  | invalid body: age: expected required field    |
+      | wrong type | {"name": "Ana", "age": "thirty"} | invalid body: age: expected signed 64-bit Int |
+
+  Scenario: The message names the field, not the key or index the client sent (nested field)
+    When I send "POST" to "/accounts" with the header "content-type" set to "application/json" and the body:
+      """
+      {"address": {}, "scores": {}, "tags": []}
+      """
+    Then the status is 400
+    And the body is "invalid body: address.zip: expected required field"
+
+  Scenario: The message names the field, not the key or index the client sent (map key)
+    When I send "POST" to "/accounts" with the header "content-type" set to "application/json" and the body:
+      """
+      {"address": {"zip": "1"}, "scores": {"KEY1": "x"}, "tags": []}
+      """
+    Then the status is 400
+    And the body is "invalid body: scores: expected signed 64-bit Int"
+
+  Scenario: The message names the field, not the key or index the client sent (list index)
+    When I send "POST" to "/accounts" with the header "content-type" set to "application/json" and the body:
+      """
+      {"address": {"zip": "1"}, "scores": {}, "tags": [1]}
+      """
+    Then the status is 400
+    And the body is "invalid body: tags: expected String"

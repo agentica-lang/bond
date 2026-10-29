@@ -1,5 +1,5 @@
-## The app the features run. It is like the todo app of `examples/todos.agc` (its body is plain text) with a few routes more for the filters
-## and the errors.
+## The app the features run. It is like the todo app of `examples/todos.agc` (its body is plain text) with a few
+## routes more for the filters and the errors.
 
 import Bond from "../../bond"
 
@@ -13,6 +13,16 @@ end
 struct NewUser
   name: String
   age: Int
+end
+
+struct Address
+  zip: String
+end
+
+struct Account
+  address: Address
+  scores: Map[String, Int]
+  tags: List[String]
 end
 
 struct Store
@@ -57,6 +67,7 @@ export def build() -> Bond.App
     |> Bond.get("/transfer-encoding", &transfer_encoding)
     |> Bond.get("/café", &hello)
     |> Bond.post("/users", &create_user)
+    |> Bond.post("/accounts", &create_account)
     |> Bond.get("/page", &page)
     |> Bond.get("/accepted", &accepted)
     |> Bond.get("/redirect", &redirect_default)
@@ -237,4 +248,9 @@ end
 def create_user(conn: Bond.Conn) -> Result[Bond.Conn]
   user = try Bond.json_body(conn, JSON.codec(NewUser))
   return ok(Bond.text(conn, 201, "hello #{user.name}, #{user.age}"))
+end
+
+def create_account(conn: Bond.Conn) -> Result[Bond.Conn]
+  account = try Bond.json_body(conn, JSON.codec(Account))
+  return ok(Bond.text(conn, 201, "zip #{account.address.zip}"))
 end

@@ -8,7 +8,7 @@ description: Run an app in process with Testing.request, with no socket.
 
 `Testing.request` runs an app in process, with no socket, through the same filters and routes as `Bond.run`. Import it from `pkg/bond/testing`.
 
-Its arguments are the app, the method, the path (with its query, if any), the request headers and the body. It gives an `HttpResponse` with `status`, `headers` and `body`. A response the server would refuse is a 500 here too, so a test sees what a client would. A `HEAD` request is answered with the body, which the server would drop.
+Its arguments are the app, the method, the path (with its query, if any), and the request headers and the body, which are optional: `Testing.request(app, "GET", "/hello")` sends no headers and an empty body. It gives an `HttpResponse` with `status`, `headers` and `body`. A response the server would refuse is a 500 here too, so a test sees what a client would. A `HEAD` request is answered with the body, which the server would drop.
 
 ```agentica
 import Bond from "pkg/bond/bond"
@@ -16,7 +16,7 @@ import Testing from "pkg/bond/testing"
 
 def main() -> Void
   app = Bond.app() |> Bond.get("/hello") do |conn| ok(Bond.text(conn, 200, "hello")) end
-  response = Testing.request(app, "GET", "/hello", [], "")
+  response = Testing.request(app, "GET", "/hello")
   puts("#{response.status} #{response.body}")
 end
 ```

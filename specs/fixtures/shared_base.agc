@@ -8,7 +8,7 @@ def one(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def status(app: Bond.App, path: String) -> Int
-  return Testing.request(app, "GET", path, [], "").status
+  return Testing.request(app, "GET", path).status
 end
 
 def main() -> Void

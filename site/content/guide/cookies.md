@@ -84,14 +84,14 @@ def main() -> Void
     |> Bond.get("/logout", &logout)
   )
   for path in ["/login", "/logout"]
-    response = Testing.request(app, "GET", path, [], "")
+    response = Testing.request(app, "GET", path)
     for line in HTTP.header_values(response.headers, "set-cookie")
       puts(line)
     end
   end
   headers = [Header(name: "Cookie", value: "sid=abc123; theme=dark")]
-  puts(Testing.request(app, "GET", "/whoami", headers, "").body)
-  puts(Testing.request(app, "GET", "/whoami", [], "").body)
+  puts(Testing.request(app, "GET", "/whoami", headers).body)
+  puts(Testing.request(app, "GET", "/whoami").body)
 end
 ```
 

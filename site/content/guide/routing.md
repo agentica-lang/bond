@@ -55,10 +55,10 @@ def main() -> Void
     |> Bond.get("/docs/guide/intro", &intro)
     |> Bond.get("/docs/:page/edit", &edit)
   )
-  puts(Testing.request(app, "GET", "/posts/42", [], "").body)
-  puts(Testing.request(app, "GET", "/posts/latest/", [], "").body)
-  puts(Testing.request(app, "GET", "/docs/guide/edit", [], "").body)
-  response = Testing.request(app, "POST", "/posts/latest", [], "")
+  puts(Testing.request(app, "GET", "/posts/42").body)
+  puts(Testing.request(app, "GET", "/posts/latest/").body)
+  puts(Testing.request(app, "GET", "/docs/guide/edit").body)
+  response = Testing.request(app, "POST", "/posts/latest")
   puts("#{response.status} #{HTTP.header_values(response.headers, "allow")}")
 end
 ```

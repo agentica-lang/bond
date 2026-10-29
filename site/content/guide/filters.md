@@ -40,9 +40,9 @@ def main() -> Void
     |> Bond.after(&sign)
     |> Bond.get("/secret", &secret)
   )
-  denied = Testing.request(app, "GET", "/secret", [], "")
+  denied = Testing.request(app, "GET", "/secret")
   puts("#{denied.status} #{denied.body}")
-  allowed = Testing.request(app, "GET", "/secret", [Header(name: "X-Token", value: "letmein")], "")
+  allowed = Testing.request(app, "GET", "/secret", [Header(name: "X-Token", value: "letmein")])
   puts("#{allowed.status} #{allowed.body}")
   puts(HTTP.header_values(denied.headers, "x-powered-by")[0])
 end

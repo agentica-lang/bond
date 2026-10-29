@@ -51,7 +51,7 @@ import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
 def show(app: Bond.App, method: String, path: String) -> Void
-  response = Testing.request(app, method, path, [], "")
+  response = Testing.request(app, method, path)
   type = HTTP.header_values(response.headers, "content-type").join(",")
   puts("#{method} #{path} #{response.status} #{type} #{response.body.size}")
 end

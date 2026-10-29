@@ -33,7 +33,7 @@ def search(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def get(app: Bond.App, target: String) -> Void
-  response = Testing.request(app, "GET", target, [], "")
+  response = Testing.request(app, "GET", target)
   puts("#{response.status} #{response.body}")
 end
 
@@ -110,9 +110,9 @@ end
 
 def main() -> Void
   app = Bond.app() |> Bond.get("/files/:name", &show)
-  puts(Testing.request(app, "GET", "/files/caf%C3%A9", [], "").body)
-  puts(Testing.request(app, "GET", "/files/a+b", [], "").body)
-  puts(Testing.request(app, "GET", "/files/%zz", [], "").status)
+  puts(Testing.request(app, "GET", "/files/caf%C3%A9").body)
+  puts(Testing.request(app, "GET", "/files/a+b").body)
+  puts(Testing.request(app, "GET", "/files/%zz").status)
 end
 ```
 

@@ -3,8 +3,8 @@ import Pattern from "../src/pattern"
 def main() -> Void
   Test.run([
     Test.test("empty segments are ignored") do
-      try Test.eq(Pattern.matches("/users/", "//users"), ok({}))
-      Test.eq(Pattern.matches("/", ""), ok({}))
+      try Test.eq(Pattern.segments("//users//7/"), ["users", "7"])
+      Test.eq(Pattern.segments("/"), [])
     end,
     Test.test("a pattern starts with a slash and names each param once") do
       try Test.assert(Pattern.valid?("/a/:b/:c"), "a good pattern")

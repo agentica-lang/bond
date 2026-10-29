@@ -2,15 +2,17 @@
 
 import Conns from "conn"
 import Pattern from "pattern"
+import Router from "router"
 import Statics from "static"
 import {Conn, ErrorHandler, Handler} from "conn"
 
 NOT_FOUND = "not found"
 
-## Routes are tried in the order they were added. Filters run in the order they were added. `not_found` answers a
+## Routes are kept as a tree of segments (`router.agc`): a literal segment wins over a param, whatever the order the
+## routes were added in. Filters run in the order they were added. `not_found` answers a
 ## path with no route and `on_error` a failure; `app()` sets the plain answers.
 export struct App
-  routes: List[Route]
+  routes: Router.Node
   before_filters: List[Handler]
   after_filters: List[Handler]
   statics: List[Statics.Mount]
@@ -19,21 +21,10 @@ export struct App
   on_error: ErrorHandler
 end
 
-struct Route
-  method: String
-  pattern: String
-  handler: Handler
-end
-
-struct Hit
-  route: Route
-  params: Map[String, String]
-end
-
 export def app() -> App
   notes: ATS[String, Bool] = ATS.new()
   return App(
-    routes: [],
+    routes: Router.empty(),
     before_filters: [],
     after_filters: [],
     statics: [],
@@ -132,14 +123,21 @@ export def handle(app: App, request: HttpRequest) -> HttpResponse
   end
 end
 
-# A bad pattern is a mistake of the program, so it stops at the start and not at the first request.
+# A bad pattern, a route added twice and a param with two names are mistakes of the program, so they stop it at the
+# start and not at the first request.
 def route(app: App, method: String, pattern: String, handler: Handler) -> App
   if not Pattern.valid?(pattern)
     bad: Result[App] = error("bond: the route pattern #{pattern} must start with / and name each param once")
     return bad.unwrap!
   end
 
-  return app.with(routes: app.routes.push(Route(method: method, pattern: pattern, handler: handler)))
+  added = Router.add(app.routes, method, pattern, handler)
+  if not added.ok?
+    bad: Result[App] = error(added.message)
+    return bad.unwrap!
+  end
+
+  return app.with(routes: added.unwrap!)
 end
 
 def serve(app: App, conn: Conn) -> Result[Conn]
@@ -148,40 +146,33 @@ def serve(app: App, conn: Conn) -> Result[Conn]
   return ok(app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end)
 end
 
-# The route that matches the path and the method; a 405 when only the path matches, a 404 when nothing does. HEAD
-# uses the route of GET (the server drops the body). Patterns and paths are compared as written, without decoding.
+# The node of the tree that holds the path (a literal segment before a param), then its handler for the method: a 405
+# when the node has routes for other methods only, a 404 when no node has the path. HEAD uses the route of GET (the
+# server drops the body). Paths are compared as written, without decoding.
 def dispatch(app: App, conn: Conn) -> Conn
   if conn.halted
     return conn
   end
 
-  hits: List[Hit] = []
-  for candidate in app.routes
-    matched = Pattern.matches(candidate.pattern, conn.path)
-    if matched.ok?
-      # `unwrap!` cannot halt here: the result is ok.
-      hits = hits.push(Hit(route: candidate, params: matched.unwrap!))
-    end
-  end
-
-  if hits.empty?
+  found = Router.find(app.routes, conn.path)
+  if not found.ok?
     case Statics.serve(app.statics, app.notes, conn)
       ok(answer) -> return answer
       error(reason) -> return unserved(app, conn, reason)
     end
   end
 
+  hit = found.unwrap!
   wanted = conn.method
   if wanted == "HEAD"
     wanted = "GET"
   end
 
-  chosen = hits.select do |hit| hit.route.method == wanted end
-  if chosen.empty?
-    return Conns.halt(Conns.header(conn, "allow", allowed(hits)), 405, "method not allowed")
+  if not hit.node.handlers.key?(wanted)
+    return Conns.halt(Conns.header(conn, "allow", allowed(hit.node)), 405, "method not allowed")
   end
 
-  return apply(app, conn.with(params: chosen[0].params), chosen[0].route.handler)
+  return apply(app, conn.with(params: hit.params), hit.node.handlers[wanted])
 end
 
 # A path under no folder, or with no file, is a 404 for the not found handler; a file that cannot be sent is a failure,
@@ -194,12 +185,12 @@ def unserved(app: App, conn: Conn, reason: String) -> Conn
   return failure(app, conn, reason)
 end
 
-# The methods of the routes that match the path, in the order they were added, with HEAD after GET.
-def allowed(hits: List[Hit]) -> String
+# The methods of the routes of the node, in the order they were added, with HEAD after GET.
+def allowed(node: Router.Node) -> String
   methods: List[String] = []
-  for hit in hits
-    methods = methods.push(hit.route.method)
-    if hit.route.method == "GET"
+  for method in node.handlers.keys
+    methods = methods.push(method)
+    if method == "GET"
       methods = methods.push("HEAD")
     end
   end

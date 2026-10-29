@@ -63,6 +63,15 @@ export def build_in(public: String) -> Bond.App
     |> Bond.after(&sign)
     |> Bond.get("/hello", &hello)
     |> Bond.get("/greet", &greet)
+    |> Bond.get("/", &root_page)
+    |> Bond.post("/only-post", &hello)
+    |> Bond.get("/a/lit/:y/z", &deep_z)
+    |> Bond.get("/a/:x/c", &deep_c)
+    |> Bond.get("/things/:id", &thing)
+    |> Bond.post("/things/:id", &update_thing)
+    |> Bond.get("/things/new", &new_thing)
+    |> Bond.get("/docs/:page/edit", &docs_edit)
+    |> Bond.get("/docs/guide/intro", &docs_intro)
     |> Bond.get("/users/:user_id/posts/:post_id", &show_post)
     |> Bond.get("/todos") do |conn| list_todos(store, conn) end
     |> Bond.post("/todos") do |conn| create_todo(store, conn) end
@@ -164,6 +173,42 @@ end
 def greet(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
   return ok(Bond.html(conn, 200, "<p>Hello, #{HTML.escape(name)}</p>"))
+end
+
+# The routes of the precedence scenarios. `/things/:id` is added before `/things/new` on purpose.
+def thing(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "thing #{try Bond.param(conn, "id")}"))
+end
+
+def update_thing(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "updated #{try Bond.param(conn, "id")}"))
+end
+
+def new_thing(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "a new thing"))
+end
+
+def docs_intro(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "the intro"))
+end
+
+def docs_edit(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "edit #{try Bond.param(conn, "page")}"))
+end
+
+def root_page(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "the root"))
+end
+
+def deep_z(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "z"))
+end
+
+# Reports the params it sees, to show that a branch the walk left leaves none behind.
+def deep_c(conn: Bond.Conn) -> Result[Bond.Conn]
+  x = Bond.param(conn, "x").unwrap_or("absent")
+  y = Bond.param(conn, "y").unwrap_or("absent")
+  return ok(Bond.text(conn, 200, "x=#{x} y=#{y}"))
 end
 
 def show_post(conn: Bond.Conn) -> Result[Bond.Conn]

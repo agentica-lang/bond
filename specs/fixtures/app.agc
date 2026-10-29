@@ -1,6 +1,7 @@
 ## The app the features run. It is like the todo app of `examples/todos.agc` (its body is plain text) with a few
 ## routes more for the filters and the errors.
 
+import Cookie from "std/cookie"
 import Bond from "../../bond"
 
 TOKEN = "letmein"
@@ -68,6 +69,12 @@ export def build() -> Bond.App
     |> Bond.get("/café", &hello)
     |> Bond.get("/search", &search)
     |> Bond.get("/items", &items)
+    |> Bond.get("/whoami", &whoami)
+    |> Bond.get("/login", &login)
+    |> Bond.get("/login-redirect", &login_redirect)
+    |> Bond.get("/logout", &logout)
+    |> Bond.get("/logout-host", &logout_host)
+    |> Bond.get("/bad-cookie", &bad_cookie)
     |> Bond.get("/params", &query_fields)
     |> Bond.post("/form-params", &form_fields)
     |> Bond.post("/signup", &signup)
@@ -299,4 +306,49 @@ end
 
 def describe(fields: Map[String, List[String]]) -> String
   return fields.keys.map do |name| "#{name}=#{fields[name].join("|")}" end.join(";")
+end
+
+# The cookies of the request: `sid` through `cookie`, the others through the map.
+def whoami(conn: Bond.Conn) -> Result[Bond.Conn]
+  sid = Bond.cookie(conn, "sid").unwrap_or("none")
+  theme = Bond.cookies(conn).get("theme", "none")
+  return ok(Bond.text(conn, 200, "sid=#{sid} theme=#{theme}"))
+end
+
+# `set_cookie` with the defaults of Bond, then every attribute through `set_cookie_with`.
+def login(conn: Bond.Conn) -> Result[Bond.Conn]
+  with_sid = try Bond.set_cookie(conn, "sid", "abc123")
+  theme = Cookie.Cookie(
+    name: "theme",
+    value: "dark",
+    path: "/app",
+    domain: "example.com",
+    max_age: 3600,
+    secure: true,
+    same_site: "None",
+  )
+  pref = Cookie.Cookie(name: "pref", value: "wide", expires: "Wed, 21 Oct 2015 07:28:00 GMT", http_only: true)
+  with_theme = try Bond.set_cookie_with(with_sid, theme)
+  with_pref = try Bond.set_cookie_with(with_theme, pref)
+  return ok(Bond.text(with_pref, 200, "welcome"))
+end
+
+def login_redirect(conn: Bond.Conn) -> Result[Bond.Conn]
+  with_sid = try Bond.set_cookie(conn, "sid", "abc123")
+  return ok(Bond.redirect(with_sid, "/whoami"))
+end
+
+def logout(conn: Bond.Conn) -> Result[Bond.Conn]
+  gone = try Bond.delete_cookie(conn, "sid")
+  return ok(Bond.text(gone, 200, "bye"))
+end
+
+def logout_host(conn: Bond.Conn) -> Result[Bond.Conn]
+  gone = try Bond.delete_cookie(conn, "__Host-id")
+  return ok(Bond.text(gone, 200, "bye"))
+end
+
+def bad_cookie(conn: Bond.Conn) -> Result[Bond.Conn]
+  bad = try Bond.set_cookie(conn, "sid", "has a space")
+  return ok(Bond.text(bad, 200, "not reached"))
 end

@@ -15,6 +15,7 @@
 
 import Apps from "src/app"
 import Conns from "src/conn"
+import Cookies from "src/cookies"
 import Filters from "src/filters"
 import Queries from "src/query"
 import Servers from "src/server"
@@ -46,6 +47,11 @@ export Conns.request_header
 export Conns.bad_request
 export Conns.param
 export Conns.param_int
+export Cookies.cookies
+export Cookies.cookie
+export Cookies.set_cookie
+export Cookies.set_cookie_with
+export Cookies.delete_cookie
 export Filters.log_request
 export Queries.query
 export Queries.query_int

@@ -22,6 +22,7 @@ end
 struct Reply
   status: Int
   headers: Map[String, String]
+  fields: List[Header]
   body: String
 end
 
@@ -53,6 +54,29 @@ def main() -> Void
     BDD.step("I post to {string} as {string} and {string}:") do |ctx, args|
       headers = [Header(name: "content-type", value: args[1]), Header(name: "content-type", value: args[2])]
       send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
+    end,
+    BDD.step("I send {string} to {string} with the cookie {string}") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: args[2])], body: ""))
+    end,
+    BDD.step("I send {string} to {string} with the cookies {string} and {string}") do |ctx, args|
+      headers = [Header(name: "cookie", value: args[2]), Header(name: "cookie", value: args[3])]
+      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+    end,
+    BDD.step("the header {string} appears {int} times") do |ctx, args|
+      reply = last_reply(ctx)
+      count = reply.fields.select do |field| field.name.downcase == args[0].downcase end.size
+      BDD.assert(ctx, count == args[1].to_i!, "the header appears #{count} times in #{reply.fields}")
+    end,
+    BDD.step("the header {string} has the value {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == args[1] end
+      BDD.assert(ctx, found, "the headers are #{reply.fields}")
+    end,
+    BDD.step("the header {string} has the value:") do |ctx, args|
+      reply = last_reply(ctx)
+      expected = BDD.doc_string(ctx)
+      found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == expected end
+      BDD.assert(ctx, found, "the headers are #{reply.fields}")
     end,
     BDD.step("the status is {int}") do |ctx, args|
       reply = last_reply(ctx)
@@ -108,7 +132,7 @@ end
 def reply_of(response: HttpResponse) -> Reply
   start: Map[String, String] = {}
   fields = response.headers.reduce(start) do |acc, header| acc.put(header.name.downcase, header.value) end
-  return Reply(status: response.status, headers: fields, body: response.body)
+  return Reply(status: response.status, headers: fields, fields: response.headers, body: response.body)
 end
 
 def last_reply(ctx: BDD.Context) -> Reply

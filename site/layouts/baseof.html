@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{{ if .IsHome }}{{ site.Title }}: a small web framework for Agentica{{ else }}{{ .Title }} · {{ site.Title }}{{ end }}</title>
+  <meta name="description" content="{{ if .Params.name }}{{ site.Params.description }}{{ else }}{{ .Description | default site.Params.description }}{{ end }}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23b4232a'/%3E%3Cpath d='M5 3v10h3.2a2.7 2.7 0 0 0 0-5.3H5m0 0h2.8a2.3 2.3 0 0 0 0-4.7H5' stroke='%23fff' stroke-width='1.6' fill='none'/%3E%3C/svg%3E">
+  {{- $sass := dict "transpiler" "dartsass" "outputStyle" "compressed" "targetPath" "css/main.css" "vars" (dict "narrow" site.Params.narrow) }}
+  {{- with resources.Get "scss/main.scss" | css.Sass $sass | fingerprint }}
+  <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous">
+  {{- end }}
+  {{- with .OutputFormats.Get "markdown" }}
+  <link rel="{{ .Rel }}" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">
+  {{- end }}
+  <script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+  {{ partial "header.html" . }}
+  <div class="layout">
+    {{ partial "sidebar.html" . }}
+    <main id="main">
+      {{ block "main" . }}{{ end }}
+    </main>
+  </div>
+  {{ partial "footer.html" . }}
+  {{- with resources.Get "js/theme.js" | js.Build (dict "minify" true "targetPath" "js/theme.js") | fingerprint }}
+  <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
+  {{- end }}
+  {{- with resources.Get "js/nav.js" | js.Build (dict "minify" true "targetPath" "js/nav.js" "params" (dict "narrow" site.Params.narrow)) | fingerprint }}
+  <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
+  {{- end }}
+  {{- if .OutputFormats.Get "markdown" }}
+  {{- with resources.Get "js/page-actions.js" | js.Build (dict "minify" true "targetPath" "js/page-actions.js") | fingerprint }}
+  <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
+  {{- end }}
+  {{- end }}
+</body>
+</html>

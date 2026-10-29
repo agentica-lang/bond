@@ -19,4 +19,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `Bond.html`, `Bond.status` and `Bond.redirect` (a 302, or 301, 303, 307 and 308; it halts and drops the content type; the `Location` must be ASCII). `Bond.html` does not escape the text.
 - `Bond.start_with` and `Bond.run_with` take the options of the HTTP server of `std/http` (timeouts, connections, body limit).
 - A crash writes one line on stderr after the stack trace of the VM, not its message again.
+- A documentation site (Hugo, GitHub Pages) in `site/`, with `make site`, and `make site-samples`, which checks (and runs, when an output block follows) every code sample of the site.
 - Needs Agentica 0.14.0 (CI and README).

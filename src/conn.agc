@@ -2,11 +2,13 @@
 ## gives a new one.
 
 # An `error` whose message starts with this text is a 400, and the rest is the body. `bad_request` is the way to
-# make one; the text is not part of the API. Once Bond decodes request data, take care that no error message that
-# echoes a client's text can start with it.
+# make one; the text is not part of the API. No error message may start with it unless it is meant for the client:
+# `json_body` cuts the client's text out of the codec messages, and a decoded value is never put in an error.
 export BAD_REQUEST = "bad request: "
 
 export INTERNAL_ERROR = "Internal Server Error"
+
+PARSE_PREFIX = "JSON.parse: "
 
 REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 
@@ -119,6 +121,28 @@ export def param(conn: Conn, name: String) -> Result[String]
   return conn.params.get(name)
 end
 
+## Decodes the body of the request with `codec` (`JSON.codec(User)`). The request must have one `Content-Type`, and
+## it must be `application/json` or a `type/name+json`, with any parameters (the body is read as UTF-8 whatever the
+## charset says). A missing, repeated or other content type, an empty body, and a body that is not one JSON
+## document that fits the struct, are an error that makes a 400 (see `bad_request`) with a short message, so
+## `try Bond.json_body(...)` answers them. The message names the struct field up to the first `[` of the codec's
+## path, so the key of a map and the index of a list that the client sent are not in it. The size of the body is
+## limited by the server (`max_body_bytes`).
+export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
+  if not json_content_type?(conn)
+    return bad_request("content type must be application/json")
+  end
+
+  if conn.body.empty?
+    return bad_request("the body is empty")
+  end
+
+  case codec.decode(conn.body)
+    ok(value) -> return ok(value)
+    error(message) -> return bad_request("invalid body: #{decode_problem(message)}")
+  end
+end
+
 ## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
 ## with `try`).
 export def bad_request[T](message: String) -> Result[T]
@@ -201,4 +225,34 @@ end
 def value_char?(ch: String) -> Bool
   code = ch.code
   return code == 9 or (code >= 32 and code != 127 and code <= LATIN1_LIMIT)
+end
+
+# One Content-Type, application/json or type/name+json, in any case, with or without parameters (`; charset=utf-8`).
+def json_content_type?(conn: Conn) -> Bool
+  values = conn.headers.select do |field| field.name.downcase == "content-type" end
+  if values.size != 1
+    return false
+  end
+
+  media = values[0].value.split(";")[0].strip().downcase
+  if media == "application/json"
+    return true
+  end
+
+  parts = media.split("/")
+  return parts.size == 2 and not parts[0].empty? and parts[1].length > 5 and parts[1].end_with?("+json")
+end
+
+# The error of the codec is `path: problem`, and the path may hold a map key or a list index that the client sent
+# (`scores["KEY"]`, `tags[0]`): keep the text before the first `[` and the problem after the last `: `. A parse
+# error has the prefix `JSON.parse: `, which is dropped.
+def decode_problem(message: String) -> String
+  if message.start_with?(PARSE_PREFIX)
+    return message.slice(PARSE_PREFIX.length, message.length - PARSE_PREFIX.length)
+  end
+
+  case message.index_of("[")
+    ok(at) -> return "#{message.slice(0, at)}: #{message.split(": ").last}"
+    error(_) -> return message
+  end
 end

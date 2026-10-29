@@ -15,7 +15,7 @@ SOCKET_MS = 5_000
 struct Ask
   method: String
   path: String
-  headers: Map[String, String]
+  headers: List[Header]
   body: String
 end
 
@@ -30,14 +30,22 @@ def main() -> Void
     BDD.step("the todo app", &keep_app),
     BDD.step("the todo app with custom handlers", &keep_custom_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
-      send(ctx, Ask(method: args[0], path: args[1], headers: {}, body: ""))
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: ""))
     end,
     BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
-      send(ctx, Ask(method: args[0], path: args[1], headers: {}, body: args[2]))
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: args[2]))
     end,
     BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
-      send(ctx, Ask(method: args[0], path: args[1], headers: {args[2]: args[3]}, body: ""))
+      send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: args[2], value: args[3])], body: ""))
     end,
+    BDD.step("I send {string} to {string} with the header {string} set to {string} and the body:") do |ctx, args|
+      headers = [Header(name: args[2], value: args[3])]
+      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: BDD.doc_string(ctx)))
+    end,
+    BDD.step(
+      "I send {string} to {string} with the content types {string} and {string} and the body:",
+      &send_two_types,
+    ),
     BDD.step("the status is {int}") do |ctx, args|
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
@@ -73,18 +81,20 @@ end
 def keep(ctx: BDD.Context, app: Bond.App) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
-    response = Testing.request(app, ask.method, ask.path, headers_of(ask.headers), ask.body)
+    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body)
     ok(JSON.from(reply_of(response)))
   end
+end
+
+def send_two_types(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  first = Header(name: "content-type", value: args[2])
+  second = Header(name: "content-type", value: args[3])
+  return send(ctx, Ask(method: args[0], path: args[1], headers: [first, second], body: BDD.doc_string(ctx)))
 end
 
 def send(ctx: BDD.Context, ask: Ask) -> BDD.Context
   reply = BDD.call(ctx, APP, JSON.from(ask))
   return BDD.set(ctx, REPLY, reply.unwrap!)
-end
-
-def headers_of(fields: Map[String, String]) -> List[Header]
-  return fields.keys.map do |name| Header(name: name, value: fields[name]) end
 end
 
 def reply_of(response: HttpResponse) -> Reply

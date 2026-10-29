@@ -6,7 +6,7 @@ description: Add Bond to a project, write a first app and run it.
 
 ## Install
 
-Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.14.0 or later. Bond is a package: you add it to the `agentica.toml` of your project as a dependency on its git repository.
+Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.15.0 or later. Bond is a package: you add it to the `agentica.toml` of your project as a dependency on its git repository.
 
 There is no release yet, so pin a commit (`--ref`, the whole id) until the first tag:
 

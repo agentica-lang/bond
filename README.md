@@ -5,7 +5,7 @@ Work in progress: this is the first version, with the router, filters, custom ha
 Query and form parsing, JSON bodies, cookies and static files come later (see
 [the design](https://github.com/agentica-lang/bond/issues/1)).
 
-Needs Agentica 0.14.0 or later.
+Needs Agentica 0.14.0 or later. The documentation is at <https://agentica-lang.github.io/bond/>.
 
 ## Install
 

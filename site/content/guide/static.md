@@ -39,7 +39,7 @@ There is a short time between this check and the read of the file. Do not let un
 
 A 500 for a file is a failure like the `error` of a handler: it goes to the [`on_error` handler](/guide/errors/), which gets the reason in words (`the static file app.css is over 10 bytes`), and the reason is written to stderr. The default handler answers the fixed text of every 500.
 
-Only regular files are served (a folder and other kinds of entry are a 404). `File.stat` cannot tell a FIFO from a file, so a FIFO in the folder is not refused; the read gives up after five seconds with a 500. Do not put one there.
+Only regular files are served (a folder and other kinds of entry are a 404). `File.stat` cannot tell a FIFO from a file ([Agentica issue #811](https://github.com/agentica-lang/agentica/issues/811)), so a FIFO in the folder is not refused; the read gives up after five seconds with a 500. Do not put one there.
 
 ## An example
 

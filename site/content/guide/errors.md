@@ -1,6 +1,6 @@
 ---
 title: Errors
-weight: 8
+weight: 9
 description: What a failure answers, and the not_found and on_error handlers.
 ---
 
@@ -16,13 +16,14 @@ A response that the HTTP server of `std/http` would refuse is a plain 500, with 
 
 They work like `not_found do ... end` and `error do ... end` of Sinatra.
 
-`Bond.not_found(app, handler)` answers a path with no route, in place of the plain `not found`. The handler is an ordinary `Bond.Handler`. It gets the `Conn` with the status 404, and the `after` filters run after it. It does not answer a 405, and not a 404 that a handler gives itself.
+The handlers are your code, so escape any value of the client that they put in HTML, `conn.path` included: see [HTML and escaping](/guide/escaping/). `Bond.not_found(app, handler)` answers a path with no route, in place of the plain `not found`. The handler is an ordinary `Bond.Handler`. It gets the `Conn` with the status 404, and the `after` filters run after it. It does not answer a 405, and not a 404 that a handler gives itself.
 
 `Bond.on_error(app, handler)` answers a failure in place of the plain 500. The handler is a `Bond.ErrorHandler`, a `Fn[Bond.Conn, String, Result[Bond.Conn]]`: it takes the `Conn` and the message, and gives a `Result[Bond.Conn]`. It gets the request `Conn` with the status 500 and nothing of the answer built so far, and the message of the failure. Bond has already written the message to stderr, and nothing sends it to the client unless the handler does: keep it out of the answer.
 
 If the error handler gives an `error` or crashes, the answer is the plain 500. It is never called for a `bad_request`, nor for a response that the server would refuse. Both handlers are set once per app; a second call replaces the first.
 
 ```agentica
+import HTML from "std/html"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -31,7 +32,7 @@ def broken(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def page_not_found(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.html(conn, 404, "<h1>Nothing at #{conn.path}</h1>"))
+  return ok(Bond.html(conn, 404, "<h1>Nothing at #{HTML.escape(conn.path)}</h1>"))
 end
 
 def page_failed(conn: Bond.Conn, message: String) -> Result[Bond.Conn]

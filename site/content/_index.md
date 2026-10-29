@@ -20,7 +20,7 @@ def main() -> Void
 end
 ```
 
-Bond is a work in progress. It has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, static files, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. HTML escaping comes later (see [the design](https://github.com/agentica-lang/bond/issues/1)).
+Bond is a work in progress. It has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, static files, HTML escaping in the guide, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. WebSockets come later (see [the design](https://github.com/agentica-lang/bond/issues/1)).
 
 - [Getting started](/getting-started/) installs Bond and runs a first app.
 - The [guide](/guide/) has a page for each part.

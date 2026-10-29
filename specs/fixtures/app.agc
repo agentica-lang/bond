@@ -2,6 +2,7 @@
 ## routes more for the filters and the errors.
 
 import Cookie from "std/cookie"
+import HTML from "std/html"
 import Bond from "../../bond"
 
 TOKEN = "letmein"
@@ -162,7 +163,7 @@ end
 # The pattern of the guide: a value of the client is escaped before it goes into HTML.
 def greet(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
-  return ok(Bond.html(conn, 200, "<p>Hello, #{name}</p>"))
+  return ok(Bond.html(conn, 200, "<p>Hello, #{HTML.escape(name)}</p>"))
 end
 
 def show_post(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -257,7 +258,7 @@ def custom_not_found(conn: Bond.Conn) -> Result[Bond.Conn]
     return error("the not found handler failed")
   end
 
-  return ok(Bond.html(conn, 404, "<h1>No page at #{conn.path}</h1>"))
+  return ok(Bond.html(conn, 404, "<h1>No page at #{HTML.escape(conn.path)}</h1>"))
 end
 
 def redirect_with(conn: Bond.Conn) -> Result[Bond.Conn]

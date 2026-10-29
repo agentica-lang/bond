@@ -106,8 +106,13 @@ export def add_header(conn: Conn, name: String, value: String) -> Conn
   return conn.with(response_headers: conn.response_headers.push(Header(name: name, value: value)))
 end
 
-## Sets a response header, replacing the one of the same name (the case does not matter).
+## Sets a response header, replacing the one of the same name (the case does not matter). `Set-Cookie` is the
+## exception: it adds a header, so it never wipes the cookies set before it (see `set_cookie`).
 export def header(conn: Conn, name: String, value: String) -> Conn
+  if name.downcase == "set-cookie"
+    return add_header(conn, name, value)
+  end
+
   kept = conn.response_headers.select do |other| other.name.downcase != name.downcase end
   return conn.with(response_headers: kept.push(Header(name: name, value: value)))
 end

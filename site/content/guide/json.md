@@ -1,6 +1,6 @@
 ---
 title: JSON bodies
-weight: 3
+weight: 4
 description: Decode the JSON body of a request into a struct.
 ---
 

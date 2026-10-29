@@ -16,6 +16,7 @@
 import Apps from "src/app"
 import Conns from "src/conn"
 import Filters from "src/filters"
+import Queries from "src/query"
 import Servers from "src/server"
 
 export Apps.App
@@ -46,6 +47,14 @@ export Conns.bad_request
 export Conns.param
 export Conns.param_int
 export Filters.log_request
+export Queries.query
+export Queries.query_int
+export Queries.query_all
+export Queries.query_params
+export Queries.form_params
+export Queries.form
+export Queries.form_int
+export Queries.form_all
 export Servers.start
 export Servers.start_with
 export Servers.run_with

@@ -2,6 +2,7 @@
 
 import Conns from "conn"
 import Pattern from "pattern"
+import Statics from "static"
 import {Conn, ErrorHandler, Handler} from "conn"
 
 NOT_FOUND = "not found"
@@ -12,6 +13,7 @@ export struct App
   routes: List[Route]
   before_filters: List[Handler]
   after_filters: List[Handler]
+  statics: List[Statics.Mount]
   not_found: Handler
   on_error: ErrorHandler
 end
@@ -32,6 +34,7 @@ export def app() -> App
     routes: [],
     before_filters: [],
     after_filters: [],
+    statics: [],
     not_found: &plain_not_found,
     on_error: &plain_error,
   )
@@ -71,8 +74,25 @@ export def on_error(app: App, handler: ErrorHandler) -> App
   return app.with(on_error: handler)
 end
 
+## Serves the files of the folder `root` under the path `prefix` (`Bond.static(app, "/assets", "public")`), for `GET`
+## and `HEAD`. A route of the app wins over a file, and a path that is not a file of the folder (missing, a folder, a
+## dot file, a way out of the folder such as `..` or `%2e%2e`, a link that leads out) is answered as a path with no
+## route, so the `not_found` handler applies. A body is text: a file over `max_bytes` (1 MiB at most) or that is not
+## UTF-8 text is a 500 (the default `max_bytes` is that 1 MiB). The program stops when `prefix` is not a path or has a
+## `:param`, or `max_bytes` is out of range.
 export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_048_576) -> App
-  return app
+  if not Pattern.valid?(prefix) or Pattern.segments(prefix).any? do |part| part.start_with?(":") end
+    bad: Result[App] = error("bond: the static prefix #{prefix} must start with / and have no :param")
+    return bad.unwrap!
+  end
+
+  if max_bytes < 1 or max_bytes > Statics.MAX_FILE_BYTES
+    bad: Result[App] = error("bond: max_bytes of a static folder must be 1 to #{Statics.MAX_FILE_BYTES}")
+    return bad.unwrap!
+  end
+
+  mount = Statics.Mount(prefix: prefix, root: root, max_bytes: max_bytes)
+  return app.with(statics: app.statics.push(mount))
 end
 
 ## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
@@ -135,7 +155,10 @@ def dispatch(app: App, conn: Conn) -> Conn
   end
 
   if hits.empty?
-    return run(app, conn.with(status: 404), app.not_found).with(halted: true)
+    case Statics.serve(app.statics, conn)
+      ok(answer) -> return answer
+      error(_) -> return run(app, conn.with(status: 404), app.not_found).with(halted: true)
+    end
   end
 
   wanted = conn.method

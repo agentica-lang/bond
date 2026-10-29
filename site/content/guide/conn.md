@@ -43,7 +43,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 ## Redirects
 
-`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308. It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. Any other status is a runtime error in the handler, so a 500. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. A redirect to an address built from client input is an open redirect: check it first.
+`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308. It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. Any other status is a runtime error in the handler, so a 500. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. `Bond.redirect` does not check the target: `//evil.com`, `/\evil.com` and `javascript:` pass through. A redirect to an address that a client gave (`?next=...`) is an open redirect, so check it first. A local target starts with `/`, its second character is not `/` or `\`, and it has no control character; any other target must be an `https://` address that your app allows. The sample in [HTML and escaping](/guide/escaping/) has the check.
 
 ```agentica
 import HTTP from "std/http"

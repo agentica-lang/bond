@@ -29,3 +29,9 @@ Feature: Server
       | size              | body              | status |
       | 4 bytes           | milk              | 201    |
       | more than 8 bytes | buy a lot of milk | 413    |
+
+  Scenario: Each Set-Cookie is a header of its own over a socket
+    Given the server listens on a free port
+    When I get "/login" over the socket
+    Then the header "set-cookie" appears 3 times
+    And the header "set-cookie" has the value "sid=abc123; Path=/; HttpOnly; SameSite=Lax"

@@ -5,14 +5,22 @@
 ## import Testing from "pkg/bond/testing"
 ##
 ## response = Testing.request(app, "POST", "/todos", [], "buy milk")
+## ping = Testing.request(app, "GET", "/ping")
 ## ```
 
 import Apps from "src/app"
 import {App} from "src/app"
 
 ## Sends the request to `app` and gives the response. `target` is the path with its query, as a client sends it
-## (`/todos?done=1`); header names are lowercased, as the server does.
-export def request(app: App, method: String, target: String, headers: List[Header], body: String) -> HttpResponse
+## (`/todos?done=1`); header names are lowercased, as the server does. `headers` default to none and `body` to an
+## empty text.
+export def request(
+  app: App,
+  method: String,
+  target: String,
+  headers: List[Header] = [],
+  body: String = "",
+) -> HttpResponse
   path = target
   case target.index_of("?")
     ok(at) -> path = target.slice(0, at)

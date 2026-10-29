@@ -10,7 +10,7 @@ end
 def main() -> Void
   app = Bond.app() |> Bond.get("/x/:id", &one) |> Bond.get("/x/y/z", &one)
   path = List.repeat("x", 5000).join("/")
-  literal = Testing.request(app, "GET", "/#{path}", [], "").status
-  deep = Testing.request(app, "GET", "/x/y/#{path}", [], "").status
+  literal = Testing.request(app, "GET", "/#{path}").status
+  deep = Testing.request(app, "GET", "/x/y/#{path}").status
   puts("#{literal} #{deep}")
 end

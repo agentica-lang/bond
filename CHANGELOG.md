@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `Testing.request(app, method, target)` takes the headers and the body as optional arguments (no headers, an empty body), so `Testing.request(app, "GET", "/hello")` works.
 - **Breaking:** routes are kept as a tree of segments, so a lookup does not depend on the number of routes. A literal segment now wins over a `:param` at the same place whatever the order the routes were added in (before, the earlier route won); the walk goes back to the param when the literal branch has no route deeper. The method is chosen after the path, so a 405 `Allow` lists the methods of that route only. The same method and pattern twice, and two names for the param at the same place (`/users/:id` and `/users/:name/posts`), stop the program when the route is added.
 
 ## [0.1.0] - 2026-10-29

@@ -30,10 +30,10 @@ end
 
 def main() -> Void
   app = Bond.app() |> Bond.get("/greet", &greet) |> Bond.not_found(&page_not_found)
-  puts(Testing.request(app, "GET", "/greet?name=Ana", [], "").body)
-  puts(Testing.request(app, "GET", "/greet?name=%3Cscript%3Ealert(1)%3C%2Fscript%3E", [], "").body)
-  puts(Testing.request(app, "GET", "/greet?name=%22+onmouseover%3D%22x", [], "").body)
-  puts(Testing.request(app, "GET", "/<b>", [], "").body)
+  puts(Testing.request(app, "GET", "/greet?name=Ana").body)
+  puts(Testing.request(app, "GET", "/greet?name=%3Cscript%3Ealert(1)%3C%2Fscript%3E").body)
+  puts(Testing.request(app, "GET", "/greet?name=%22+onmouseover%3D%22x").body)
+  puts(Testing.request(app, "GET", "/<b>").body)
 end
 ```
 
@@ -102,10 +102,10 @@ end
 def main() -> Void
   app = Bond.app() |> Bond.get("/go", &go) |> Bond.get("/page", &page)
   for target in ["/done", "//evil.com", "%2F%5Cevil.com", "javascript:alert(1)"]
-    response = Testing.request(app, "GET", "/go?next=#{target}", [], "")
+    response = Testing.request(app, "GET", "/go?next=#{target}")
     puts("#{target} #{response.headers.select do |h| h.name == "location" end.map do |h| h.value end}")
   end
-  puts(Testing.request(app, "GET", "/page?name=%3C%2Fscript%3E%22&next=%22%3E", [], "").body)
+  puts(Testing.request(app, "GET", "/page?name=%3C%2Fscript%3E%22&next=%22%3E").body)
 end
 ```
 

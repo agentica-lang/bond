@@ -69,10 +69,10 @@ def main() -> Void
     |> Bond.get("/new", &new_page)
     |> Bond.get("/wrong", &not_a_redirect)
   )
-  moved = Testing.request(app, "GET", "/old", [], "")
+  moved = Testing.request(app, "GET", "/old")
   puts("#{moved.status} #{HTTP.header_values(moved.headers, "location")[0]}")
-  puts(Testing.request(app, "GET", "/new", [], "").body)
-  puts(Testing.request(app, "GET", "/wrong", [], "").status)
+  puts(Testing.request(app, "GET", "/new").body)
+  puts(Testing.request(app, "GET", "/wrong").status)
 end
 ```
 
@@ -100,7 +100,7 @@ end
 
 def main() -> Void
   app = Bond.app() |> Bond.post("/todos", &create)
-  empty = Testing.request(app, "POST", "/todos", [], "")
+  empty = Testing.request(app, "POST", "/todos")
   puts("#{empty.status} #{empty.body}")
 end
 ```

@@ -26,4 +26,4 @@ Bond is a work in progress. It has the router, filters, custom `not_found` and `
 - The [guide](/guide/) has a page for each part.
 - The source and the changelog are [on GitHub](https://github.com/agentica-lang/bond).
 
-Bond needs Agentica 0.14.0 or later, and is under the Apache License 2.0.
+Bond needs Agentica 0.15.0 or later, and is under the Apache License 2.0.

@@ -119,8 +119,25 @@ export def param(conn: Conn, name: String) -> Result[String]
   return conn.params.get(name)
 end
 
+## Decodes the body of the request with `codec` (`JSON.codec(User)`). The request must say it is JSON: a
+## `Content-Type` of `application/json` or of a type that ends in `+json`, with any parameters. A missing or other
+## content type, an empty body, and a body that is not one JSON document that fits the struct, are an error that
+## makes a 400 (see `bad_request`) with a short message, so `try Bond.json_body(...)` answers them. The message
+## names the field and never repeats the text of the client. The size of the body is limited by the server
+## (`max_body_bytes`).
 export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
-  return error("not written yet")
+  if not json_content_type?(conn)
+    return bad_request("content type must be application/json")
+  end
+
+  if conn.body.empty?
+    return bad_request("the body is empty")
+  end
+
+  case codec.decode(conn.body)
+    ok(value) -> return ok(value)
+    error(message) -> return bad_request("invalid body: #{message.replace("JSON.parse: ", "")}")
+  end
 end
 
 ## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
@@ -205,4 +222,14 @@ end
 def value_char?(ch: String) -> Bool
   code = ch.code
   return code == 9 or (code >= 32 and code != 127 and code <= LATIN1_LIMIT)
+end
+
+# application/json or x/y+json, whatever the case, with or without parameters (`; charset=utf-8`).
+def json_content_type?(conn: Conn) -> Bool
+  case request_header(conn, "content-type")
+    ok(value) ->
+      media = value.split(";")[0].strip().downcase
+      return media == "application/json" or (media.end_with?("+json") and media.include?("/"))
+    error(_) -> return false
+  end
 end

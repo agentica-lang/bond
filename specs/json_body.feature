@@ -58,7 +58,7 @@ Feature: JSON request bodies
       <body>
       """
     Then the status is 400
-    And the body starts with "invalid JSON: "
+    And the body starts with "invalid body: "
     And the body contains "<field>"
 
     Examples:

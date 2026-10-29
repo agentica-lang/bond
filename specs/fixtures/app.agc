@@ -1,5 +1,5 @@
-## The app the features run. It is the todo app of `examples/todos.agc` with a few routes more for the filters and
-## the errors.
+## The app the features run. It is like the todo app of `examples/todos.agc` (its body is plain text) with a few routes more for the filters
+## and the errors.
 
 import Bond from "../../bond"
 

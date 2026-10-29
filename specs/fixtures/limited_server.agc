@@ -9,7 +9,7 @@ BODY_LIMIT = 8
 
 def main() -> Void
   options = HTTP.server_options().with(max_body_bytes: BODY_LIMIT)
-  server = Bond.start_with(Fixture.build(), "127.0.0.1", 0, options).unwrap!
+  server = Bond.start_with(Fixture.build_in("fixtures/public"), "127.0.0.1", 0, options).unwrap!
   puts("listening on #{Bond.local_port(server)}")
   IO.flush()
   Bond.wait(server).unwrap!

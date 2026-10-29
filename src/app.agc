@@ -2,6 +2,7 @@
 
 import Conns from "conn"
 import Pattern from "pattern"
+import Statics from "static"
 import {Conn, ErrorHandler, Handler} from "conn"
 
 NOT_FOUND = "not found"
@@ -12,6 +13,8 @@ export struct App
   routes: List[Route]
   before_filters: List[Handler]
   after_filters: List[Handler]
+  statics: List[Statics.Mount]
+  notes: ATS[String, Bool]
   not_found: Handler
   on_error: ErrorHandler
 end
@@ -28,10 +31,13 @@ struct Hit
 end
 
 export def app() -> App
+  notes: ATS[String, Bool] = ATS.new()
   return App(
     routes: [],
     before_filters: [],
     after_filters: [],
+    statics: [],
+    notes: notes,
     not_found: &plain_not_found,
     on_error: &plain_error,
   )
@@ -69,6 +75,34 @@ end
 ## come here.
 export def on_error(app: App, handler: ErrorHandler) -> App
   return app.with(on_error: handler)
+end
+
+## Serves the files of the folder `root` under the path `prefix` (`Bond.static(app, "/assets", "public")`), for `GET`
+## and `HEAD`. A route of the app wins over a file, and a path that is not a file of the folder (missing, a folder, a
+## dot file, a way out of the folder such as `..` or `%2e%2e`, a link that leads out) is answered as a path with no
+## route, so the `not_found` handler applies. A body is text: a file whose type is not text is a 501, and a text file
+## over `max_bytes` (1 MiB at most, the default) or that is not UTF-8 is a failure (a 500 through the error handler).
+## The program stops when `prefix` is not a path or has a `:param`, when `max_bytes` is out of range, or when `root`
+## is not a folder now: it is checked when the app is built, and its real path is kept.
+export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_048_576) -> App
+  if not Pattern.valid?(prefix) or Pattern.segments(prefix).any? do |part| part.start_with?(":") end
+    bad: Result[App] = error("bond: the static prefix #{prefix} must start with / and have no :param")
+    return bad.unwrap!
+  end
+
+  if max_bytes < 1 or max_bytes > Statics.MAX_FILE_BYTES
+    bad: Result[App] = error("bond: max_bytes of a static folder must be 1 to #{Statics.MAX_FILE_BYTES}")
+    return bad.unwrap!
+  end
+
+  real = Statics.real_root(root)
+  if not real.ok?
+    bad: Result[App] = error("bond: the static folder #{root} must be a folder that exists")
+    return bad.unwrap!
+  end
+
+  mount = Statics.Mount(prefix: prefix, root: real.unwrap!, max_bytes: max_bytes)
+  return app.with(statics: app.statics.push(mount))
 end
 
 ## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
@@ -131,7 +165,10 @@ def dispatch(app: App, conn: Conn) -> Conn
   end
 
   if hits.empty?
-    return run(app, conn.with(status: 404), app.not_found).with(halted: true)
+    case Statics.serve(app.statics, app.notes, conn)
+      ok(answer) -> return answer
+      error(reason) -> return unserved(app, conn, reason)
+    end
   end
 
   wanted = conn.method
@@ -145,6 +182,16 @@ def dispatch(app: App, conn: Conn) -> Conn
   end
 
   return apply(app, conn.with(params: chosen[0].params), chosen[0].route.handler)
+end
+
+# A path under no folder, or with no file, is a 404 for the not found handler; a file that cannot be sent is a failure,
+# like the error of a handler.
+def unserved(app: App, conn: Conn, reason: String) -> Conn
+  if reason == Statics.MISS
+    return run(app, conn.with(status: 404), app.not_found).with(halted: true)
+  end
+
+  return failure(app, conn, reason)
 end
 
 # The methods of the routes that match the path, in the order they were added, with HEAD after GET.

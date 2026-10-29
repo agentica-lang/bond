@@ -30,6 +30,7 @@ def main() -> Void
   BDD.run([
     BDD.step("the todo app", &keep_app),
     BDD.step("the todo app with custom handlers", &keep_custom_app),
+    BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: ""))
     end,
@@ -108,6 +109,56 @@ end
 
 def keep_custom_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return keep(ctx, Fixture.build_custom())
+end
+
+# The folder of the links is made for each request and removed after it, since a scenario has no hook to clean up.
+# The scenario is skipped where the folder cannot be made (no `ln`, no links, no file named `con.txt`).
+def keep_links_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  base = "static_links_#{System.pid()}"
+  probe = make_folder(base)
+  Path.remove(base)
+  if not probe.ok?
+    return BDD.skip(ctx, "the folder of links cannot be made here: #{probe.message}")
+  end
+
+  return BDD.keep(ctx, APP) do |request|
+    ask = try JSON.decode(request, Ask)
+    try make_folder(base)
+    app = Bond.app() |> Bond.static("/files", "#{base}/root")
+    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body)
+    Path.remove(base)
+    ok(JSON.from(reply_of(response)))
+  end
+end
+
+# `root` has the files and the links, and `secret.txt` next to it is the file that no link may reach.
+def make_folder(base: String) -> Result[Void]
+  root = "#{base}/root"
+  try Dir.mkdir("#{root}/.hid")
+  for name in ["hello.txt", "console.txt", "com0.txt", "con.txt", "nul.css", "Aux.html", "com1.txt", "LPT9.txt"]
+    try File.write_text("#{root}/#{name}", "hello from a file")
+  end
+
+  try File.write_text("#{root}/.env", "hidden")
+  try File.write_text("#{root}/.hid/inner.txt", "hidden")
+  try File.write_text("#{base}/secret.txt", "outside")
+  try link("hello.txt", "#{root}/alias.txt")
+  try link(".env", "#{root}/to_env.txt")
+  try link(".hid/inner.txt", "#{root}/to_hid.txt")
+  try link(".hid", "#{root}/to_hid_dir")
+  try link("../secret.txt", "#{root}/outside.txt")
+  try link("..", "#{root}/out_dir")
+  return ok()
+end
+
+def link(target: String, path: String) -> Result[Void]
+  process = try Process.spawn("ln", ["-s", target, path])
+  code = try Process.wait(process, SOCKET_MS)
+  if code != 0
+    return error("ln -s exited with #{code}")
+  end
+
+  return ok()
 end
 
 def keep(ctx: BDD.Context, app: Bond.App) -> BDD.Context

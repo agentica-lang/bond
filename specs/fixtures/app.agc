@@ -43,6 +43,12 @@ export def build_custom() -> Bond.App
 end
 
 export def build() -> Bond.App
+  return build_in("specs/fixtures/public")
+end
+
+# The folder of the static files is relative to the working directory: `agentica test` runs the app in process from the
+# project folder, while the program of a socket scenario runs from the folder of its feature (`specs/`).
+export def build_in(public: String) -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
   return (
     Bond.app()
@@ -76,6 +82,9 @@ export def build() -> Bond.App
     |> Bond.get("/logout", &logout)
     |> Bond.get("/logout-host", &logout_host)
     |> Bond.get("/bad-cookie", &bad_cookie)
+    |> Bond.get("/assets/override.txt", &hello)
+    |> Bond.static("/assets", public)
+    |> Bond.static("/small", public, 10)
     |> Bond.get("/raw-cookie", &raw_cookie)
     |> Bond.get("/require-sid", &require_sid)
     |> Bond.get("/set-cookie", &set_from_query)

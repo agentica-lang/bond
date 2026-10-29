@@ -35,3 +35,12 @@ Feature: Server
     When I get "/login" over the socket
     Then the header "set-cookie" appears 3 times
     And the header "set-cookie" has the value "sid=abc123; Path=/; HttpOnly; SameSite=Lax"
+
+  Scenario: A static file over a socket has its length and its headers
+    Given the server listens on a free port
+    When I get "/assets/hello.txt" over the socket
+    Then the status is 200
+    And the body is "hello from a file"
+    And the header "content-length" is "17"
+    And the header "content-type" is "text/plain; charset=utf-8"
+    And the header "x-content-type-options" is "nosniff"

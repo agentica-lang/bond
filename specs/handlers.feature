@@ -58,3 +58,14 @@ Feature: Custom handlers
     When I send "POST" to "/todos"
     Then the status is 400
     And the body is "title is empty"
+
+  Scenario: The not found handler answers a missing static file
+    When I send "GET" to "/assets/missing.txt"
+    Then the status is 404
+    And the body is "<h1>No page at /assets/missing.txt</h1>"
+
+  Scenario: A static file that cannot be sent goes to the error handler
+    When I send "GET" to "/assets/bad.txt"
+    Then the status is 500
+    And the body is "Something went wrong"
+    And the header "x-error" is "the static file bad.txt is not valid UTF-8 text or could not be read"

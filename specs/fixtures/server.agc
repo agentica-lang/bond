@@ -4,7 +4,7 @@ import Bond from "../../bond"
 import Fixture from "app"
 
 def main() -> Void
-  server = Bond.start(Fixture.build(), "127.0.0.1", 0).unwrap!
+  server = Bond.start(Fixture.build_in("fixtures/public"), "127.0.0.1", 0).unwrap!
   puts("listening on #{Bond.local_port(server)}")
   IO.flush()
   Bond.wait(server).unwrap!

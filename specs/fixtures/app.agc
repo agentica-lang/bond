@@ -63,6 +63,10 @@ export def build_in(public: String) -> Bond.App
     |> Bond.after(&sign)
     |> Bond.get("/hello", &hello)
     |> Bond.get("/greet", &greet)
+    |> Bond.get("/", &root_page)
+    |> Bond.post("/only-post", &hello)
+    |> Bond.get("/a/lit/:y/z", &deep_z)
+    |> Bond.get("/a/:x/c", &deep_c)
     |> Bond.get("/things/:id", &thing)
     |> Bond.post("/things/:id", &update_thing)
     |> Bond.get("/things/new", &new_thing)
@@ -190,6 +194,21 @@ end
 
 def docs_edit(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.text(conn, 200, "edit #{try Bond.param(conn, "page")}"))
+end
+
+def root_page(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "the root"))
+end
+
+def deep_z(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "z"))
+end
+
+# Reports the params it sees, to show that a branch the walk left leaves none behind.
+def deep_c(conn: Bond.Conn) -> Result[Bond.Conn]
+  x = Bond.param(conn, "x").unwrap_or("absent")
+  y = Bond.param(conn, "y").unwrap_or("absent")
+  return ok(Bond.text(conn, 200, "x=#{x} y=#{y}"))
 end
 
 def show_post(conn: Bond.Conn) -> Result[Bond.Conn]

@@ -127,3 +127,37 @@ Feature: Routing
   Scenario: The same pattern with another method, and the same param name, are not a conflict
     Given the Agentica program "fixtures/same_param.agc"
     Then the program exits with code 0 within 5000 milliseconds
+
+  Scenario: The root route answers the empty path and the slash
+    When I send "GET" to "/"
+    Then the status is 200
+    And the body is "the root"
+
+  Scenario: A param of a branch that the walk left is not set
+    When I send "GET" to "/a/lit/c"
+    Then the status is 200
+    And the body is "x=lit y=absent"
+
+  Scenario: HEAD on a route that has POST only is a 405 that lists POST
+    When I send "HEAD" to "/only-post"
+    Then the status is 405
+    And the header "allow" is "POST"
+
+  Scenario: Two apps made from one base do not see each other's routes
+    Given the Agentica program "fixtures/shared_base.agc"
+    Then the program exits with code 0 within 5000 milliseconds
+    And stdout is:
+      """
+      a: 200 404
+      b: 404 200
+
+      """
+
+  Scenario: A path of thousands of segments is a 404 at once
+    Given the Agentica program "fixtures/long_path.agc"
+    Then the program exits with code 0 within 5000 milliseconds
+    And stdout is:
+      """
+      404 404
+
+      """

@@ -17,6 +17,8 @@ site/highlight/node_modules: site/highlight/package.json site/highlight/package-
 site: site-sass site/highlight/node_modules
 	hugo --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
 	node site/highlight/highlight.mjs site/public
+	@# The layouts print the title of a home or a list page, so its content must not start with the same heading.
+	@bad=0; for f in $$(find site/public -name index.html); do n=$$(grep -o '<h1' $$f | wc -l); [ $$n -eq 1 ] || { echo "$$f has $$n h1" >&2; bad=1; }; done; [ $$bad -eq 0 ]
 
 site-serve: site-sass
 	hugo server --source site

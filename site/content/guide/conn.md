@@ -13,7 +13,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | Function | Does |
 |---|---|
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
-| `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
+| `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text; see [HTML and escaping](/guide/escaping/) |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todo)`) as JSON; sets `Content-Type` |
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308, and any other code is a runtime error, so a 500 |
@@ -39,11 +39,11 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 ## HTML and escaping
 
-`Bond.html` sends the text as it is. Bond has no HTML escaping yet, so escape what a client sent before you put it in the text.
+`Bond.html` sends the text as it is. Escape every value of a client with `HTML.escape` of `std/html` before it goes into the text: see [HTML and escaping](/guide/escaping/).
 
 ## Redirects
 
-`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308. It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. Any other status is a runtime error in the handler, so a 500. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. A redirect to an address built from client input is an open redirect: check it first.
+`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308. It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. Any other status is a runtime error in the handler, so a 500. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. `Bond.redirect` does not check the target: `//evil.com`, `/\evil.com` and `javascript:` pass through. A redirect to an address that a client gave (`?next=...`) is an open redirect, so check it first. A local target starts with `/`, its second character is not `/` or `\`, and it has no control character; any other target must be an `https://` address that your app allows. The sample in [HTML and escaping](/guide/escaping/) has the check.
 
 ```agentica
 import HTTP from "std/http"

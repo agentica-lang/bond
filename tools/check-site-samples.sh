@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Checks every ```agentica block of site/content with `agentica check`, so the samples of the site cannot drift
 # from the API. A block that an ```output block follows is also run, and its standard output must be that text.
-# A block is a whole program, and must not start a server when it has an output block; Bond is imported as a package (`pkg/bond/...`), which this script sets
-# up in a temporary project from the files of this checkout: a manifest, a lock with the hash that the build
-# verifies, and deps/bond/. Needs `agentica` on PATH. Usage: tools/check-site-samples.sh [CONTENT_DIR]
+# A block is a whole program, and must not start a server when it has an output block. A fence that starts with
+# `agentica` but has other words, and an output block that no agentica block precedes, are failures too.
+# Bond is imported as a package (`pkg/bond/...`), which this script sets up in a temporary project from the files of
+# this checkout: a manifest, a lock with the hash that the build verifies, and deps/bond/.
+# Needs `agentica` on PATH. Usage: tools/check-site-samples.sh [CONTENT_DIR]
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -48,14 +50,27 @@ LOCK
 count=0
 failed=0
 while IFS= read -r page; do
-  # One file per block, named after the page and the line of the opening fence.
-  awk -v dir="$work" -v page="$(basename "$page" .md)" '
-    /^```(agentica|agc)[ \t]*$/ && !inside { inside = 1; name = sprintf("%s/%s-%d.agc", dir, page, NR); next }
+  # One file per block, named after the path of the page below the content folder (with __ for each /) and the
+  # line of the opening fence, so two pages with the same file name cannot collide.
+  relative="${page#"$content"/}"
+  key="$(echo "${relative%.md}" | sed 's|/|__|g')"
+  if ! awk -v dir="$work" -v key="$key" -v page="$page" '
+    function fail(message) { printf "FAIL %s:%d: %s\n", page, NR, message > "/dev/stderr"; bad = 1 }
+    /^```(agentica|agc)[ \t]*$/ && !inside { inside = 1; name = sprintf("%s/%s-%d.agc", dir, key, NR); next }
+    /^```(agentica|agc)/ && !inside {
+      fail("words after agentica: a block takes no attributes"); inside = 1; name = "/dev/null"; next
+    }
     /^```output[ \t]*$/ && !inside && last != "" { inside = 1; name = last ".out"; last = ""; next }
+    /^```output/ && !inside {
+      fail("an output block needs an agentica block before it"); inside = 1; name = "/dev/null"; next
+    }
     /^```[ \t]*$/ && inside { inside = 0; close(name); if (name ~ /\.agc$/) last = name; next }
     inside { print > name; next }
     /[^ \t]/ { last = "" }
-  ' "$page"
+    END { exit bad }
+  ' "$page"; then
+    failed=$((failed + 1))
+  fi
 done < <(find "$content" -name '*.md' | LC_ALL=C sort)
 
 for sample in "$work"/*.agc; do
@@ -67,7 +82,8 @@ for sample in "$work"/*.agc; do
     echo "$output" >&2
   elif [ -e "$sample.out" ]; then
     # The output block is the whole standard output; stderr (the logs of Bond) is not compared.
-    if ! actual="$(cd "$work" && timeout 30 agentica "$sample" 2>/dev/null)" || [ "$actual" != "$(cat "$sample.out")" ]; then
+    actual="$(cd "$work" && timeout 30 agentica "$sample" 2>/dev/null)" || actual="(the program failed)"
+    if [ "$actual" != "$(cat "$sample.out")" ]; then
       failed=$((failed + 1))
       echo "FAIL $(basename "$sample"): the output is not the output block" >&2
       echo "$actual" >&2

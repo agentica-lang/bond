@@ -32,13 +32,6 @@
   }
 }
 
-.version {
-  flex-shrink: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-  text-decoration: none;
-}
-
 .repo {
   margin-left: auto;
 }
@@ -62,13 +55,6 @@
 
   .js .nav-toggle {
     display: block;
-  }
-}
-
-// The theme button needs the room: the footer and the release link still show the version.
-@media (max-width: 30rem) {
-  .version {
-    display: none;
   }
 }
 

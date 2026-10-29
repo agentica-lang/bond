@@ -26,6 +26,13 @@ const CLASSES = [
   ["variable.other.enummember", "no"],
 ];
 
+const OPTIONAL = new Set([
+  "comment",
+  "constant.character.escape",
+  "constant.language",
+  "keyword.operator.logical",
+  "variable.other.enummember",
+]);
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
 function decode(html) {
@@ -44,11 +51,14 @@ function escape(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const used = new Set();
+
 function classOf(scopes) {
   for (let i = scopes.length - 1; i >= 0; i--) {
     if (scopes[i].startsWith("meta.embedded")) return null;
     const found = CLASSES.find(([prefix]) => scopes[i] === prefix || scopes[i].startsWith(`${prefix}.`));
     if (found) {
+      used.add(found[0]);
       return found[1];
     }
   }
@@ -126,4 +136,8 @@ for (const file of htmlFiles(site)) {
   if (out !== html) writeFileSync(file, out);
 }
 if (blocks === 0) fail(`no agentica code blocks found in ${site}`);
+// A scope of CLASSES that the grammar renamed would color nothing, so the scopes that the samples of the site use must
+// still match; OPTIONAL are the ones that the samples do not use at the moment.
+const unused = CLASSES.filter(([prefix]) => !used.has(prefix) && !OPTIONAL.has(prefix)).map(([prefix]) => prefix);
+if (unused.length > 0) fail(`no token matched ${unused.join(", ")}: check the scope names in CLASSES`);
 console.log(`highlight: ${blocks} agentica code blocks`);

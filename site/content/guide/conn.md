@@ -16,7 +16,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todo)`) as JSON; sets `Content-Type` |
 | `Bond.status(conn, code)` | sets the status and nothing else |
-| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308 |
+| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308, and any other code is a runtime error, so a 500 |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |

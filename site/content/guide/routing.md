@@ -6,7 +6,7 @@ description: Routes, path params and what happens when nothing matches.
 
 # Routing
 
-`Bond.get`, `Bond.post`, `Bond.put`, `Bond.patch` and `Bond.delete` take the app, a pattern and a handler, and return the app. A handler is a `Fn[Bond.Conn, Result[Bond.Conn]]`: write `&name` for a function that has only the `Conn`, and a block for one that needs more.
+`Bond.get`, `Bond.post`, `Bond.put`, `Bond.patch` and `Bond.delete` take the app, a pattern and a handler, and return the app. The app is a `Bond.App`, and a handler is a `Bond.Handler`, which is a `Fn[Bond.Conn, Result[Bond.Conn]]`: write `&name` for a function that has only the `Conn`, and a block for one that needs more.
 
 ## Params
 

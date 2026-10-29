@@ -19,7 +19,7 @@
   {{- if not $page -}}
     {{- $href = "" -}}
     {{- if site.Params.repoPublic -}}
-      {{- $href = printf "%s/blob/master/%s%s" site.Params.repo $target $fragment -}}
+      {{- $href = printf "%s/blob/main/%s%s" site.Params.repo $target $fragment -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

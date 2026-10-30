@@ -14,8 +14,8 @@ end
 ## Like `start`, with the options of the server of `std/http` (`HttpServerOptions`: the timeouts, the connections
 ## at once and the body limit), such as `HTTP.server_options().with(max_body_bytes: 4_194_304)`.
 export def start_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[HttpServer]
-  handler = answering() do |request| ok(Apps.handle(app, request)) end
-  return HTTP.listen(host, port, handler, options)
+  handler = answering() do |request| ok(Apps.handle_stream(app, request)) end
+  return HTTP.listen_stream(host, port, handler, options)
 end
 
 export def local_port(server: HttpServer) -> Int
@@ -42,8 +42,10 @@ export def run_with(app: App, host: String, port: Int, options: HttpServerOption
   return wait(server)
 end
 
-# `HTTP.listen` takes the handler before its last argument, so a block cannot be written there: this gives the
-# block a name first.
-def answering(handler: Fn[HttpRequest, Result[HttpResponse]]) -> Fn[HttpRequest, Result[HttpResponse]]
+# `HTTP.listen_stream` takes the handler before its last argument, so a block cannot be written there: this gives
+# the block a name first.
+def answering(
+  handler: Fn[HttpRequest, Result[HTTP.StreamResponse]],
+) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
   return handler
 end

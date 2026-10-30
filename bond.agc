@@ -33,12 +33,16 @@ export Apps.static
 export Apps.before
 export Apps.after
 export Apps.handle
+export Apps.handle_stream
 export Conns.Conn
 export Conns.Handler
 export Conns.ErrorHandler
 export Conns.text
 export Conns.json
 export Conns.json_as
+export Conns.stream
+export Conns.sse
+export Conns.sse_event
 export Conns.json_body
 export Conns.halt
 export Conns.html

@@ -8,9 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `Bond.json_as(conn, status, JSON.codec(Todo), todo)` answers a struct as JSON and encodes it once, with no `Json` in between. A generic function cannot call `JSON.encode` on its type parameter, so it takes the codec, as `json_body` does. `Bond.json` still takes a `Json`, for a list or a map.
 
+- `Bond.stream(conn, status, channel)` and `Bond.sse(conn, channel)` answer with the pieces a task sends on a `Channel[Bytes]`, sent as they come (server-sent events for `sse`, with `Bond.sse_event(data, event)` to make each one). `Testing.request` reads the channel into the body, and `max_pieces` and `timeout_ms` (the time for the whole body) cut a stream that never ends; it reads text streams only for now (a stream that is not UTF-8 is a 500). A body that is not a stream is sent as before.
+
 ### Changed
 
-- **Breaking:** needs Agentica 0.18.0 or later (`Map.get` and `String.index_of` give an `Optional`). `Bond.param` of a missing segment is still an `error`.
+- **Breaking:** needs Agentica 0.19.0-beta.1 or later (0.18.0 for `Map.get` and `String.index_of` giving an `Optional`, 0.19.0-beta.1 for the streamed server). `Bond.param` of a missing segment is still an `error`.
+- `Bond.run` and `start` serve with `HTTP.listen_stream`; an answer that is not a stream is one closed piece, so it is sent with `Content-Length` as before.
 - `Testing.request(app, method, target)` takes the headers and the body as optional arguments (no headers, an empty body), so `Testing.request(app, "GET", "/hello")` works.
 - **Breaking:** routes are kept as a tree of segments, so a lookup does not depend on the number of routes. A literal segment now wins over a `:param` at the same place whatever the order the routes were added in (before, the earlier route won); the walk goes back to the param when the literal branch has no route deeper. The method is chosen after the path, so a 405 `Allow` lists the methods of that route only. The same method and pattern twice, and two names for the param at the same place (`/users/:id` and `/users/:name/posts`), stop the program when the route is added.
 

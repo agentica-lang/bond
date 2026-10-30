@@ -12,6 +12,8 @@ struct Todo
   title: String
 end
 
+export type Producers = Channel[Task[Void]]
+
 struct NewUser
   name: String
   age: Int
@@ -34,23 +36,28 @@ end
 
 # The same app with custom handlers for a path with no route and for a failure. The error handler answers by path so
 # that one app shows each case: it gives an error for /filter-error and crashes for /boom-again.
-export def build_custom() -> Bond.App
+export def build_custom(producers: Producers) -> Bond.App
   return (
-    build()
+    build(producers)
     |> Bond.get("/boom-again", &boom)
     |> Bond.not_found(&custom_not_found)
     |> Bond.on_error(&custom_error)
   )
 end
 
-export def build() -> Bond.App
-  return build_in("specs/fixtures/public")
+export def build(producers: Producers) -> Bond.App
+  return build_in("specs/fixtures/public", producers)
 end
 
-# The folder of the static files is relative to the working directory: `agentica test` runs the app in process from the
-# project folder, while the program of a socket scenario runs from the folder of its feature (`specs/`).
-export def build_in(public: String) -> Bond.App
+## The folder of the static files is relative to the working directory: `agentica test` runs the app in process from the
+## project folder, while the program of a socket scenario runs from the folder of its feature (`specs/`).
+##
+## `producers` is where the routes of the streams put the task of each producer they start, so that a step can wait
+## for them to end (a BDD handler must not return with a task pending). A program that serves forever gives a channel
+## nobody reads: a send that cannot be made is dropped.
+export def build_in(public: String, producers: Producers) -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
+  stopped: ATS[String, Bool] = ATS.new()
   return (
     Bond.app()
     |> Bond.before(&fail_on_request)
@@ -114,6 +121,13 @@ export def build_in(public: String) -> Bond.App
     |> Bond.get("/location-non-ascii", &location_non_ascii)
     |> Bond.get("/location-newline", &location_newline)
     |> Bond.get("/header-bad-name", &header_bad_name)
+    |> Bond.get("/events") do |conn| events(producers, conn) end
+    |> Bond.get("/events-304") do |conn| events_not_modified(producers, conn) end
+    |> Bond.get("/events-bad-header") do |conn| events_bad_header(producers, conn) end
+    |> Bond.get("/events-binary", &events_binary)
+    |> Bond.get("/events-replaced") do |conn| events_replaced(producers, conn) end
+    |> Bond.get("/endless") do |conn| endless(producers, stopped, conn) end
+    |> Bond.get("/endless-stopped") do |conn| endless_stopped(stopped, conn) end
   )
 end
 
@@ -449,4 +463,84 @@ def track_visit(conn: Bond.Conn) -> Result[Bond.Conn]
   end
 
   return ok(conn)
+end
+
+# Hands the task of a producer to whoever waits for it. A full or unread channel drops it.
+def keep(producers: Producers, task: Task[Void]) -> Void
+  producers.send(task, 1)
+end
+
+# A task sends the events and closes the channel, as the guide says a producer must.
+def produce(events: Channel[Bytes]) -> Void
+  for event in [Bond.sse_event("one"), Bond.sse_event("two\nlines", "note")]
+    if not events.send(event, 5000).ok?
+      break
+    end
+  end
+
+  events.close
+end
+
+def events(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  keep(producers, Task.spawn(&produce, channel))
+  return ok(Bond.sse(conn, channel))
+end
+
+# A 304 has no body, so the stream is dropped and its channel closed.
+def events_not_modified(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  keep(producers, Task.spawn(&produce, channel))
+  return ok(Bond.stream(conn, 304, channel))
+end
+
+# A response the server refuses is a plain 500, and the channel of its stream is closed.
+def events_bad_header(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  keep(producers, Task.spawn(&produce, channel))
+  return ok(Bond.header(Bond.sse(conn, channel), "content-length", "5"))
+end
+
+# The pieces are not UTF-8 text, so `Testing.request` cannot give them as a body.
+def events_binary(conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  channel.send(Bytes.from_list([255, 216, 0]).unwrap!, 5000).unwrap!
+  channel.close
+  return ok(Bond.stream(conn, 200, channel))
+end
+
+# A body helper after a stream replaces it and closes its channel.
+def events_replaced(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  keep(producers, Task.spawn(&produce, channel))
+  return ok(Bond.halt(Bond.sse(conn, channel), 403, "forbidden"))
+end
+
+# A producer that never ends by itself: it stops only when its send fails, and says so in `stopped`.
+def tick(events: Channel[Bytes], stopped: ATS[String, Bool]) -> Void
+  while events.send(Bond.sse_event("tick"), 5000).ok?
+    Task.sleep(20)
+  end
+
+  stopped.put("endless", true)
+  events.close
+end
+
+def endless(producers: Producers, stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(2)
+  keep(producers, Task.spawn() do tick(channel, stopped) end)
+  return ok(Bond.sse(conn, channel))
+end
+
+# Waits (2 s at most) for the producer of /endless to see its channel closed.
+def endless_stopped(stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
+  for _ in 1..40
+    if stopped.get("endless").ok?
+      return ok(Bond.text(conn, 200, "stopped"))
+    end
+
+    Task.sleep(50)
+  end
+
+  return ok(Bond.text(conn, 200, "running"))
 end

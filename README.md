@@ -5,7 +5,7 @@ Version 0.1.0 has the router, filters, custom handlers, JSON bodies, query strin
 Limits: static files are text only until Agentica has bodies of bytes, and WebSockets come later (see
 [the design](https://github.com/agentica-lang/bond/issues/1)).
 
-Bond 0.1.0 needs Agentica 0.16.0 or later; the next release needs Agentica 0.18.0 or later.
+Bond 0.1.0 needs Agentica 0.16.0 or later; the next release needs Agentica 0.19.0-beta.1 or later.
 
 Documentation: https://agentica-lang.github.io/bond/
 

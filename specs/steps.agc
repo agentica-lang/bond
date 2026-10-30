@@ -11,12 +11,16 @@ APP = "app"
 REPLY = "reply"
 PORT = "port"
 SOCKET_MS = 5_000
+PRODUCERS = 16
+PRODUCER_MS = 5_000
 
 struct Ask
   method: String
   path: String
   headers: List[Header]
   body: String
+  max_pieces: Int = 0
+  timeout_ms: Int = 10_000 # keep in sync with the defaults of Testing.request
 end
 
 struct Reply
@@ -33,6 +37,12 @@ def main() -> Void
     BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: ""))
+    end,
+    BDD.step("I send {string} to {string} keeping at most {int} pieces") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: "", max_pieces: args[2].to_i!))
+    end,
+    BDD.step("I send {string} to {string} waiting at most {int} ms") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: "", timeout_ms: args[2].to_i!))
     end,
     BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: args[2]))
@@ -87,6 +97,13 @@ def main() -> Void
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
     end,
+    # Like "the body is {string}", for text with line breaks (the events of a stream): the step reads a quoted string as
+    # Gherkin does, so a backslash is written twice and `\\n` is a line break.
+    BDD.step("the body is the text {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      expected = args[0].replace("\\n", "\n")
+      BDD.assert(ctx, reply.body == expected, "the body is #{reply.body.inspect}, not #{expected.inspect}")
+    end,
     BDD.step("the header {string} is {string}") do |ctx, args|
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.headers.get(args[0].downcase, "") == args[1], "the headers are #{reply.headers}")
@@ -104,11 +121,13 @@ def main() -> Void
 end
 
 def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return keep(ctx, Fixture.build())
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build(producers), producers)
 end
 
 def keep_custom_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return keep(ctx, Fixture.build_custom())
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_custom(producers), producers)
 end
 
 # The folder of the links is made for each request and removed after it, since a scenario has no hook to clean up.
@@ -161,11 +180,24 @@ def link(target: String, path: String) -> Result[Void]
   return ok()
 end
 
-def keep(ctx: BDD.Context, app: Bond.App) -> BDD.Context
+def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
-    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body)
+    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body, ask.max_pieces, ask.timeout_ms)
+    wait_for_producers(producers)
     ok(JSON.from(reply_of(response)))
+  end
+end
+
+# BDD fails a handler that returns with a task pending, and a producer of a stream ends only when it has seen its
+# channel closed (or sent its last piece). The routes of the streams hand their tasks over, and this awaits each, so
+# no timing is guessed. By the time `Testing.request` returns, every task that the request started is in the channel.
+def wait_for_producers(producers: Fixture.Producers) -> Void
+  while true
+    case producers.recv(1)
+      ok(task) -> Task.await(task, PRODUCER_MS)
+      error(_) -> break
+    end
   end
 end
 

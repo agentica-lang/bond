@@ -43,3 +43,13 @@ Feature: Todos
     When I send "POST" to "/todos" with the body ""
     Then the status is 400
     And the body is "title is empty"
+
+  Scenario: The list of todos is a JSON array, answered from a Json value
+    Given I send "POST" to "/todos" with the body "one"
+    When I send "GET" to "/todos"
+    Then the status is 200
+    And the header "content-type" is "application/json"
+    And the JSON body is:
+      """
+      [{"id": 1, "title": "one"}]
+      """

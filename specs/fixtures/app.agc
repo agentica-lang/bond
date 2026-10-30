@@ -228,7 +228,7 @@ def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
 
   todo = Todo(id: store.next_id.add("todo", 1), title: conn.body)
   store.todos.put(todo.id, todo)
-  return ok(Bond.json(conn, 201, JSON.from(todo)))
+  return ok(Bond.json_as(conn, 201, JSON.codec(Todo), todo))
 end
 
 def latest(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -238,7 +238,7 @@ end
 def show_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   id = try Bond.param_int(conn, "id")
   case store.todos.get(id)
-    ok(todo) -> return ok(Bond.json(conn, 200, JSON.from(todo)))
+    ok(todo) -> return ok(Bond.json_as(conn, 200, JSON.codec(Todo), todo))
     error(_) -> return ok(Bond.halt(conn, 404, "not found"))
   end
 end

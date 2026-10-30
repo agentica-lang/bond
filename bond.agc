@@ -38,6 +38,7 @@ export Conns.Handler
 export Conns.ErrorHandler
 export Conns.text
 export Conns.json
+export Conns.json_as
 export Conns.json_body
 export Conns.halt
 export Conns.html

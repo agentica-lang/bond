@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `Bond.json_as(conn, status, JSON.codec(Todo), todo)` answers a struct as JSON and encodes it once, with no `Json` in between. A generic function cannot call `JSON.encode` on its type parameter, so it takes the codec, as `json_body` does. `Bond.json` still takes a `Json`, for a list or a map.
+
 ### Changed
 
 - **Breaking:** needs Agentica 0.18.0 or later (`Map.get` and `String.index_of` give an `Optional`). `Bond.param` of a missing segment is still an `error`.

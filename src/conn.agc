@@ -90,9 +90,18 @@ export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
   return header(untyped, "location", location).with(status: code, response_body: "", halted: true)
 end
 
-## Answers `value` encoded as JSON. It sets `Content-Type`; call `header` after it to use another.
+## Answers `value` (a `Json`, such as `JSON.from(scores)` for a list or a map) as JSON. It sets `Content-Type`; call
+## `header` after it to use another. For a struct, `json_as` encodes it once, with no `Json` in between.
 export def json(conn: Conn, status: Int, value: Json) -> Conn
   return header(conn, "content-type", "application/json").with(status: status, response_body: JSON.encode(value))
+end
+
+## Answers a struct encoded as JSON with its `codec` (`JSON.codec(Todo)`), like `json` but with no `Json` value in
+## between: the struct is written once. A generic function cannot call `JSON.encode` on its type parameter, so the
+## codec comes from the caller, as in `json_body`. A non-finite `Float` stops the handler with a runtime error
+## (a 500), as `JSON.encode` does.
+export def json_as[T](conn: Conn, status: Int, codec: JSON.Codec[T], value: T) -> Conn
+  return header(conn, "content-type", "application/json").with(status: status, response_body: codec.encode(value))
 end
 
 ## Answers `body` as plain text and stops the filters and the handler that come after.

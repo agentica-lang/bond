@@ -1,5 +1,6 @@
 ## The app: routes and filters, and how a request goes through them.
 
+import HTTP from "std/http"
 import Conns from "conn"
 import Pattern from "pattern"
 import Router from "router"
@@ -110,16 +111,28 @@ end
 ## The response to a request: the before filters, the route, the after filters. It does not fail: an `error` of a
 ## filter or handler, and a runtime error in one, goes to the error handler (a 400 for `bad_request`), and a
 ## response the server would refuse is a plain 500 (`Conns.to_response`). The chain runs in a task of its own so
-## that a runtime error ends the request and not the program; the after filters do not run for a crash.
+## that a runtime error ends the request and not the program; the after filters do not run for a crash. A streamed
+## body is read to its end into the response; the server uses `handle_stream` instead.
 export def handle(app: App, request: HttpRequest) -> HttpResponse
+  return Conns.to_response(answer(app, request))
+end
+
+## Like `handle`, for `HTTP.listen_stream`: the channel of a streamed body is sent as it is, and any other body is one
+## closed piece.
+export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
+  return Conns.to_stream_response(answer(app, request))
+end
+
+# The `Conn` that answers the request, before it is turned into a response.
+def answer(app: App, request: HttpRequest) -> Conn
   conn = Conns.from_request(request)
   task = Task.spawn() do serve(app, conn) end
   case Task.await(task)
-    ok(done) -> return Conns.to_response(done)
+    ok(done) -> return done
     error(message) ->
       # The VM has printed the stack trace of the crash; the message is not logged a second time.
       IO.warn("bond: #{conn.method} #{conn.path}: crashed, the stack trace is above")
-      return Conns.to_response(answer_error(app, conn, message))
+      return answer_error(app, conn, message)
   end
 end
 
@@ -226,9 +239,10 @@ end
 
 # The error handler runs in a task of its own, like the chain: if it crashes, the request still gets an answer. It
 # gets the request with nothing of the answer built so far, in both paths, so that no header of a filter or of the
-# handler that failed is in a 500.
+# handler that failed is in a 500. A stream the conn already held is dropped, so it is closed: its producer stops.
 def answer_error(app: App, conn: Conn, message: String) -> Conn
-  failing = conn.with(status: 500, response_headers: [], response_body: "")
+  Conns.close_stream(conn)
+  failing = conn.with(status: 500, response_headers: [], response_body: "", response_stream: none)
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> return answer.with(halted: true)

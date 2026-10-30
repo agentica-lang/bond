@@ -87,6 +87,11 @@ def main() -> Void
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
     end,
+    # A doc string drops its final blank lines, and the last event of a stream ends with one: the step puts it back.
+    BDD.step("the body is the events:") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.body == "#{BDD.doc_string(ctx)}\n\n", "the body is #{reply.body.inspect}")
+    end,
     BDD.step("the header {string} is {string}") do |ctx, args|
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.headers.get(args[0].downcase, "") == args[1], "the headers are #{reply.headers}")

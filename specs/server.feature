@@ -44,3 +44,19 @@ Feature: Server
     And the header "content-length" is "17"
     And the header "content-type" is "text/plain; charset=utf-8"
     And the header "x-content-type-options" is "nosniff"
+
+  Scenario: A stream over a socket has the pieces and the channel closing ends the body
+    Given the server listens on a free port
+    When I get "/events" over the socket
+    Then the status is 200
+    And the header "content-type" is "text/event-stream; charset=utf-8"
+    And the body is the events:
+      """
+      data: one
+
+      event: note
+      data: two
+      data: lines
+      """
+    When I get "/hello" over the socket
+    Then the body is "hello"

@@ -114,6 +114,9 @@ export def build_in(public: String) -> Bond.App
     |> Bond.get("/location-non-ascii", &location_non_ascii)
     |> Bond.get("/location-newline", &location_newline)
     |> Bond.get("/header-bad-name", &header_bad_name)
+    |> Bond.get("/events", &events)
+    |> Bond.get("/events-304", &events_not_modified)
+    |> Bond.get("/events-bad-header", &events_bad_header)
   )
 end
 
@@ -449,4 +452,35 @@ def track_visit(conn: Bond.Conn) -> Result[Bond.Conn]
   end
 
   return ok(conn)
+end
+
+# A task sends the events and closes the channel, as the guide says a producer must.
+def produce(events: Channel[Bytes]) -> Void
+  for event in [Bond.sse_event("one"), Bond.sse_event("two\nlines", "note")]
+    if not events.send(event, 5000).ok?
+      break
+    end
+  end
+
+  events.close
+end
+
+def events(conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  Task.spawn(&produce, channel)
+  return ok(Bond.sse(conn, channel))
+end
+
+# A 304 has no body, so the stream is dropped and its channel closed.
+def events_not_modified(conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  Task.spawn(&produce, channel)
+  return ok(Bond.stream(conn, 304, channel))
+end
+
+# A response the server refuses is a plain 500, and the channel of its stream is closed.
+def events_bad_header(conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  Task.spawn(&produce, channel)
+  return ok(Bond.header(Bond.sse(conn, channel), "content-length", "5"))
 end

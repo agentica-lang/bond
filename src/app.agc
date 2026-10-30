@@ -112,9 +112,15 @@ end
 ## filter or handler, and a runtime error in one, goes to the error handler (a 400 for `bad_request`), and a
 ## response the server would refuse is a plain 500 (`Conns.to_response`). The chain runs in a task of its own so
 ## that a runtime error ends the request and not the program; the after filters do not run for a crash. A streamed
-## body is read to its end into the response; the server uses `handle_stream` instead.
-export def handle(app: App, request: HttpRequest) -> HttpResponse
-  return Conns.to_response(answer(app, request))
+## body is read into the response, as `Conns.to_response` says (`max_pieces` and `timeout_ms` bound it); the server
+## uses `handle_stream` instead.
+export def handle(
+  app: App,
+  request: HttpRequest,
+  max_pieces: Int = 0,
+  timeout_ms: Int = 10_000,
+) -> HttpResponse
+  return Conns.to_response(answer(app, request), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for `HTTP.listen_stream`: the channel of a streamed body is sent as it is, and any other body is one

@@ -17,6 +17,8 @@ struct Ask
   path: String
   headers: List[Header]
   body: String
+  max_pieces: Int = 0
+  timeout_ms: Int = 10_000
 end
 
 struct Reply
@@ -33,6 +35,12 @@ def main() -> Void
     BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: ""))
+    end,
+    BDD.step("I send {string} to {string} keeping at most {int} pieces") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: "", max_pieces: args[2].to_i!))
+    end,
+    BDD.step("I send {string} to {string} waiting at most {int} ms") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: "", timeout_ms: args[2].to_i!))
     end,
     BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: args[2]))
@@ -87,10 +95,12 @@ def main() -> Void
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
     end,
-    # A doc string drops its final blank lines, and the last event of a stream ends with one: the step puts it back.
-    BDD.step("the body is the events:") do |ctx, args|
+    # Like "the body is {string}", for text with line breaks (the events of a stream): the step reads a quoted string as
+    # Gherkin does, so a backslash is written twice and `\\n` is a line break.
+    BDD.step("the body is the text {string}") do |ctx, args|
       reply = last_reply(ctx)
-      BDD.assert(ctx, reply.body == "#{BDD.doc_string(ctx)}\n\n", "the body is #{reply.body.inspect}")
+      expected = args[0].replace("\\n", "\n")
+      BDD.assert(ctx, reply.body == expected, "the body is #{reply.body.inspect}, not #{expected.inspect}")
     end,
     BDD.step("the header {string} is {string}") do |ctx, args|
       reply = last_reply(ctx)
@@ -169,7 +179,12 @@ end
 def keep(ctx: BDD.Context, app: Bond.App) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
-    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body)
+    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body, ask.max_pieces, ask.timeout_ms)
+    if ask.max_pieces > 0 or ask.timeout_ms != 10_000
+      # A producer that was cut sees its channel closed on its next send: BDD wants no task pending when we return.
+      Task.sleep(200)
+    end
+
     ok(JSON.from(reply_of(response)))
   end
 end

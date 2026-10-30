@@ -50,13 +50,6 @@ Feature: Server
     When I get "/events" over the socket
     Then the status is 200
     And the header "content-type" is "text/event-stream; charset=utf-8"
-    And the body is the events:
-      """
-      data: one
-
-      event: note
-      data: two
-      data: lines
-      """
+    And the body is the text "data: one\\n\\nevent: note\\ndata: two\\ndata: lines\\n\\n"
     When I get "/hello" over the socket
     Then the body is "hello"

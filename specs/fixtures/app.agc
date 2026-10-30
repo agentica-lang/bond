@@ -51,6 +51,7 @@ end
 # project folder, while the program of a socket scenario runs from the folder of its feature (`specs/`).
 export def build_in(public: String) -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
+  stopped: ATS[String, Bool] = ATS.new()
   return (
     Bond.app()
     |> Bond.before(&fail_on_request)
@@ -117,6 +118,10 @@ export def build_in(public: String) -> Bond.App
     |> Bond.get("/events", &events)
     |> Bond.get("/events-304", &events_not_modified)
     |> Bond.get("/events-bad-header", &events_bad_header)
+    |> Bond.get("/events-binary", &events_binary)
+    |> Bond.get("/events-replaced", &events_replaced)
+    |> Bond.get("/endless") do |conn| endless(stopped, conn) end
+    |> Bond.get("/endless-stopped") do |conn| endless_stopped(stopped, conn) end
   )
 end
 
@@ -483,4 +488,48 @@ def events_bad_header(conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   Task.spawn(&produce, channel)
   return ok(Bond.header(Bond.sse(conn, channel), "content-length", "5"))
+end
+
+# The pieces are not UTF-8 text, so `Testing.request` cannot give them as a body.
+def events_binary(conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  channel.send(Bytes.from_list([255, 216, 0]).unwrap!, 5000).unwrap!
+  channel.close
+  return ok(Bond.stream(conn, 200, channel))
+end
+
+# A body helper after a stream replaces it and closes its channel.
+def events_replaced(conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(8)
+  Task.spawn(&produce, channel)
+  return ok(Bond.halt(Bond.sse(conn, channel), 403, "forbidden"))
+end
+
+# A producer that never ends by itself: it stops only when its send fails, and says so in `stopped`.
+def tick(events: Channel[Bytes], stopped: ATS[String, Bool]) -> Void
+  while events.send(Bond.sse_event("tick"), 5000).ok?
+    Task.sleep(20)
+  end
+
+  stopped.put("endless", true)
+  events.close
+end
+
+def endless(stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
+  channel: Channel[Bytes] = Channel.new(2)
+  Task.spawn() do tick(channel, stopped) end
+  return ok(Bond.sse(conn, channel))
+end
+
+# Waits (2 s at most) for the producer of /endless to see its channel closed.
+def endless_stopped(stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
+  for _ in 1..40
+    if stopped.get("endless").ok?
+      return ok(Bond.text(conn, 200, "stopped"))
+    end
+
+    Task.sleep(50)
+  end
+
+  return ok(Bond.text(conn, 200, "running"))
 end

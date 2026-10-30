@@ -6,7 +6,7 @@ description: The Conn struct and the helpers that build an answer.
 
 # Conn and helpers
 
-`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) and `body`. It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` and `halted`.
+`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) and `body`. It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body`, `response_stream` (the channel of a streamed body, see [Streaming](/guide/streaming/)) and `halted`.
 
 Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 200, "hello"))` and a helper can wrap another.
 

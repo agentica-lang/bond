@@ -59,13 +59,13 @@ data: tick 3
 
 ```
 
-`Testing.request` reads the channel to its end, so a test sees all the events as one body. It waits at most five seconds for each piece, then closes the channel and takes what it has. Over the server, a browser's `EventSource` or `curl -N` sees each event when it is sent.
+`Testing.request` reads the channel to its end, so a test sees all the events as one body (see [Testing](/guide/testing/) for `max_pieces` and `timeout_ms`, which cut a stream that never ends, and for the text-only limit). Over the server, a browser's `EventSource` or `curl -N` sees each event when it is sent.
 
 ## Rules
 
-- A stream replaces any text body set before it: the answer is the stream, and `Bond.text` and the like after it do not apply. Set other headers with `Bond.header`. `Content-Length` and `Transfer-Encoding` are the server's, so setting them is a 500 (and the channel is closed).
+- A stream replaces the body set before it, and `Bond.text`, `html`, `json`, `json_as`, `redirect` and `halt` after it replace the stream (a `halt(conn, 403, ...)` after `sse` is a 403 with a text body). A channel that is replaced is closed, so its producer stops. Set other headers with `Bond.header`. `Content-Length` and `Transfer-Encoding` are the server's, so setting them is a 500 (and the channel is closed).
 - A 204 or a 304 has no body, so its channel is closed and nothing is sent. `HEAD` gets the head only.
-- A stream that is not sent (a failure in an `after` filter, a response the server refuses) is closed, so its producer stops.
+- A stream that is not sent (an `error` of an `after` filter, a response the server refuses) is closed, so its producer stops. A crash (a runtime error) in an `after` filter does not close it: Bond does not know the channel then, so the producer must send with a timeout, as above, and stop when it ends.
 - A failure after the head went out cannot change the status: the body is cut and the client sees it as incomplete. Check what can fail before you return the stream.
 - Filters and routes run as for any answer, before the stream starts; the `after` filters run when the handler returns, not when the stream ends.
 - The `Conn` of the handler is gone once it returns, so the producer gets what it needs through its arguments (the channel, and any data it reads), not the `Conn`.

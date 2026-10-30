@@ -4,11 +4,9 @@ DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
 .PHONY: check site site-serve site-sass site-samples
 
-# Every .agc file of the package, its examples, specs and tests. `agentica check` takes one file at a time.
-AGC_FILES := $(wildcard *.agc src/*.agc examples/*.agc specs/*.agc specs/fixtures/*.agc test/*.agc)
-
+# `agentica check` with no path checks every .agc file of the package, its examples, specs and tests.
 check:
-	@for f in $(AGC_FILES); do agentica check "$$f" || exit 1; done
+	@agentica check
 
 site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
 

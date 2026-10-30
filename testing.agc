@@ -23,8 +23,8 @@ export def request(
 ) -> HttpResponse
   path = target
   case target.index_of("?")
-    ok(at) -> path = target.slice(0, at)
-    error(_) -> path = target
+    some(at) -> path = target.slice(0, at)
+    none -> path = target
   end
 
   lowered = headers.map do |header| Header(name: header.name.downcase, value: header.value) end

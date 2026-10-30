@@ -41,8 +41,8 @@ end
 export def from_request(request: HttpRequest) -> Conn
   query = ""
   case request.target.index_of("?")
-    ok(at) -> query = request.target.slice(at + 1, request.target.length - at - 1)
-    error(_) -> query = ""
+    some(at) -> query = request.target.slice(at + 1, request.target.length - at - 1)
+    none -> query = ""
   end
 
   return Conn(
@@ -129,7 +129,7 @@ end
 
 ## The text of the `:name` segment of the route, or an error when the route has no such segment.
 export def param(conn: Conn, name: String) -> Result[String]
-  return conn.params.get(name)
+  return conn.params.get(name).to_result("no param #{name}")
 end
 
 ## Decodes the body of the request with `codec` (`JSON.codec(User)`). The request must have one `Content-Type`, and
@@ -241,7 +241,7 @@ def token_char?(ch: String) -> Bool
   digit = code >= 48 and code <= 57
   upper = code >= 65 and code <= 90
   lower = code >= 97 and code <= 122
-  return digit or upper or lower or TOKEN_SYMBOLS.index_of(ch).ok?
+  return digit or upper or lower or TOKEN_SYMBOLS.index_of(ch).some?
 end
 
 def value_char?(ch: String) -> Bool
@@ -269,7 +269,7 @@ def decode_problem(message: String) -> String
   end
 
   case message.index_of("[")
-    ok(at) -> return "#{message.slice(0, at)}: #{message.split(": ").last}"
-    error(_) -> return message
+    some(at) -> return "#{message.slice(0, at)}: #{message.split(": ").last}"
+    none -> return message
   end
 end

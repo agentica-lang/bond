@@ -54,4 +54,43 @@ end
 400 invalid body: age: expected signed 64-bit Int
 ```
 
-To answer with JSON, keep using `Bond.json(conn, status, value)`: `JSON.from(user)` turns a struct into the `Json` value, so a response needs no codec.
+## Answering with JSON
+
+`Bond.json_as(conn, status, JSON.codec(User), user)` answers a struct as JSON and encodes it once. A function of your own that is generic over `T` cannot call `JSON.encode` on `T` (Agentica needs the type to write it), so Bond takes the codec, as `json_body` does. It sets `Content-Type: application/json`.
+
+`Bond.json(conn, status, value)` takes a `Json`, which is the way for a list or a map (`JSON.from(scores)`), since a codec is for a struct. A `Json` you built or parsed works as it did before.
+
+```agentica
+import Bond from "pkg/bond/bond"
+import Testing from "pkg/bond/testing"
+
+struct User
+  name: String
+  age: Int
+end
+
+def show_user(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.json_as(conn, 200, JSON.codec(User), User(name: "Ana", age: 30)))
+end
+
+def show_ages(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.json(conn, 200, JSON.from({"ana": 30, "luis": 25})))
+end
+
+def main() -> Void
+  app = (
+    Bond.app()
+    |> Bond.get("/user", &show_user)
+    |> Bond.get("/ages", &show_ages)
+  )
+  for path in ["/user", "/ages"]
+    response = Testing.request(app, "GET", path)
+    puts("#{response.status} #{response.body}")
+  end
+end
+```
+
+```output
+200 {"name":"Ana","age":30}
+200 {"ana":30,"luis":25}
+```

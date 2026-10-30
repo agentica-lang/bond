@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  AGENTICA_VERSION: 0.17.0
-  AGENTICA_SHA256: bca1bb67ef56432b25d11f8d37b4fcbc1f3a71fdb01b60bb713357d3c9f35646
+  AGENTICA_VERSION: 0.18.0
+  AGENTICA_SHA256: b836888967e3f6431f2c47ee78f348ae9f8bed39f170e277aabe296a142048b7
 
 jobs:
   test:
@@ -31,7 +31,7 @@ jobs:
       - name: Check
         run: |
           agentica --version
-          make check
+          agentica check
 
       # The features of specs/ (they listen on 127.0.0.1 only) and the unit tests of test/.
       - name: Test

@@ -20,8 +20,8 @@ end
 ## use `unwrap_or` or `case`.
 export def cookie(conn: Conn, name: String) -> Result[String]
   case cookies(conn).get(name)
-    ok(value) -> return ok(value)
-    error(_) -> return error("no cookie #{name}")
+    some(value) -> return ok(value)
+    none -> return error("no cookie #{name}")
   end
 end
 

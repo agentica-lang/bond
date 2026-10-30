@@ -81,8 +81,8 @@ end
 # `what` names the kind of field in the message; `name` is the program's, never the client's text.
 def one(fields: Map[String, List[String]], name: String, what: String) -> Result[String]
   case fields.get(name)
-    ok(found) -> return ok(found[0])
-    error(_) -> return Conns.bad_request("#{what} #{name} is missing")
+    some(found) -> return ok(found[0])
+    none -> return Conns.bad_request("#{what} #{name} is missing")
   end
 end
 

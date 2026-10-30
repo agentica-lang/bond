@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `Bond.json_as(conn, status, JSON.codec(Todo), todo)` answers a struct as JSON and encodes it once, with no `Json` in between. A generic function cannot call `JSON.encode` on its type parameter, so it takes the codec, as `json_body` does. `Bond.json` still takes a `Json`, for a list or a map.
 
-- `Bond.stream(conn, status, channel)` and `Bond.sse(conn, channel)` answer with the pieces a task sends on a `Channel[Bytes]`, sent as they come (server-sent events for `sse`, with `Bond.sse_event(data, event)` to make each one). `Testing.request` reads the channel into the body, and `max_pieces` and `timeout_ms` cut a stream that never ends; it reads text streams only for now (a stream that is not UTF-8 is a 500). A body that is not a stream is sent as before.
+- `Bond.stream(conn, status, channel)` and `Bond.sse(conn, channel)` answer with the pieces a task sends on a `Channel[Bytes]`, sent as they come (server-sent events for `sse`, with `Bond.sse_event(data, event)` to make each one). `Testing.request` reads the channel into the body, and `max_pieces` and `timeout_ms` (the time for the whole body) cut a stream that never ends; it reads text streams only for now (a stream that is not UTF-8 is a 500). A body that is not a stream is sent as before.
 
 ### Changed
 

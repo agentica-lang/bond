@@ -118,7 +118,7 @@ export def handle(
   app: App,
   request: HttpRequest,
   max_pieces: Int = 0,
-  timeout_ms: Int = 10_000,
+  timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Testing.request and specs/steps.agc
 ) -> HttpResponse
   return Conns.to_response(answer(app, request), max_pieces, timeout_ms)
 end

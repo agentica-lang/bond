@@ -11,6 +11,8 @@ APP = "app"
 REPLY = "reply"
 PORT = "port"
 SOCKET_MS = 5_000
+PRODUCERS = 16
+PRODUCER_MS = 5_000
 
 struct Ask
   method: String
@@ -18,7 +20,7 @@ struct Ask
   headers: List[Header]
   body: String
   max_pieces: Int = 0
-  timeout_ms: Int = 10_000
+  timeout_ms: Int = 10_000 # keep in sync with the defaults of Testing.request
 end
 
 struct Reply
@@ -119,11 +121,13 @@ def main() -> Void
 end
 
 def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return keep(ctx, Fixture.build())
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build(producers), producers)
 end
 
 def keep_custom_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return keep(ctx, Fixture.build_custom())
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_custom(producers), producers)
 end
 
 # The folder of the links is made for each request and removed after it, since a scenario has no hook to clean up.
@@ -176,16 +180,24 @@ def link(target: String, path: String) -> Result[Void]
   return ok()
 end
 
-def keep(ctx: BDD.Context, app: Bond.App) -> BDD.Context
+def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
     response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body, ask.max_pieces, ask.timeout_ms)
-    if ask.max_pieces > 0 or ask.timeout_ms != 10_000
-      # A producer that was cut sees its channel closed on its next send: BDD wants no task pending when we return.
-      Task.sleep(200)
-    end
-
+    wait_for_producers(producers)
     ok(JSON.from(reply_of(response)))
+  end
+end
+
+# BDD fails a handler that returns with a task pending, and a producer of a stream ends only when it has seen its
+# channel closed (or sent its last piece). The routes of the streams hand their tasks over, and this awaits each, so
+# no timing is guessed. By the time `Testing.request` returns, every task that the request started is in the channel.
+def wait_for_producers(producers: Fixture.Producers) -> Void
+  while true
+    case producers.recv(1)
+      ok(task) -> Task.await(task, PRODUCER_MS)
+      error(_) -> break
+    end
   end
 end
 

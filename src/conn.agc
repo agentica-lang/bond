@@ -20,10 +20,6 @@ TOKEN_SYMBOLS = "!#$%&'*+-.^_`|~"
 ASCII_LIMIT = 127
 LATIN1_LIMIT = 255
 
-# How long `Testing.request` waits for each piece of a streamed body before it gives up and closes the channel. The
-# whole body has `timeout_ms` (10 s by default; a default must be a literal), so a producer that never ends is cut.
-PIECE_TIMEOUT_MS = 5000
-
 export type Handler = Fn[Conn, Result[Conn]]
 
 export type ErrorHandler = Fn[Conn, String, Result[Conn]]
@@ -124,11 +120,13 @@ end
 ## must close the channel on every path, or the response never ends. Its `send` is `error("channel: closed")` once the
 ## client has left, which is the signal to stop. Set the type with `header` (`sse` does it for an event stream). The
 ## `Content-Length` is the server's, so the headers cannot set it. A stream replaces the body set before it, and a
-## body helper after it (`text`, `html`, `json`, `redirect`, `halt`) replaces the stream. A channel that is replaced
-## is closed, so its producer stops. A 204 or a 304 has no body, so its channel is closed. `Testing.request`
+## body helper after it (`text`, `html`, `json`, `json_as`, `redirect`, `halt`) replaces the stream and closes its
+## channel, so its producer stops. `stream` itself does not close the stream it replaces, so a filter can wrap the
+## stream of the conn (read `conn.response_stream`, pump it into a new channel and call `stream` with that one): closing
+## the old channel is then up to the caller. A 204 or a 304 has no body, so its channel is closed. `Testing.request`
 ## collects the pieces into the body.
 export def stream(conn: Conn, status: Int, body: Channel[Bytes]) -> Conn
-  return release(conn).with(status: status, response_body: "", response_stream: some(body))
+  return conn.with(status: status, response_body: "", response_stream: some(body))
 end
 
 ## Answers a 200 stream of server-sent events (`text/event-stream`, no caching) from `events`: the producer sends the
@@ -253,10 +251,13 @@ end
 ## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees what a client would.
 ##
 ## A streamed body is read here to its end, as one text, for a test. It is read until the producer closes the channel,
-## `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body, and then the channel is closed so the
-## producer stops; a body cut by the time limit says so on stderr. A `HEAD` gets no body and its channel is closed,
-## as over a socket. A body that is not UTF-8 text is a 500 with the body `the stream is not UTF-8 text`, since an
-## `HttpResponse` holds text.
+## `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body (one gap between pieces may take all of it),
+## and then the channel is closed so the producer stops; a body cut by the time limit says so on stderr. A `HEAD` gets
+## no body and its channel is closed, as over a socket. A body that is not UTF-8 text is a 500 with the body `the
+## stream is not UTF-8 text`, since an `HttpResponse` holds text.
+##
+## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
+## `Testing.request` and `specs/steps.agc`.
 export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HttpResponse
   problem = refusal(conn)
   if not problem.empty?
@@ -326,9 +327,10 @@ def plain_500(body: String) -> HttpResponse
 end
 
 # The pieces of a stream until the producer closes it, as one text. It stops at `max_pieces` pieces (when it is above
-# 0), when a piece takes more than PIECE_TIMEOUT_MS or when `timeout_ms` is spent for the whole body, and then the
-# channel is closed so the producer stops. Only a cut by time is reported on stderr: the producer closing is the end
-# and the piece limit was asked for. The result is an error when the pieces are not UTF-8 text.
+# 0) or when `timeout_ms` is spent for the whole body, and then the channel is closed so the producer stops. Each wait
+# for a piece is the time that is left, so one gap may take all of it. Only a cut by time is reported on stderr: the
+# producer closing is the end and the piece limit was asked for. The result is an error when the pieces are not UTF-8
+# text.
 def collect(conn: Conn, body: Channel[Bytes], max_pieces: Int, timeout_ms: Int) -> Result[String]
   pieces: List[Bytes] = []
   deadline = Time.monotonic_ms() + timeout_ms
@@ -344,12 +346,7 @@ def collect(conn: Conn, body: Channel[Bytes], max_pieces: Int, timeout_ms: Int) 
       break
     end
 
-    wait = PIECE_TIMEOUT_MS
-    if left < wait
-      wait = left
-    end
-
-    case body.recv(wait)
+    case body.recv(left)
       ok(piece) -> pieces = pieces.push(piece)
       error(_) ->
         if not body.closed?

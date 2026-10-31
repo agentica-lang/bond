@@ -18,7 +18,7 @@ def main() -> Void
 end
 ```
 
-Bond 0.2.0 has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, static files (any file, as bytes), streamed bodies (server-sent events), a guide to HTML escaping, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. WebSockets come later (see [the design](https://github.com/agentica-lang/bond/issues/1)).
+Bond 0.3.0 has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, static files (any file, as bytes), streamed bodies (server-sent events), a guide to HTML escaping, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. WebSockets come later (see [the design](https://github.com/agentica-lang/bond/issues/1)).
 
 - [Getting started](/getting-started/) installs Bond and runs a first app.
 - The [guide](/guide/) has a page for each part.

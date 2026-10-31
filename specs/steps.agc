@@ -51,88 +51,35 @@ def main() -> Void
     BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: args[2]))
     end,
-    BDD.step("I post the bytes {string} to {string} as {string}") do |ctx, args|
-      headers = [Header(name: "content-type", value: args[2])]
-      send(ctx, Ask(method: "POST", path: args[1], headers: headers, body: "", raw: numbers(args[0])))
-    end,
+    BDD.step("I post the bytes {string} to {string} as {string}", &post_bytes),
     BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: args[2], value: args[3])], body: ""))
     end,
-    BDD.step("I send {string} to {string} with the header {string} set to {string} and the body:") do |ctx, args|
-      headers = [Header(name: args[2], value: args[3])]
-      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: BDD.doc_string(ctx)))
-    end,
+    BDD.step(
+      "I send {string} to {string} with the header {string} set to {string} and the body:",
+      &send_header_and_body,
+    ),
     BDD.step(
       "I send {string} to {string} with the content types {string} and {string} and the body:",
       &send_two_types,
     ),
-    BDD.step("I post to {string} as {string}:") do |ctx, args|
-      headers = [Header(name: "content-type", value: args[1])]
-      send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
-    end,
-    BDD.step("I post to {string} as {string} and {string}:") do |ctx, args|
-      headers = [Header(name: "content-type", value: args[1]), Header(name: "content-type", value: args[2])]
-      send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
-    end,
+    BDD.step("I post to {string} as {string}:", &post_as),
+    BDD.step("I post to {string} as {string} and {string}:", &post_as_two_types),
     BDD.step("I send {string} to {string} with the cookie {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: args[2])], body: ""))
     end,
-    BDD.step("I send {string} to {string} with the cookies {string} and {string}") do |ctx, args|
-      headers = [Header(name: "cookie", value: args[2]), Header(name: "cookie", value: args[3])]
-      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
-    end,
-    BDD.step("I send {string} to {string} with the range {string} and the validator {string}") do |ctx, args|
-      headers = [Header(name: "range", value: args[2]), Header(name: "if-range", value: args[3])]
-      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
-    end,
-    BDD.step("the header {string} appears {int} times") do |ctx, args|
-      reply = last_reply(ctx)
-      count = reply.fields.select do |field| field.name.downcase == args[0].downcase end.size
-      BDD.assert(ctx, count == args[1].to_i!, "the header appears #{count} times in #{reply.fields}")
-    end,
-    BDD.step("the header {string} has the value {string}") do |ctx, args|
-      reply = last_reply(ctx)
-      found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == args[1] end
-      BDD.assert(ctx, found, "the headers are #{reply.fields}")
-    end,
-    BDD.step("the header {string} has the value:") do |ctx, args|
-      reply = last_reply(ctx)
-      expected = BDD.doc_string(ctx)
-      found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == expected end
-      BDD.assert(ctx, found, "the headers are #{reply.fields}")
-    end,
-    BDD.step("the status is {int}") do |ctx, args|
-      reply = last_reply(ctx)
-      BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
-    end,
-    BDD.step("the body is {string}") do |ctx, args|
-      reply = last_reply(ctx)
-      BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
-    end,
-    BDD.step("the body bytes are {string}") do |ctx, args|
-      reply = last_reply(ctx)
-      BDD.assert(ctx, reply.bytes == args[0], "the body bytes are #{reply.bytes}")
-    end,
-    # Like "the body is {string}", for text with line breaks (the events of a stream): the step reads a quoted string as
-    # Gherkin does, so a backslash is written twice and `\\n` is a line break.
-    BDD.step("the body is the text {string}") do |ctx, args|
-      reply = last_reply(ctx)
-      expected = args[0].replace("\\n", "\n")
-      BDD.assert(ctx, reply.body == expected, "the body is #{reply.body.inspect}, not #{expected.inspect}")
-    end,
-    BDD.step("the header {string} is {string}") do |ctx, args|
-      reply = last_reply(ctx)
-      BDD.assert(ctx, reply.headers.get(args[0].downcase, "") == args[1], "the headers are #{reply.headers}")
-    end,
-    BDD.step("the header {string} is not set") do |ctx, args|
-      reply = last_reply(ctx)
-      BDD.assert(ctx, not reply.headers.key?(args[0].downcase), "the headers are #{reply.headers}")
-    end,
-    BDD.step("the body has {int} bytes") do |ctx, args|
-      reply = last_reply(ctx)
-      count = numbers(reply.bytes).size
-      BDD.assert(ctx, count == args[0].to_i!, "the body has #{count} bytes")
-    end,
+    BDD.step("I send {string} to {string} with the cookies {string} and {string}", &send_two_cookies),
+    BDD.step("I send {string} to {string} with the range {string} and the validator {string}", &send_range),
+    BDD.step("the header {string} appears {int} times", &header_count_is),
+    BDD.step("the header {string} has the value {string}", &header_has_value),
+    BDD.step("the header {string} has the value:", &header_has_doc_value),
+    BDD.step("the status is {int}", &status_is),
+    BDD.step("the body is {string}", &body_is),
+    BDD.step("the body bytes are {string}", &body_bytes_are),
+    BDD.step("the body is the text {string}", &body_is_text),
+    BDD.step("the header {string} is {string}", &header_is),
+    BDD.step("the header {string} is not set", &header_not_set),
+    BDD.step("the body has {int} bytes", &body_size_is),
     BDD.step("the body bytes are the pattern from {int}", &body_is_pattern),
     BDD.step("the JSON body is:", &json_body_is),
     BDD.step("the server listens on a free port", &start_server),
@@ -141,6 +88,94 @@ def main() -> Void
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
   ])
+end
+
+def post_bytes(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: "content-type", value: args[2])]
+  return send(ctx, Ask(method: "POST", path: args[1], headers: headers, body: "", raw: numbers(args[0])))
+end
+
+def send_header_and_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: args[2], value: args[3])]
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: BDD.doc_string(ctx)))
+end
+
+def post_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: "content-type", value: args[1])]
+  return send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
+end
+
+def post_as_two_types(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: "content-type", value: args[1]), Header(name: "content-type", value: args[2])]
+  return send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
+end
+
+def send_two_cookies(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: "cookie", value: args[2]), Header(name: "cookie", value: args[3])]
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+end
+
+def send_range(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: "range", value: args[2]), Header(name: "if-range", value: args[3])]
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+end
+
+def header_count_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  count = reply.fields.select do |field| field.name.downcase == args[0].downcase end.size
+  return BDD.assert(ctx, count == args[1].to_i!, "the header appears #{count} times in #{reply.fields}")
+end
+
+def header_has_value(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == args[1] end
+  return BDD.assert(ctx, found, "the headers are #{reply.fields}")
+end
+
+def header_has_doc_value(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  expected = BDD.doc_string(ctx)
+  found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == expected end
+  return BDD.assert(ctx, found, "the headers are #{reply.fields}")
+end
+
+def status_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
+end
+
+def body_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
+end
+
+def body_bytes_are(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(ctx, reply.bytes == args[0], "the body bytes are #{reply.bytes}")
+end
+
+# Like "the body is {string}", for text with line breaks (the events of a stream): the step reads a quoted string as
+# Gherkin does, so a backslash is written twice and `\\n` is a line break.
+def body_is_text(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  expected = args[0].replace("\\n", "\n")
+  return BDD.assert(ctx, reply.body == expected, "the body is #{reply.body.inspect}, not #{expected.inspect}")
+end
+
+def header_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(ctx, reply.headers.get(args[0].downcase, "") == args[1], "the headers are #{reply.headers}")
+end
+
+def header_not_set(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(ctx, not reply.headers.key?(args[0].downcase), "the headers are #{reply.headers}")
+end
+
+def body_size_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  count = numbers(reply.bytes).size
+  return BDD.assert(ctx, count == args[0].to_i!, "the body has #{count} bytes")
 end
 
 def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -163,14 +198,16 @@ def keep_links_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
     return BDD.skip(ctx, "the folder of links cannot be made here: #{probe.message}")
   end
 
-  return BDD.keep(ctx, APP) do |request|
-    ask = try JSON.decode(request, Ask)
-    try make_folder(base)
-    app = Bond.app() |> Bond.static("/files", "#{base}/root")
-    response = ask_request(app, ask, 0, 10_000)
-    Path.remove(base)
-    ok(JSON.from(reply_of(response)))
-  end
+  return BDD.keep(ctx, APP) do |request| serve_links(base, request) end
+end
+
+def serve_links(base: String, request: Json) -> Result[Json]
+  ask = try JSON.decode(request, Ask)
+  try make_folder(base)
+  app = Bond.app() |> Bond.static("/files", "#{base}/root")
+  response = ask_request(app, ask, 0, 10_000)
+  Path.remove(base)
+  return ok(JSON.from(reply_of(response)))
 end
 
 # `root` has the files and the links, and `secret.txt` next to it is the file that no link may reach.
@@ -204,14 +241,16 @@ def link(target: String, path: String) -> Result[Void]
 end
 
 def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.Context
-  return BDD.keep(ctx, APP) do |request|
-    ask = try JSON.decode(request, Ask)
-    before = Task.pending_count()
-    response = ask_request(app, ask, ask.max_pieces, ask.timeout_ms)
-    wait_for_producers(producers)
-    settle(before)
-    ok(JSON.from(reply_of(response)))
-  end
+  return BDD.keep(ctx, APP) do |request| serve(app, producers, request) end
+end
+
+def serve(app: Bond.App, producers: Fixture.Producers, request: Json) -> Result[Json]
+  ask = try JSON.decode(request, Ask)
+  before = Task.pending_count()
+  response = ask_request(app, ask, ask.max_pieces, ask.timeout_ms)
+  wait_for_producers(producers)
+  settle(before)
+  return ok(JSON.from(reply_of(response)))
 end
 
 # The pump of a file (`Bond.send_file`) is a task of the library, so it is not in `producers`. When the body has been
@@ -232,23 +271,25 @@ end
 def keep_big_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   size = args[0].to_i!
   base = "send_file_#{System.pid()}"
-  return BDD.keep(ctx, APP) do |request|
-    ask = try JSON.decode(request, Ask)
-    try Dir.mkdir(base)
-    try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
-    app = (
-      Bond.app()
-      |> Bond.get("/big") do |conn| Bond.send_file(conn, "#{base}/big.bin") end
-      |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
-      |> Bond.static("/files", base)
-    )
-    before = Task.pending_count()
-    response = ask_request(app, ask, 0, 10_000)
-    settle(before)
-    Path.remove("#{base}/big.bin")
-    Path.remove(base)
-    ok(JSON.from(reply_of(response)))
-  end
+  return BDD.keep(ctx, APP) do |request| serve_big(base, size, request) end
+end
+
+def serve_big(base: String, size: Int, request: Json) -> Result[Json]
+  ask = try JSON.decode(request, Ask)
+  try Dir.mkdir(base)
+  try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
+  app = (
+    Bond.app()
+    |> Bond.get("/big") do |conn| Bond.send_file(conn, "#{base}/big.bin") end
+    |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
+    |> Bond.static("/files", base)
+  )
+  before = Task.pending_count()
+  response = ask_request(app, ask, 0, 10_000)
+  settle(before)
+  Path.remove("#{base}/big.bin")
+  Path.remove(base)
+  return ok(JSON.from(reply_of(response)))
 end
 
 def pattern(size: Int) -> Bytes

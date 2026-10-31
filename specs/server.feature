@@ -44,6 +44,17 @@ Feature: Server
     And the header "content-length" is "17"
     And the header "content-type" is "text/plain; charset=utf-8"
     And the header "x-content-type-options" is "nosniff"
+    And the header "accept-ranges" is "bytes"
+
+  Scenario: A range of a file over a socket is a 206 that has the length of the part
+    Given the server listens on a free port
+    When I get "/assets/hello.txt" over the socket with the header "range" set to "bytes=6-9"
+    Then the status is 206
+    And the body is "from"
+    And the header "content-length" is "4"
+    And the header "content-range" is "bytes 6-9/17"
+    When I get "/hello" over the socket
+    Then the body is "hello"
 
   Scenario: A stream over a socket has the pieces and the channel closing ends the body
     Given the server listens on a free port

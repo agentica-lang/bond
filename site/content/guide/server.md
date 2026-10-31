@@ -27,12 +27,11 @@ end
 
 ## Options
 
-`Bond.run_with(app, host, port, options)` and `Bond.start_with(app, host, port, options)` take the options of the server of `std/http`. `HttpServerOptions` has `request_timeout_ms`, `idle_timeout_ms`, `max_connections` and `max_body_bytes`. Start from `HTTP.server_options()` and change what you need with `.with`. The other functions use `HTTP.server_options()` as it is.
+`Bond.run_with(app, host, port, options)` and `Bond.start_with(app, host, port, options)` take the options of the server of `std/http`. `HttpServerOptions` has `request_timeout_ms`, `idle_timeout_ms`, `max_connections` and `max_body_bytes`. Every field has a default, so `HttpServerOptions(max_body_bytes: 4_194_304)` changes one field and keeps the rest. The other functions use `HttpServerOptions()`.
 
 A body over `max_body_bytes` is a 413 from the server, and never reaches the app.
 
 ```agentica
-import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -41,7 +40,7 @@ end
 
 def main() -> Void
   app = Bond.app() |> Bond.get("/hello", &hello)
-  options = HTTP.server_options().with(max_body_bytes: 4_194_304, max_connections: 64)
+  options = HttpServerOptions(max_body_bytes: 4_194_304, max_connections: 64)
   Bond.run_with(app, "127.0.0.1", 4567, options).unwrap!
 end
 ```

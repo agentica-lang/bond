@@ -13,6 +13,7 @@ PORT = "port"
 SOCKET_MS = 5_000
 PRODUCERS = 16
 PRODUCER_MS = 5_000
+PATTERN = 251
 
 struct Ask
   method: String
@@ -36,6 +37,7 @@ def main() -> Void
   BDD.run([
     BDD.step("the todo app", &keep_app),
     BDD.step("the todo app with custom handlers", &keep_custom_app),
+    BDD.step("the app with a file of {int} bytes", &keep_big_app),
     BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: ""))
@@ -77,6 +79,10 @@ def main() -> Void
     end,
     BDD.step("I send {string} to {string} with the cookies {string} and {string}") do |ctx, args|
       headers = [Header(name: "cookie", value: args[2]), Header(name: "cookie", value: args[3])]
+      send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+    end,
+    BDD.step("I send {string} to {string} with the range {string} and the validator {string}") do |ctx, args|
+      headers = [Header(name: "range", value: args[2]), Header(name: "if-range", value: args[3])]
       send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
     end,
     BDD.step("the header {string} appears {int} times") do |ctx, args|
@@ -122,10 +128,17 @@ def main() -> Void
       reply = last_reply(ctx)
       BDD.assert(ctx, not reply.headers.key?(args[0].downcase), "the headers are #{reply.headers}")
     end,
+    BDD.step("the body has {int} bytes") do |ctx, args|
+      reply = last_reply(ctx)
+      count = numbers(reply.bytes).size
+      BDD.assert(ctx, count == args[0].to_i!, "the body has #{count} bytes")
+    end,
+    BDD.step("the body bytes are the pattern from {int}", &body_is_pattern),
     BDD.step("the JSON body is:", &json_body_is),
     BDD.step("the server listens on a free port", &start_server),
     BDD.step("the server with a small body limit listens on a free port", &start_limited_server),
     BDD.step("I get {string} over the socket", &get_over_socket),
+    BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
   ])
 end
@@ -193,10 +206,62 @@ end
 def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
+    before = Task.pending_count()
     response = ask_request(app, ask, ask.max_pieces, ask.timeout_ms)
     wait_for_producers(producers)
+    settle(before)
     ok(JSON.from(reply_of(response)))
   end
+end
+
+# The pump of a file (`Bond.send_file`) is a task of the library, so it is not in `producers`. When the body has been
+# read it is about to end, so this waits for the tasks to be back to what they were before the request.
+def settle(before: Int) -> Void
+  for _ in 1..PRODUCER_MS
+    if Task.pending_count() <= before
+      return
+    end
+
+    Task.sleep(1)
+  end
+end
+
+# A file of `size` bytes, written for each request in a folder that is removed after it. Byte `i` is `i % 251` (a prime,
+# so the pattern does not repeat at the size of a piece), which `body_is_pattern` checks. The routes: `/big` sends the
+# file, `/save` sends it as a download, and `/files` serves its folder.
+def keep_big_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  size = args[0].to_i!
+  base = "send_file_#{System.pid()}"
+  return BDD.keep(ctx, APP) do |request|
+    ask = try JSON.decode(request, Ask)
+    try Dir.mkdir(base)
+    try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
+    app = (
+      Bond.app()
+      |> Bond.get("/big") do |conn| Bond.send_file(conn, "#{base}/big.bin") end
+      |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
+      |> Bond.static("/files", base)
+    )
+    before = Task.pending_count()
+    response = ask_request(app, ask, 0, 10_000)
+    settle(before)
+    Path.remove("#{base}/big.bin")
+    Path.remove(base)
+    ok(JSON.from(reply_of(response)))
+  end
+end
+
+def pattern(size: Int) -> Bytes
+  return Bytes.from_list((0...size).to_a.map do |i| i % PATTERN end).unwrap!
+end
+
+# The body is the pattern of `keep_big_app` starting at the byte given by the step.
+def body_is_pattern(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  start = args[0].to_i!
+  values = numbers(reply.bytes)
+  wrong = (0...values.size).to_a.select do |i| values[i] != (start + i) % PATTERN end
+  return BDD.assert(ctx, wrong.empty?, "the body differs from the pattern at #{wrong.take(3)}")
 end
 
 # BDD fails a handler that returns with a task pending, and a producer of a stream ends only when it has seen its
@@ -279,10 +344,14 @@ def post_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return over_socket(ctx, "POST", args[1], args[0])
 end
 
-def over_socket(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context
+def get_over_socket_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return over_socket(ctx, "GET", args[0], "", [Header(name: args[1], value: args[2])])
+end
+
+def over_socket(ctx: BDD.Context, method: String, path: String, body: String, headers: List[Header] = []) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  client = HTTP.client(HTTP.client_options()).unwrap!
-  response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, [])
+  client = HTTP.client().unwrap!
+  response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, headers)
   HTTP.close_client(client)
   return BDD.set(ctx, REPLY, JSON.from(reply_of(response.unwrap!)))
 end

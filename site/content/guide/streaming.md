@@ -59,7 +59,7 @@ data: tick 3
 
 ```
 
-`Testing.request` reads the channel to its end, so a test sees all the events as one body (see [Testing](/guide/testing/) for `max_pieces` and `timeout_ms`, which cut a stream that never ends, and for the text-only limit). Over the server, a browser's `EventSource` or `curl -N` sees each event when it is sent.
+`Testing.request` reads the channel to its end, so a test sees all the events as one body (see [Testing](/guide/testing/) for `max_pieces` and `timeout_ms`, which cut a stream that never ends). Over the server, a browser's `EventSource` or `curl -N` sees each event when it is sent.
 
 ## A body with a known size
 

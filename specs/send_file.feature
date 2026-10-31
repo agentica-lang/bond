@@ -51,6 +51,25 @@ Feature: Sending a file
     When I send "GET" to "/download-unicode"
     Then the header "content-disposition" is "attachment; filename=\"caf_ _x_.txt\"; filename*=UTF-8''caf%C3%A9%20%22x%22.txt"
 
+  Scenario: A name that tries to end the header has no control character, quote or backslash in the answer
+    Given the todo app
+    When I send "GET" to "/download-hostile"
+    Then the status is 200
+    And the header "content-disposition" is "attachment; filename=\"a__Set-Cookie: x=1__b_.txt\"; filename*=UTF-8''a%0D%0ASet-Cookie%3A%20x%3D1%00%22b%5C.txt"
+    And the header "set-cookie" is not set
+    And the body is "hello from a file"
+
+  Scenario: An attachment with an empty name has no file name
+    Given the todo app
+    When I send "GET" to "/download-nameless"
+    Then the header "content-disposition" is "attachment"
+
+  Scenario: A custom status set after the file is kept, and the file is the body
+    Given the todo app
+    When I send "GET" to "/download-not-found"
+    Then the status is 404
+    And the body is "hello from a file"
+
   Scenario Outline: A file that is not a plain file of the disk is a 500 (<path>)
     Given the todo app
     When I send "GET" to "<path>"

@@ -36,7 +36,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; see [Cookies](/guide/cookies/) |
 | `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` with `Path=/`, `HttpOnly` and `SameSite=Lax`, as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` with every attribute |
 | `Bond.delete_cookie(conn, name)` | adds a `Set-Cookie` that deletes the cookie (`Max-Age=0`) |
-| `Bond.send_file(conn, path, attachment)` | answers with a file read in pieces, with its length, its type, `Accept-Ranges` and `Range` support; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
+| `Bond.send_file(conn, path, some(name))` | answers with a file read in pieces, with its length, its type, `Accept-Ranges` and `Range` support; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
 | `Bond.static(app, prefix, root)` | serves the files of a folder under a path (`GET` and `HEAD`, any file up to `max_bytes`); an app function, not a `Conn` one; see [Static files](/guide/static/) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |

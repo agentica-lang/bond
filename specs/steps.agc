@@ -239,7 +239,7 @@ def keep_big_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
     app = (
       Bond.app()
       |> Bond.get("/big") do |conn| Bond.send_file(conn, "#{base}/big.bin") end
-      |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", "big file.bin") end
+      |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
       |> Bond.static("/files", base)
     )
     before = Task.pending_count()
@@ -350,7 +350,7 @@ end
 
 def over_socket(ctx: BDD.Context, method: String, path: String, body: String, headers: List[Header] = []) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  client = HTTP.client().unwrap!
   response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, headers)
   HTTP.close_client(client)
   return BDD.set(ctx, REPLY, JSON.from(reply_of(response.unwrap!)))

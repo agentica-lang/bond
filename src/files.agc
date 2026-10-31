@@ -1,13 +1,13 @@
-## Answering with a file: `send_file` gives its bytes in pieces with the `Content-Length` of the size, and the part that a
-## `Range` header asks for. `Bond.static` answers through the same function.
+## Answering with a file: `send_file` gives its bytes in pieces with the `Content-Length` of the size, and the part
+## that a `Range` header asks for. `Bond.static` answers through the same function.
 
 import MIME from "std/mime"
 import URI from "std/uri"
 import Conns from "conn"
 import {Conn} from "conn"
 
-## The size of the pieces that are read from the file and sent.
-export PIECE_BYTES = 65_536
+# The size of the pieces that are read from the file and sent.
+PIECE_BYTES = 65_536
 
 # The bytes before the part that a range starts at are read and dropped: `File` has no seek. A read is at most 1 MiB.
 SKIP_BYTES = 1_048_576
@@ -27,9 +27,9 @@ HUGE = 1_000_000_000_000_000_000
 # The most digits of a number that is converted as it is.
 MAX_DIGITS = 18
 
-## Which bytes of the file the request wants: `status` is 200 (all of it), 206 (the `size` bytes from `first`) or 416
-## (the range starts beyond the end of the file).
-export struct Slice
+# Which bytes of the file the request wants: `status` is 200 (all of it), 206 (the `size` bytes from `first`) or 416
+# (the range starts beyond the end of the file).
+struct Slice
   status: Int
   first: Int
   size: Int
@@ -45,9 +45,13 @@ struct Job
 end
 
 ## Answers with the file at `path`: its type from `std/mime` (a text type with `; charset=utf-8`), `Content-Length`,
-## `Accept-Ranges: bytes` and `X-Content-Type-Options: nosniff`. A non-empty `attachment` adds `Content-Disposition:
-## attachment` with that file name. See `send` for the rules of the range and the body.
-export def send_file(conn: Conn, path: String, attachment: String = "") -> Result[Conn]
+## `Accept-Ranges: bytes` and `X-Content-Type-Options: nosniff`. `some(name)` as the `attachment` adds
+## `Content-Disposition: attachment` with that file name (`some("")` has no name).
+##
+## The status is always set: 200, or 206 and 416 for a `Range` header, whatever it was before. So a custom
+## `not_found` page that sends a file answers 200 unless `Bond.status` comes after, and a client that sends a `Range`
+## to such a page can get a 206. See `send` for the rules of the range and the body.
+export def send_file(conn: Conn, path: String, attachment: Optional[String] = none) -> Result[Conn]
   return send(conn, path, file_name(path), attachment)
 end
 
@@ -58,7 +62,7 @@ end
 ## with) are ignored: the whole file is the answer. The file is read in pieces by a task that the call starts, so the
 ## memory does not grow with the size, and a `HEAD` request gets the headers with the length and no body. An
 ## `error` is a file that is not a plain file or that cannot be opened.
-export def send(conn: Conn, path: String, type_name: String, attachment: String = "") -> Result[Conn]
+export def send(conn: Conn, path: String, type_name: String, attachment: Optional[String] = none) -> Result[Conn]
   info = File.stat(path)
   if not info.ok? or info.unwrap!.kind != "file"
     return error("the file #{file_name(path)} cannot be read")
@@ -88,8 +92,8 @@ export def send(conn: Conn, path: String, type_name: String, attachment: String 
   return ok(Conns.stream(bare, slice.status, body, some(slice.size)))
 end
 
-## The part of a file of `size` bytes that the value of a `Range` header asks for ("" when there is none).
-export def slice_of(value: String, size: Int) -> Slice
+# The part of a file of `size` bytes that the value of a `Range` header asks for ("" when there is none).
+def slice_of(value: String, size: Int) -> Slice
   all = Slice(status: 200, first: 0, size: size)
   spec = value.strip
   if not spec.downcase.start_with?("bytes=")
@@ -175,7 +179,7 @@ def request_range(conn: Conn) -> String
 end
 
 # The headers of the answer, for any `slice`: the type, the ranges, the `Content-Range` of a part, and the disposition.
-def headed(conn: Conn, type_name: String, attachment: String, slice: Slice, size: Int) -> Conn
+def headed(conn: Conn, type_name: String, attachment: Optional[String], slice: Slice, size: Int) -> Conn
   type = MIME.mime_type(type_name)
   label = type
   if MIME.text?(type)
@@ -185,8 +189,9 @@ def headed(conn: Conn, type_name: String, attachment: String, slice: Slice, size
   typed = Conns.header(Conns.header(conn, "content-type", label), "x-content-type-options", "nosniff")
   ranged = Conns.header(typed, "accept-ranges", "bytes")
   named = ranged
-  if not attachment.empty?
-    named = Conns.header(ranged, "content-disposition", disposition(attachment))
+  case attachment
+    some(name) -> named = Conns.header(ranged, "content-disposition", disposition(name))
+    none -> named = ranged
   end
 
   if slice.status == 206
@@ -204,6 +209,10 @@ end
 # The value of `Content-Disposition` for a download with the name `name`: a quoted `filename` of the printable ASCII of
 # the name (anything else is `_`), and the exact name as `filename*` (RFC 6266) when they differ.
 def disposition(name: String) -> String
+  if name.empty?
+    return "attachment"
+  end
+
   plain = name.split("").map do |ch| fallback_char(ch) end.join("")
   if plain == name
     return "attachment; filename=\"#{plain}\""

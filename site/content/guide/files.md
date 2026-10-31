@@ -6,7 +6,7 @@ description: Answer with a file of any size, read in pieces, with its length, a 
 
 # Sending files
 
-`Bond.send_file(conn, path)` answers with the file at `path`. It gives a `Result[Bond.Conn]`, so a handler can return it as it is, or `try` it. The file is not read when the handler runs: a task that the call starts reads it in pieces of 64 KiB while the server sends them, so a file of any size costs a few pieces of memory. The server knows the size first, so the answer has `Content-Length` and the pieces go out as they are, with no chunks (this is the `length` of [`Bond.stream`](/guide/streaming/)).
+`Bond.send_file(conn, path)` answers with the file at `path`. It gives a `Result[Bond.Conn]`, so a handler can return it as it is, or `try` it. It sets the status itself: 200, or 206 and 416 for a range (below), whatever the status was. A [custom `not_found` handler](/guide/errors/) that sends a file therefore answers 200, and a client that sends a `Range` to it can get a 206; call `Bond.status(conn, 404)` after `send_file` for a page with another status, and keep it for pages that no client asks by range. The file is not read when the handler runs: a task that the call starts reads it in pieces of 64 KiB while the server sends them, so a file of any size costs a few pieces of memory. The server knows the size first, so the answer has `Content-Length` and the pieces go out as they are, with no chunks (this is the `length` of [`Bond.stream`](/guide/streaming/)).
 
 The answer has:
 
@@ -14,7 +14,7 @@ The answer has:
 - `Content-Length` of the size of the file (added by the server), and `Accept-Ranges: bytes`.
 - `X-Content-Type-Options: nosniff`.
 
-A third argument makes the file a download: `Bond.send_file(conn, "reports/q3.csv", "q3 report.csv")` adds `Content-Disposition: attachment; filename="q3 report.csv"`, and the browser saves it under that name. A name with characters outside ASCII, a quote or a backslash has a fallback `filename` (each such character is `_`) and the exact name as `filename*=UTF-8''...`, as RFC 6266 says.
+A third argument, an `Optional[String]`, makes the file a download: `Bond.send_file(conn, "reports/q3.csv", some("q3 report.csv"))` adds `Content-Disposition: attachment; filename="q3 report.csv"`, and the browser saves it under that name. A name with a control character (CR, LF, NUL), a quote, a backslash or a character outside ASCII has a fallback `filename` (each such character is `_`) and the exact name as `filename*=UTF-8''...`, as RFC 6266 says.
 
 The `error` of `send_file` is a path that is not a plain file (missing, a folder) or a file that cannot be opened. It goes to the [`on_error` handler](/guide/errors/) like any failure of a handler, so decide what the client should see before you call it: check that the file is the one you mean to give, since the path is yours and not the client's. Do not build a path from a request without the checks that [Static files](/guide/static/) makes. The file can still change after the answer started: a file that gets shorter is cut, and the client sees an incomplete body, never a short one that looks whole.
 
@@ -53,7 +53,7 @@ def report(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def save(conn: Bond.Conn) -> Result[Bond.Conn]
-  return Bond.send_file(conn, "files_sample.txt", "ten.txt")
+  return Bond.send_file(conn, "files_sample.txt", some("ten.txt"))
 end
 
 def show(app: Bond.App, method: String, path: String, range: String) -> Void

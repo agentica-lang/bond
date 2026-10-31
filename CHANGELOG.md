@@ -4,7 +4,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Needs the Agentica release that has `HTTP.StreamResponse(length:)` (agentica-lang/agentica#872) and the removal of `HTTP.server_options()` and `HTTP.client_options()` (agentica-lang/agentica#888).
+Needs Agentica 0.19.0-beta.3 or later, which has `HTTP.StreamResponse(length:)` (agentica-lang/agentica#872) and the removal of `HTTP.server_options()` and `HTTP.client_options()` (agentica-lang/agentica#888).
 
 ### Added
 

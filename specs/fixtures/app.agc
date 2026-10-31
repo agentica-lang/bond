@@ -101,6 +101,16 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/logout-host", &logout_host)
     |> Bond.get("/bad-cookie", &bad_cookie)
     |> Bond.get("/assets/override.txt", &hello)
+    |> Bond.get("/download") do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("report.txt")) end
+    |> Bond.get("/download-unicode") do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("café \"x\".txt")) end
+    |> Bond.get("/download-hostile") do |conn| Bond.send_file(conn, "#{public}/hello.txt", some(hostile())) end
+    |> Bond.get("/download-nameless") do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("")) end
+    |> Bond.get("/download-not-found") do |conn| not_found_file(public, conn) end
+    |> Bond.get("/download-plain") do |conn| Bond.send_file(conn, "#{public}/hello.txt") end
+    |> Bond.get("/download-png") do |conn| Bond.send_file(conn, "#{public}/pixel.png") end
+    |> Bond.get("/download-empty") do |conn| Bond.send_file(conn, "#{public}/empty.txt") end
+    |> Bond.get("/download-missing") do |conn| Bond.send_file(conn, "#{public}/missing.txt") end
+    |> Bond.get("/download-folder") do |conn| Bond.send_file(conn, "#{public}/sub") end
     |> Bond.static("/assets", public)
     |> Bond.static("/small", public, 10)
     |> Bond.get("/raw-cookie", &raw_cookie)
@@ -179,6 +189,17 @@ end
 
 def sign(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.header(conn, "x-powered-by", "bond"))
+end
+
+# A name that tries to end the header and start another (CR LF), with a NUL, a quote and a backslash.
+def hostile() -> String
+  return "a\r\nSet-Cookie: x=1#{String.from_code(0)}\"b\\.txt"
+end
+
+# A page of a file with another status: `Bond.status` comes after `send_file`, which sets 200.
+def not_found_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
+  sent = try Bond.send_file(conn, "#{public}/hello.txt")
+  return ok(Bond.status(sent, 404))
 end
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]

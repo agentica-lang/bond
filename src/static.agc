@@ -1,19 +1,16 @@
-## Static files: a folder served under a path, read with `File` as bytes and typed with `std/mime`.
+## Static files: a folder served under a path, sent by `Files.send` (read in pieces, typed with `std/mime`).
 
-import MIME from "std/mime"
 import URI from "std/uri"
 import Conns from "conn"
+import Files from "files"
 import Pattern from "pattern"
 import {Conn} from "conn"
 
-## The largest `max_bytes`: a file of 1 MiB at most is read, in one `File.read_bytes` call.
-export MAX_FILE_BYTES = 1_048_576
+## The largest `max_bytes`, 1 TiB: no real file is bigger, and the number stays far from the end of an `Int`.
+export MAX_FILE_BYTES = 1_099_511_627_776
 
 ## The reason of the `error` of `serve` for a request that is not for a file. Any other `error` is a failure.
 export MISS = "not a static file"
-
-# The open and the read wait on a FIFO that no one writes to, so the wait is short.
-READ_MS = 5_000
 
 # Names that Windows opens as a device, whatever the extension and the case.
 DEVICES = Set.new([
@@ -81,8 +78,7 @@ def answer(mount: Mount, parts: List[String], conn: Conn) -> Result[Conn]
   names = try decode(parts)
   file = try locate(mount, names)
   name = names.last
-  body = try read(mount, file, name)
-  return ok(typed(conn, MIME.mime_type(name), body))
+  return send(mount, file, name, conn)
 end
 
 # Each segment is decoded, and then refused when it could leave the folder or name something that is not a plain file
@@ -157,8 +153,9 @@ def with_separator(root: String) -> String
   return "#{root}/"
 end
 
-# The reasons are for stderr and the error handler, in words: the text of a failed read is the VM's, not ours.
-def read(mount: Mount, file: String, name: String) -> Result[Bytes]
+# The reasons are for stderr and the error handler, in words: the text of a failed read is the VM's, not ours. The size
+# is checked here and the file is sent by `Files.send`, which reads it in pieces, so a big file costs no memory.
+def send(mount: Mount, file: String, name: String, conn: Conn) -> Result[Conn]
   info = File.stat(file)
   if not info.ok?
     return error("the static file #{name} cannot be read")
@@ -169,32 +166,10 @@ def read(mount: Mount, file: String, name: String) -> Result[Bytes]
     return error("the static file #{name} is over #{mount.max_bytes} bytes")
   end
 
-  if size == 0
-    return ok("".bytes)
-  end
-
-  # `size` is at most 1 MiB, the most of one `File.read_bytes` call, and a regular file is read whole by it.
-  handle = File.open(file, "read", READ_MS)
-  if not handle.ok?
+  sent = Files.send(conn, file, name)
+  if not sent.ok?
     return error("the static file #{name} cannot be read")
   end
 
-  body = File.read_bytes(handle.unwrap!, size, READ_MS)
-  File.close(handle.unwrap!, READ_MS)
-  if not body.ok?
-    return error("the static file #{name} cannot be read")
-  end
-
-  return body
-end
-
-# Text types say their charset; the rest is bytes with the type of the extension. The file is not checked to be UTF-8.
-def typed(conn: Conn, type: String, body: Bytes) -> Conn
-  label = type
-  if MIME.text?(type)
-    label = "#{type}; charset=utf-8"
-  end
-
-  typed_conn = Conns.header(conn, "content-type", label)
-  return Conns.header(typed_conn, "x-content-type-options", "nosniff").with(status: 200, response_body: body)
+  return sent
 end

@@ -70,10 +70,10 @@ end
 ## and `HEAD`. A route of the app wins over a file, and a path that is not a file of the folder (missing, a folder, a
 ## dot file, a way out of the folder such as `..` or `%2e%2e`, a link that leads out) is answered as a path with no
 ## route, so the `not_found` handler applies. Any file is served, as the bytes it holds, with the type of its
-## extension; a file over `max_bytes` (1 MiB at most, the default) is a failure (a 500 through the error handler).
+## extension; a file over `max_bytes` (1 GiB, the default) is a failure (a 500 through the error handler).
 ## The program stops when `prefix` is not a path or has a `:param`, when `max_bytes` is out of range, or when `root`
 ## is not a folder now: it is checked when the app is built, and its real path is kept.
-export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_048_576) -> App
+export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_073_741_824) -> App
   if not Pattern.valid?(prefix) or Pattern.segments(prefix).any? do |part| part.start_with?(":") end
     bad: Result[App] = error("bond: the static prefix #{prefix} must start with / and have no :param")
     return bad.unwrap!
@@ -245,7 +245,13 @@ end
 # handler that failed is in a 500. A stream the conn already held is dropped, so it is closed: its producer stops.
 def answer_error(app: App, conn: Conn, message: String) -> Conn
   Conns.close_stream(conn)
-  failing = conn.with(status: 500, response_headers: [], response_body: "".bytes, response_stream: none)
+  failing = conn.with(
+    status: 500,
+    response_headers: [],
+    response_body: "".bytes,
+    response_stream: none,
+    response_length: none,
+  )
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> return answer.with(halted: true)

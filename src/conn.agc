@@ -32,8 +32,9 @@ export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 ## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
 ## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
 ## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed
-## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. A new `Conn` answers
-## 200 with no body.
+## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. `response_length` is
+## the size of a streamed body when it is known (`stream` with a `length`, `send_file`). A new `Conn` answers 200 with
+## no body.
 export struct Conn
   method: String
   path: String
@@ -45,6 +46,7 @@ export struct Conn
   response_headers: List[Header]
   response_body: Bytes
   response_stream: Optional[Channel[Bytes]]
+  response_length: Optional[Int]
   halted: Bool
 end
 
@@ -67,6 +69,7 @@ export def from_request(request: HttpRequest) -> Conn
     response_headers: [],
     response_body: NO_BODY,
     response_stream: none,
+    response_length: none,
     halted: false,
   )
 end
@@ -141,8 +144,13 @@ end
 ## stream of the conn (read `conn.response_stream`, pump it into a new channel and call `stream` with that one): closing
 ## the old channel is then up to the caller. A 204 or a 304 has no body, so its channel is closed. `Testing.request`
 ## collects the pieces into the body.
-export def stream(conn: Conn, status: Int, body: Channel[Bytes]) -> Conn
-  return conn.with(status: status, response_body: NO_BODY, response_stream: some(body))
+##
+## With a `length` (the size of the whole body, which a big file has before it is read) the server sends
+## `Content-Length` and the pieces as they are, with no chunks. The producer must send exactly `length` bytes: a body
+## that ends short, or goes over, closes the connection, so the client sees an incomplete body. `Testing.request` shows
+## the `Content-Length` header of such a stream, since it has no socket.
+export def stream(conn: Conn, status: Int, body: Channel[Bytes], length: Optional[Int] = none) -> Conn
+  return conn.with(status: status, response_body: NO_BODY, response_stream: some(body), response_length: length)
 end
 
 ## Answers a 200 stream of server-sent events (`text/event-stream`, no caching) from `events`: the producer sends the
@@ -295,15 +303,20 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
     return refused(conn, problem)
   end
 
-  if conn.status == 204 or conn.status == 304 or (conn.method == "HEAD" and conn.response_stream.some?)
+  if conn.status == 204 or conn.status == 304
     close_stream(conn)
     return HttpResponse(status: conn.status, headers: conn.response_headers, body: NO_BODY)
+  end
+
+  if conn.method == "HEAD" and conn.response_stream.some?
+    close_stream(conn)
+    return HttpResponse(status: conn.status, headers: sized_headers(conn), body: NO_BODY)
   end
 
   case conn.response_stream
     some(body) ->
       pieces = collect(conn, body, max_pieces, timeout_ms)
-      return HttpResponse(status: conn.status, headers: conn.response_headers, body: pieces)
+      return HttpResponse(status: conn.status, headers: sized_headers(conn), body: pieces)
 
     none -> return HttpResponse(status: conn.status, headers: conn.response_headers, body: conn.response_body)
   end
@@ -324,17 +337,28 @@ export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
   end
 
   case conn.response_stream
-    some(body) -> return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: body)
+    some(body) ->
+      headers = conn.response_headers
+      return HTTP.StreamResponse(status: conn.status, headers: headers, body: body, length: conn.response_length)
+
     none ->
       whole = HTTP.whole(conn.response_body)
       return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
   end
 end
 
+# The headers of the answer for a test: the `Content-Length` of a stream with a length is added, as the server does.
+def sized_headers(conn: Conn) -> List[Header]
+  case conn.response_length
+    some(length) -> return conn.response_headers.push(Header(name: "content-length", value: length.to_s))
+    none -> return conn.response_headers
+  end
+end
+
 # The conn with no stream: the one it had is closed, since nothing will read it.
 def release(conn: Conn) -> Conn
   close_stream(conn)
-  return conn.with(response_stream: none)
+  return conn.with(response_stream: none, response_length: none)
 end
 
 # The plain 500 for a response the server would refuse. A stream that will not be sent is closed.
@@ -391,6 +415,15 @@ end
 def refusal(conn: Conn) -> String
   if conn.status < 200 or conn.status > 599
     return "the status #{conn.status} is outside 200 to 599"
+  end
+
+  case conn.response_length
+    some(length) ->
+      if length < 0
+        return "the length of a stream is negative"
+      end
+
+    none -> ""
   end
 
   names = conn.response_headers.map do |header| header.name.downcase end

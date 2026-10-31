@@ -16,6 +16,7 @@
 import Apps from "src/app"
 import Conns from "src/conn"
 import Cookies from "src/cookies"
+import Files from "src/files"
 import Filters from "src/filters"
 import Queries from "src/query"
 import Servers from "src/server"
@@ -43,6 +44,7 @@ export Conns.json_as
 export Conns.stream
 export Conns.sse
 export Conns.sse_event
+export Files.send_file
 export Conns.json_body
 export Conns.body_text
 export Conns.bytes

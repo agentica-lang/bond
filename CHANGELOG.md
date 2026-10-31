@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Needs the Agentica release that has `HTTP.StreamResponse(length:)` (agentica-lang/agentica#872).
+
+### Added
+
+- `Bond.send_file(conn, path, attachment)` answers with a file read in pieces by a task, with `Content-Length` of its size, the type of `std/mime`, `Accept-Ranges: bytes` and `X-Content-Type-Options: nosniff`. A name as `attachment` adds `Content-Disposition: attachment`. A `Range` of one range is a `206` with `Content-Range`, a range that starts beyond the end is a `416`, and `HEAD` gets the headers with the length.
+- `Bond.stream(conn, status, body, length)` takes the size of the body when it is known: `Content-Length` and no chunks.
+
+### Changed
+
+- `Bond.static` sends its files with `send_file`: they have `Accept-Ranges` and ranges, and a file is no longer read whole, so the default `max_bytes` is 1 GiB (was 1 MiB) and the most is 1 TiB.
+- `Testing.request` adds the `Content-Length` header to the answer of a stream that has a length.
+
 ## [0.3.0] - 2026-10-31
 
 Needs Agentica 0.19.0-beta.2 or later.

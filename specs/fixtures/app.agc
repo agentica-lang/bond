@@ -101,6 +101,13 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/logout-host", &logout_host)
     |> Bond.get("/bad-cookie", &bad_cookie)
     |> Bond.get("/assets/override.txt", &hello)
+    |> Bond.get("/download") do |conn| Bond.send_file(conn, "#{public}/hello.txt", "report.txt") end
+    |> Bond.get("/download-unicode") do |conn| Bond.send_file(conn, "#{public}/hello.txt", "café \"x\".txt") end
+    |> Bond.get("/download-plain") do |conn| Bond.send_file(conn, "#{public}/hello.txt") end
+    |> Bond.get("/download-png") do |conn| Bond.send_file(conn, "#{public}/pixel.png") end
+    |> Bond.get("/download-empty") do |conn| Bond.send_file(conn, "#{public}/empty.txt") end
+    |> Bond.get("/download-missing") do |conn| Bond.send_file(conn, "#{public}/missing.txt") end
+    |> Bond.get("/download-folder") do |conn| Bond.send_file(conn, "#{public}/sub") end
     |> Bond.static("/assets", public)
     |> Bond.static("/small", public, 10)
     |> Bond.get("/raw-cookie", &raw_cookie)

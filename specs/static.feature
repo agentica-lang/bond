@@ -2,8 +2,8 @@ Feature: Static files
   `Bond.static(app, "/assets", "fixtures/public")` serves the files of a folder under a path. It answers `GET` and
   `HEAD` with the bytes of the file: `Content-Type` from `std/mime`, with `; charset=utf-8` for a text type,
   `X-Content-Type-Options: nosniff`, and the `Content-Length` that the server adds. A path that is not a file of the
-  folder is a 404, and so is every way out of the folder or into a hidden name. A file over `max_bytes` (1 MiB at
-  most) is a 500. A route of the app wins over a file. The folder `specs/fixtures/public` has the files, and the app of
+  folder is a 404, and so is every way out of the folder or into a hidden name. A file over `max_bytes` (1 GiB by
+  default) is a 500. A route of the app wins over a file. The folder `specs/fixtures/public` has the files, and the app of
   `specs/fixtures/app.agc` serves it at `/assets` and, with `max_bytes` of 10, at `/small`. The links and the names
   that a checkout cannot hold are made for the scenario, in a folder that is removed after the request.
 

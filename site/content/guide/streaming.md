@@ -61,6 +61,10 @@ data: tick 3
 
 `Testing.request` reads the channel to its end, so a test sees all the events as one body (see [Testing](/guide/testing/) for `max_pieces` and `timeout_ms`, which cut a stream that never ends, and for the text-only limit). Over the server, a browser's `EventSource` or `curl -N` sees each event when it is sent.
 
+## A body with a known size
+
+A stream has no `Content-Length`: the server sends chunks. When the size is known before the body is (a file), give it as the last argument: `Bond.stream(conn, 200, channel, some(size))`. The head then says `Content-Length: size` and the pieces go out as they are, with no chunks, so a client can show a progress bar and resume. The producer must send exactly `size` bytes: a body that ends short, or one that would go over, closes the connection, and the client sees an incomplete body. A `size` that is negative is a 500. [`Bond.send_file`](/guide/files/) does this for a file. `Testing.request` shows the `Content-Length` header of such a stream, since it has no socket.
+
 ## Rules
 
 - A stream replaces the body set before it, and `Bond.text`, `html`, `json`, `json_as`, `redirect` and `halt` after it replace the stream (a `halt(conn, 403, ...)` after `sse` is a 403 with a text body). A channel that is replaced by a body helper is closed, so its producer stops; `Bond.stream` does not close the one it replaces, so a filter can wrap a stream (read `conn.response_stream`, pump it into a new channel, call `Bond.stream`) and then closing the old channel is up to it. Set other headers with `Bond.header`. `Content-Length` and `Transfer-Encoding` are the server's, so setting them is a 500 (and the channel is closed).

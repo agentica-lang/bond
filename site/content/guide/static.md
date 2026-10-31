@@ -14,7 +14,8 @@ Only `GET` and `HEAD` read a file. Any other method on a path under the prefix i
 
 - `Content-Type` from `std/mime` by the extension of the file (`text/css`, `application/json`, `image/png`), with `; charset=utf-8` added for a text type (`MIME.text?`). A file with an extension that `std/mime` does not know, or with none (`LICENSE`), is `application/octet-stream`.
 - `X-Content-Type-Options: nosniff`, so a browser uses the type that Bond sent and does not guess a script from a text file.
-- `Content-Length` is added by the HTTP server, as for every answer of Bond. A `HEAD` answer has the same headers, with the length of the file, and the HTTP server sends no body for it (`Testing.request` shows the body, since it has no socket).
+- `Content-Length` is added by the HTTP server. A `HEAD` answer has the same headers, with the length of the file, and no body.
+- `Accept-Ranges: bytes`, and a `Range` header is answered with a 206 or a 416, as for [`Bond.send_file`](/guide/files/), which sends every file of a folder.
 
 Bond sets no cache headers: no `ETag`, no `Last-Modified`, no `Cache-Control` and no `304`. Add a `Cache-Control` with an `after` filter if you want one.
 
@@ -32,9 +33,9 @@ There is a short time between this check and the read of the file. Do not let un
 
 ## Any file, and the size
 
-Bond reads the file with `File.read_bytes` and sends the bytes as they are: HTML, CSS, JavaScript, JSON and SVG, and also images, fonts, archives and PDFs. A text file is not checked to be UTF-8, and its `charset=utf-8` is a claim of the type, not a test of the file.
+Bond sends the file with [`Bond.send_file`](/guide/files/), which reads it in pieces while the server sends them, so the memory does not grow with the size. The bytes are sent as they are: HTML, CSS, JavaScript, JSON and SVG, and also images, fonts, archives and PDFs. A text file is not checked to be UTF-8, and its `charset=utf-8` is a claim of the type, not a test of the file.
 
-A file over `max_bytes` is a 500. A file of exactly `max_bytes` is served. The default is 1 MiB, which is also the most one `File.read_bytes` call reads: `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` that is 0 or over 1 MiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built, like a bad route pattern. A larger file, such as a video, belongs on a web server or a CDN in front of Bond.
+A file over `max_bytes` is a 500. A file of exactly `max_bytes` is served. The default is 1 GiB (before 0.4.0 it was 1 MiB, the most of one read): `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` that is 0 or over 1 TiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built, like a bad route pattern. Bond has no cache headers, no compression and no `If-Modified-Since`, so a large file that many clients ask for belongs on a web server or a CDN in front of Bond.
 
 A 500 for a file is a failure like the `error` of a handler: it goes to the [`on_error` handler](/guide/errors/), which gets the reason in words (`the static file app.css is over 10 bytes`), and the reason is written to stderr. The default handler answers the fixed text of every 500.
 
@@ -79,7 +80,7 @@ end
 GET /assets/hello.txt 200 text/plain; charset=utf-8 5
 GET /assets/app.css 200 text/css; charset=utf-8 18
 GET /assets/logo.png 200 image/png 1
-HEAD /assets/hello.txt 200 text/plain; charset=utf-8 5
+HEAD /assets/hello.txt 200 text/plain; charset=utf-8 0
 GET /assets/%2e%2e/agentica.toml 404 text/plain; charset=utf-8 9
 GET /assets/missing.txt 404 text/plain; charset=utf-8 9
 POST /assets/hello.txt 405 text/plain; charset=utf-8 18

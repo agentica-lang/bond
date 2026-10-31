@@ -246,10 +246,11 @@ export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
   end
 end
 
-## The body of the request as text, decoded as `HTTP.text` does: UTF-8 only (`us-ascii` is read as UTF-8), and a
-## `charset` in `Content-Type` other than `utf-8` or `us-ascii` is refused. A body that does not decode is an error
-## that makes a 400 (see `bad_request`), with a fixed message, so `try Bond.body_text(conn)` answers it. Read
-## `conn.body` for the bytes as they came. The size of the body is limited by the server (`max_body_bytes`).
+## The body of the request as text, decoded as `HTTP.text` does: in the `charset` of `Content-Type` (UTF-8 when it has
+## none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 are read too), and any other `charset` is refused.
+## A body that does not decode is an error that makes a 400 (see `bad_request`), with a fixed message, so
+## `try Bond.body_text(conn)` answers it. Read `conn.body` for the bytes as they came. The size of the body is limited
+## by the server (`max_body_bytes`).
 export def body_text(conn: Conn) -> Result[String]
   case HTTP.text(conn.body, conn.headers)
     ok(text) -> return ok(text)

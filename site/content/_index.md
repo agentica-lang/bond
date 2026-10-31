@@ -24,4 +24,4 @@ Bond 0.4.0 has the router, filters, custom `not_found` and `on_error` handlers, 
 - The [guide](/guide/) has a page for each part.
 - The source and the changelog are [on GitHub](https://github.com/agentica-lang/bond).
 
-Bond needs Agentica 0.19.0-beta.3 or later, and is under the Apache License 2.0.
+Bond needs Agentica 0.19.0 or later, and is under the Apache License 2.0.

@@ -1,7 +1,8 @@
 Feature: Request bodies
   `conn.body` is the body of the request as the client sent it, `Bytes` of any content. `Bond.body_text(conn)` reads it
-  as text, as `HTTP.text` does: UTF-8 only, and a `charset` other than `utf-8` is refused. A body that does not decode
-  is a 400 with a fixed message. `Bond.bytes(conn, status, body)` answers bytes as they are. The app of
+  as text, as `HTTP.text` does: in the `charset` of the request (UTF-8 by default; UTF-16, UTF-32, ASCII, Latin-1,
+  ISO-8859-15 and Windows-1252 too), and any other `charset` is refused. A body that does not decode is a 400 with a
+  fixed message. `Bond.bytes(conn, status, body)` answers bytes as they are. The app of
   `specs/fixtures/app.agc` has `POST /body-text` (the text of the body) and `POST /body-echo` (the bytes, sent back).
 
   Background:
@@ -25,8 +26,13 @@ Feature: Request bodies
     Then the status is 400
     And the body is "the body is not UTF-8 text"
 
-  Scenario: Another charset is a 400
-    When I post to "/body-text" as "text/plain; charset=iso-8859-1":
+  Scenario: A Latin-1 body is read in its charset
+    When I post the bytes "99 97 102 233" to "/body-text" as "text/plain; charset=iso-8859-1"
+    Then the status is 200
+    And the body is "text café"
+
+  Scenario: A charset that std/http cannot decode is a 400
+    When I post to "/body-text" as "text/plain; charset=shift_jis":
       """
       caf
       """

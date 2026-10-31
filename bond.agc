@@ -44,6 +44,8 @@ export Conns.stream
 export Conns.sse
 export Conns.sse_event
 export Conns.json_body
+export Conns.body_text
+export Conns.bytes
 export Conns.halt
 export Conns.html
 export Conns.status

@@ -19,6 +19,7 @@ struct Ask
   path: String
   headers: List[Header]
   body: String
+  raw: List[Int] = [] # the body as bytes when it is not empty (then `body` is not used)
   max_pieces: Int = 0
   timeout_ms: Int = 10_000 # keep in sync with the defaults of Testing.request
 end
@@ -27,7 +28,8 @@ struct Reply
   status: Int
   headers: Map[String, String]
   fields: List[Header]
-  body: String
+  body: String # the text of the body, or "" when it is not UTF-8
+  bytes: String # the byte values of the body, as "255 254 0"
 end
 
 def main() -> Void
@@ -46,6 +48,10 @@ def main() -> Void
     end,
     BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: args[2]))
+    end,
+    BDD.step("I post the bytes {string} to {string} as {string}") do |ctx, args|
+      headers = [Header(name: "content-type", value: args[2])]
+      send(ctx, Ask(method: "POST", path: args[1], headers: headers, body: "", raw: numbers(args[0])))
     end,
     BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: args[2], value: args[3])], body: ""))
@@ -97,6 +103,10 @@ def main() -> Void
       reply = last_reply(ctx)
       BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
     end,
+    BDD.step("the body bytes are {string}") do |ctx, args|
+      reply = last_reply(ctx)
+      BDD.assert(ctx, reply.bytes == args[0], "the body bytes are #{reply.bytes}")
+    end,
     # Like "the body is {string}", for text with line breaks (the events of a stream): the step reads a quoted string as
     # Gherkin does, so a backslash is written twice and `\\n` is a line break.
     BDD.step("the body is the text {string}") do |ctx, args|
@@ -144,7 +154,7 @@ def keep_links_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
     ask = try JSON.decode(request, Ask)
     try make_folder(base)
     app = Bond.app() |> Bond.static("/files", "#{base}/root")
-    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body)
+    response = ask_request(app, ask, 0, 10_000)
     Path.remove(base)
     ok(JSON.from(reply_of(response)))
   end
@@ -183,7 +193,7 @@ end
 def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.Context
   return BDD.keep(ctx, APP) do |request|
     ask = try JSON.decode(request, Ask)
-    response = Testing.request(app, ask.method, ask.path, ask.headers, ask.body, ask.max_pieces, ask.timeout_ms)
+    response = ask_request(app, ask, ask.max_pieces, ask.timeout_ms)
     wait_for_producers(producers)
     ok(JSON.from(reply_of(response)))
   end
@@ -212,10 +222,27 @@ def send(ctx: BDD.Context, ask: Ask) -> BDD.Context
   return BDD.set(ctx, REPLY, reply.unwrap!)
 end
 
+# The request of a step: its text body, or its bytes when it has some.
+def ask_request(app: Bond.App, ask: Ask, max_pieces: Int, timeout_ms: Int) -> HttpResponse
+  if ask.raw.empty?
+    return Testing.request(app, ask.method, ask.path, ask.headers, ask.body, max_pieces, timeout_ms)
+  end
+
+  body = Bytes.from_list(ask.raw).unwrap!
+  return Testing.request_bytes(app, ask.method, ask.path, ask.headers, body, max_pieces, timeout_ms)
+end
+
+# "255 254 0" as the numbers it lists.
+def numbers(text: String) -> List[Int]
+  return text.split(" ").map do |word| word.to_i! end
+end
+
 def reply_of(response: HttpResponse) -> Reply
   start: Map[String, String] = {}
   fields = response.headers.reduce(start) do |acc, header| acc.put(header.name.downcase, header.value) end
-  return Reply(status: response.status, headers: fields, fields: response.headers, body: response.body)
+  text = String.from_bytes(response.body).unwrap_or("")
+  values = response.body.to_a.map do |byte| byte.to_s end.join(" ")
+  return Reply(status: response.status, headers: fields, fields: response.headers, body: text, bytes: values)
 end
 
 def last_reply(ctx: BDD.Context) -> Reply
@@ -255,7 +282,7 @@ end
 def over_socket(ctx: BDD.Context, method: String, path: String, body: String) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
   client = HTTP.client(HTTP.client_options()).unwrap!
-  response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", [], body)
+  response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, [])
   HTTP.close_client(client)
   return BDD.set(ctx, REPLY, JSON.from(reply_of(response.unwrap!)))
 end

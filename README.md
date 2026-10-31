@@ -2,10 +2,9 @@
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
 Version 0.2.0 has the router, filters, custom handlers, JSON bodies, query strings and forms, cookies, static files, streamed bodies (server-sent events), and the helpers to answer.
-Limits: static files are text only until Agentica has bodies of bytes, and WebSockets come later (see
-[the design](https://github.com/agentica-lang/bond/issues/1)).
+Limits: WebSockets come later (see [the design](https://github.com/agentica-lang/bond/issues/1)).
 
-Bond 0.2.0 needs Agentica 0.19.0-beta.1 or later (0.1.0 needs 0.16.0).
+The next release needs Agentica 0.19.0-beta.2 or later (bodies of bytes); Bond 0.2.0 needs 0.19.0-beta.1 or later and 0.1.0 needs 0.16.0.
 
 Documentation: https://agentica-lang.github.io/bond/
 

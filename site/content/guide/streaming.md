@@ -41,7 +41,7 @@ def main() -> Void
   response = Testing.request(app, "GET", "/ticks")
   puts(response.status)
   puts(response.headers.select do |header| header.name == "content-type" end[0].value)
-  puts(response.body)
+  puts(Testing.text(response).unwrap!)
 end
 ```
 

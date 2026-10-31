@@ -111,6 +111,8 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/params", &query_fields)
     |> Bond.post("/form-params", &form_fields)
     |> Bond.post("/signup", &signup)
+    |> Bond.post("/body-text", &body_text)
+    |> Bond.post("/body-echo", &body_echo)
     |> Bond.post("/tags", &tags)
     |> Bond.post("/users", &create_user)
     |> Bond.post("/accounts", &create_account)
@@ -236,13 +238,25 @@ def list_todos(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.body.empty?
+  title = try Bond.body_text(conn)
+  if title.empty?
     return Bond.bad_request("title is empty")
   end
 
-  todo = Todo(id: store.next_id.add("todo", 1), title: conn.body)
+  todo = Todo(id: store.next_id.add("todo", 1), title: title)
   store.todos.put(todo.id, todo)
   return ok(Bond.json_as(conn, 201, JSON.codec(Todo), todo))
+end
+
+# The text of the body, or the 400 of `body_text`.
+def body_text(conn: Bond.Conn) -> Result[Bond.Conn]
+  text = try Bond.body_text(conn)
+  return ok(Bond.text(conn, 200, "text #{text}"))
+end
+
+# The bytes of the body, sent back as they came.
+def body_echo(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.bytes(conn, 200, conn.body))
 end
 
 def latest(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -501,7 +515,7 @@ def events_bad_header(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn
   return ok(Bond.header(Bond.sse(conn, channel), "content-length", "5"))
 end
 
-# The pieces are not UTF-8 text, so `Testing.request` cannot give them as a body.
+# The pieces are not UTF-8 text: the body is their bytes.
 def events_binary(conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   channel.send(Bytes.from_list([255, 216, 0]).unwrap!, 5000).unwrap!

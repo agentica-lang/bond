@@ -4,6 +4,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Needs Agentica 0.19.0-beta.2 or later.
+
+### Added
+
+- `Bond.static` serves any file, as the bytes it holds: images, fonts, archives and PDFs, with the type of `std/mime` (a text type gets `; charset=utf-8`, any other type is sent as it is, and a file that `std/mime` does not know is `application/octet-stream`). It reads with `File.read_bytes`, so `max_bytes` still holds (1 MiB at most).
+- `Bond.bytes(conn, status, body)` answers `Bytes` as they are, and `Bond.body_text(conn)` reads the body of the request as text (UTF-8 only, a 400 with a fixed message for a body that does not decode or a `charset` other than `utf-8`).
+- `Testing.text(response)` reads the body of a response as text, and `Testing.request_bytes` sends a request body that is `Bytes`.
+
+### Changed
+
+- **Breaking:** needs Agentica 0.19.0-beta.2 (the bodies of `std/http` are `Bytes`). `conn.body` and `conn.response_body` are `Bytes`: read the request as text with `Bond.body_text(conn)`, and the body of an `HttpResponse` from `Testing.request` with `Testing.text(response)`. `Bond.text`, `html`, `json` and `halt` still take text. A handler that used `conn.body` as text now calls `try Bond.body_text(conn)`; `Bond.json_body` and the form readers need no change. A request body that is not UTF-8 reaches the handler (before, the server answered 400), so `form_params` and `json_body` give their own 400 for it.
+- `Testing.request` reads a stream that is not UTF-8 as bytes (before, the body was a 500 that said `the stream is not UTF-8 text`).
+- A static file over `max_bytes` is still a 500, and a text file that is not UTF-8 is no longer a failure (it is sent as it is).
+
+### Removed
+
+- The 501 for a static file that is not text, and the notice about it on stderr.
+
 ## [0.2.0] - 2026-10-30
 
 Needs Agentica 0.19.0-beta.1 or later.

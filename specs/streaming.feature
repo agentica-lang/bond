@@ -49,7 +49,7 @@ Feature: Streamed bodies
     When I send "GET" to "/endless-stopped"
     Then the body is "stopped"
 
-  Scenario: A stream that is not UTF-8 text is a 500 that says so
+  Scenario: A stream that is not UTF-8 text is read as bytes
     When I send "GET" to "/events-binary"
-    Then the status is 500
-    And the body is "the stream is not UTF-8 text"
+    Then the status is 200
+    And the body bytes are "255 216 0"

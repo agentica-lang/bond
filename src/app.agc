@@ -17,19 +17,16 @@ export struct App
   before_filters: List[Handler]
   after_filters: List[Handler]
   statics: List[Statics.Mount]
-  notes: ATS[String, Bool]
   not_found: Handler
   on_error: ErrorHandler
 end
 
 export def app() -> App
-  notes: ATS[String, Bool] = ATS.new()
   return App(
     routes: Router.empty(),
     before_filters: [],
     after_filters: [],
     statics: [],
-    notes: notes,
     not_found: &plain_not_found,
     on_error: &plain_error,
   )
@@ -72,8 +69,8 @@ end
 ## Serves the files of the folder `root` under the path `prefix` (`Bond.static(app, "/assets", "public")`), for `GET`
 ## and `HEAD`. A route of the app wins over a file, and a path that is not a file of the folder (missing, a folder, a
 ## dot file, a way out of the folder such as `..` or `%2e%2e`, a link that leads out) is answered as a path with no
-## route, so the `not_found` handler applies. A body is text: a file whose type is not text is a 501, and a text file
-## over `max_bytes` (1 MiB at most, the default) or that is not UTF-8 is a failure (a 500 through the error handler).
+## route, so the `not_found` handler applies. Any file is served, as the bytes it holds, with the type of its
+## extension; a file over `max_bytes` (1 MiB at most, the default) is a failure (a 500 through the error handler).
 ## The program stops when `prefix` is not a path or has a `:param`, when `max_bytes` is out of range, or when `root`
 ## is not a folder now: it is checked when the app is built, and its real path is kept.
 export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_048_576) -> App
@@ -175,7 +172,7 @@ def dispatch(app: App, conn: Conn) -> Conn
 
   found = Router.find(app.routes, conn.path)
   if not found.ok?
-    case Statics.serve(app.statics, app.notes, conn)
+    case Statics.serve(app.statics, conn)
       ok(answer) -> return answer
       error(reason) -> return unserved(app, conn, reason)
     end
@@ -248,7 +245,7 @@ end
 # handler that failed is in a 500. A stream the conn already held is dropped, so it is closed: its producer stops.
 def answer_error(app: App, conn: Conn, message: String) -> Conn
   Conns.close_stream(conn)
-  failing = conn.with(status: 500, response_headers: [], response_body: "", response_stream: none)
+  failing = conn.with(status: 500, response_headers: [], response_body: "".bytes, response_stream: none)
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> return answer.with(halted: true)

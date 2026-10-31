@@ -8,9 +8,13 @@ def hello(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.text(conn, 200, "hello #{agent} #{conn.body.size}"))
 end
 
+def text_of(response: HttpResponse) -> String
+  return String.from_bytes(response.body).unwrap!
+end
+
 def main() -> Void
   app = Bond.app() |> Bond.get("/hello", &hello)
-  puts(Testing.request(app, "GET", "/hello").body)
-  puts(Testing.request(app, "GET", "/hello", [Header(name: "X-Agent", value: "bond")]).body)
-  puts(Testing.request(app, "GET", "/hello", [], "abc").body)
+  puts(text_of(Testing.request(app, "GET", "/hello")))
+  puts(text_of(Testing.request(app, "GET", "/hello", [Header(name: "X-Agent", value: "bond")])))
+  puts(text_of(Testing.request(app, "GET", "/hello", [], "abc")))
 end

@@ -41,9 +41,9 @@ def main() -> Void
     |> Bond.get("/secret", &secret)
   )
   denied = Testing.request(app, "GET", "/secret")
-  puts("#{denied.status} #{denied.body}")
+  puts("#{denied.status} #{Testing.text(denied).unwrap!}")
   allowed = Testing.request(app, "GET", "/secret", [Header(name: "X-Token", value: "letmein")])
-  puts("#{allowed.status} #{allowed.body}")
+  puts("#{allowed.status} #{Testing.text(allowed).unwrap!}")
   puts(HTTP.header_values(denied.headers, "x-powered-by")[0])
 end
 ```

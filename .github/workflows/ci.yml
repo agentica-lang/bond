@@ -10,9 +10,7 @@ permissions:
 
 env:
   AGENTICA_VERSION: 0.19.0-beta.2
-  # The sha256 of the linux-x86_64 archive of 0.19.0-beta.2: to fill in when the release is published (this PR waits
-  # for it). Until then the check below fails on purpose.
-  AGENTICA_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+  AGENTICA_SHA256: b0a8f70cd009b1f67ac8e8e9de9a2c0a70e8718ced6851c8a1389bdf54e935c8
 
 jobs:
   test:

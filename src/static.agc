@@ -1,4 +1,4 @@
-## Static files: a folder served under a path, read with `File` and typed with `std/mime`.
+## Static files: a folder served under a path, read with `File` as bytes and typed with `std/mime`.
 
 import MIME from "std/mime"
 import URI from "std/uri"
@@ -6,13 +6,13 @@ import Conns from "conn"
 import Pattern from "pattern"
 import {Conn} from "conn"
 
-## The largest `max_bytes`: `File.read_text` reads a file of 1 MiB at most.
+## The largest `max_bytes`: a file of 1 MiB at most is read, in one `File.read_bytes` call.
 export MAX_FILE_BYTES = 1_048_576
 
 ## The reason of the `error` of `serve` for a request that is not for a file. Any other `error` is a failure.
 export MISS = "not a static file"
 
-# `File.read_text` waits on a FIFO that no one writes to, so the wait is short.
+# The open and the read wait on a FIFO that no one writes to, so the wait is short.
 READ_MS = 5_000
 
 # Names that Windows opens as a device, whatever the extension and the case.
@@ -21,10 +21,6 @@ DEVICES = Set.new([
   "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
   "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ])
-
-BINARY_NOTICE = (
-  "bond: a static file is not text, and a binary file needs a body of bytes in std/http (Agentica #805, #803)"
-)
 
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
 ## served.
@@ -44,16 +40,15 @@ export def real_root(root: String) -> Result[String]
   return Path.real(root)
 end
 
-## The answer of the first mount that holds the path of the request: a file (200), a 405 for a method other than GET
-## and HEAD, or a 501 for a file that is not text. An `error` with the reason `MISS` means that the request is not
-## for a file (nothing of that name, a folder, a hidden name, a way out of the folder), so the caller answers it as a
-## path with no route. Any other `error` is a file that cannot be sent (too big, not UTF-8), for the error handler.
-## `notes` remembers what was said on stderr, so that the notice about binary files is written once.
-export def serve(mounts: List[Mount], notes: ATS[String, Bool], conn: Conn) -> Result[Conn]
+## The answer of the first mount that holds the path of the request: a file (200), or a 405 for a method other than
+## GET and HEAD. An `error` with the reason `MISS` means that the request is not for a file (nothing of that name, a
+## folder, a hidden name, a way out of the folder), so the caller answers it as a path with no route. Any other
+## `error` is a file that cannot be sent (too big, or not readable), for the error handler.
+export def serve(mounts: List[Mount], conn: Conn) -> Result[Conn]
   for mount in mounts
     inside = below(mount, conn.path)
     if inside.ok?
-      return answer(mount, notes, inside.unwrap!, conn)
+      return answer(mount, inside.unwrap!, conn)
     end
   end
 
@@ -78,7 +73,7 @@ def below(mount: Mount, path: String) -> Result[List[String]]
   return ok(found.drop(wanted.size))
 end
 
-def answer(mount: Mount, notes: ATS[String, Bool], parts: List[String], conn: Conn) -> Result[Conn]
+def answer(mount: Mount, parts: List[String], conn: Conn) -> Result[Conn]
   if conn.method != "GET" and conn.method != "HEAD"
     return ok(Conns.halt(Conns.header(conn, "allow", "GET, HEAD"), 405, "method not allowed"))
   end
@@ -86,14 +81,8 @@ def answer(mount: Mount, notes: ATS[String, Bool], parts: List[String], conn: Co
   names = try decode(parts)
   file = try locate(mount, names)
   name = names.last
-  type = MIME.mime_type(name)
-  # The type decides before the file is read: a body is text, so a file that is not text cannot be sent.
-  if not MIME.text?(type)
-    return ok(not_implemented(notes, conn))
-  end
-
-  text = try read(mount, file, name)
-  return ok(typed(conn, type, text))
+  body = try read(mount, file, name)
+  return ok(typed(conn, MIME.mime_type(name), body))
 end
 
 # Each segment is decoded, and then refused when it could leave the folder or name something that is not a plain file
@@ -169,34 +158,43 @@ def with_separator(root: String) -> String
 end
 
 # The reasons are for stderr and the error handler, in words: the text of a failed read is the VM's, not ours.
-def read(mount: Mount, file: String, name: String) -> Result[String]
+def read(mount: Mount, file: String, name: String) -> Result[Bytes]
   info = File.stat(file)
   if not info.ok?
     return error("the static file #{name} cannot be read")
   end
 
-  if info.unwrap!.size_bytes > mount.max_bytes
+  size = info.unwrap!.size_bytes
+  if size > mount.max_bytes
     return error("the static file #{name} is over #{mount.max_bytes} bytes")
   end
 
-  text = File.read_text(file, READ_MS)
-  if not text.ok?
-    return error("the static file #{name} is not valid UTF-8 text or could not be read")
+  if size == 0
+    return ok("".bytes)
   end
 
-  return text
-end
-
-# A 501 with a fixed body; the notice goes to stderr once, since a site that links to images would fill the log.
-def not_implemented(notes: ATS[String, Bool], conn: Conn) -> Conn
-  if ATS.put_new(notes, "binary", true)
-    IO.warn(BINARY_NOTICE)
+  # `size` is at most 1 MiB, the most of one `File.read_bytes` call, and a regular file is read whole by it.
+  handle = File.open(file, "read", READ_MS)
+  if not handle.ok?
+    return error("the static file #{name} cannot be read")
   end
 
-  return Conns.halt(conn, 501, "Not Implemented")
+  body = File.read_bytes(handle.unwrap!, size, READ_MS)
+  File.close(handle.unwrap!, READ_MS)
+  if not body.ok?
+    return error("the static file #{name} cannot be read")
+  end
+
+  return body
 end
 
-def typed(conn: Conn, type: String, text: String) -> Conn
-  typed_conn = Conns.header(conn, "content-type", "#{type}; charset=utf-8")
-  return Conns.header(typed_conn, "x-content-type-options", "nosniff").with(status: 200, response_body: text)
+# Text types say their charset; the rest is bytes with the type of the extension. The file is not checked to be UTF-8.
+def typed(conn: Conn, type: String, body: Bytes) -> Conn
+  label = type
+  if MIME.text?(type)
+    label = "#{type}; charset=utf-8"
+  end
+
+  typed_conn = Conns.header(conn, "content-type", label)
+  return Conns.header(typed_conn, "x-content-type-options", "nosniff").with(status: 200, response_body: body)
 end

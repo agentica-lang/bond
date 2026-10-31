@@ -47,9 +47,9 @@ def main() -> Void
     |> Bond.on_error(&page_failed)
   )
   missing = Testing.request(app, "GET", "/nothing")
-  puts("#{missing.status} #{missing.body}")
+  puts("#{missing.status} #{Testing.text(missing).unwrap!}")
   failed = Testing.request(app, "GET", "/broken")
-  puts("#{failed.status} #{failed.body}")
+  puts("#{failed.status} #{Testing.text(failed).unwrap!}")
 end
 ```
 

@@ -65,7 +65,7 @@ Feature: Custom handlers
     And the body is "<h1>No page at /assets/missing.txt</h1>"
 
   Scenario: A static file that cannot be sent goes to the error handler
-    When I send "GET" to "/assets/bad.txt"
+    When I send "GET" to "/small/eleven.txt"
     Then the status is 500
     And the body is "Something went wrong"
-    And the header "x-error" is "the static file bad.txt is not valid UTF-8 text or could not be read"
+    And the header "x-error" is "the static file eleven.txt is over 10 bytes"

@@ -1,10 +1,9 @@
 Feature: Static files
   `Bond.static(app, "/assets", "fixtures/public")` serves the files of a folder under a path. It answers `GET` and
-  `HEAD` with the file as a text body: `Content-Type` from `std/mime`, with `; charset=utf-8`,
+  `HEAD` with the bytes of the file: `Content-Type` from `std/mime`, with `; charset=utf-8` for a text type,
   `X-Content-Type-Options: nosniff`, and the `Content-Length` that the server adds. A path that is not a file of the
   folder is a 404, and so is every way out of the folder or into a hidden name. A file over `max_bytes` (1 MiB at
-  most) or a text file that is not UTF-8 is a 500, and a file whose type is not text is a 501, since a body is text.
-  A route of the app wins over a file. The folder `specs/fixtures/public` has the files, and the app of
+  most) is a 500. A route of the app wins over a file. The folder `specs/fixtures/public` has the files, and the app of
   `specs/fixtures/app.agc` serves it at `/assets` and, with `max_bytes` of 10, at `/small`. The links and the names
   that a checkout cannot hold are made for the scenario, in a folder that is removed after the request.
 
@@ -46,16 +45,23 @@ Feature: Static files
       | /assets/missing.txt |
       | /assets/sub         |
 
-  Scenario Outline: A file that is not text by its type is a 501, before it is read (<path>)
+  Scenario Outline: A file that is not text is served as the bytes it holds (<path>)
     When I send "GET" to "<path>"
-    Then the status is 501
-    And the body is "Not Implemented"
+    Then the status is 200
+    And the header "content-type" is "<type>"
+    And the body bytes are "<bytes>"
 
     Examples:
-      | path              |
-      | /assets/pixel.png |
-      | /assets/blob.bin  |
-      | /assets/notes.xyz |
+      | path              | type                     | bytes       |
+      | /assets/pixel.png | image/png                | 255 254 0 1 |
+      | /assets/blob.bin  | application/octet-stream | 255 254 0 1 |
+      | /assets/notes.xyz | application/octet-stream | 120 121 122 |
+
+  Scenario: A text file is not checked to be UTF-8
+    When I send "GET" to "/assets/bad.txt"
+    Then the status is 200
+    And the header "content-type" is "text/plain; charset=utf-8"
+    And the body bytes are "255 254 0 1"
 
   Scenario Outline: A path that is not a file of the folder is a 404 (<why>)
     When I send "GET" to "<path>"
@@ -109,7 +115,7 @@ Feature: Static files
     Then the status is 200
     And the body is "hello"
 
-  Scenario Outline: A file over max_bytes or that is not UTF-8 text is a 500 (<path>)
+  Scenario Outline: A file over max_bytes is a 500 (<path>)
     When I send "GET" to "<path>"
     Then the status is <status>
 
@@ -119,27 +125,11 @@ Feature: Static files
       | /small/ten.txt    | 200    |
       | /small/eleven.txt | 500    |
       | /small/hello.txt  | 500    |
-      | /assets/bad.txt   | 500    |
 
   Scenario: A 500 for a file has the plain body
-    When I send "GET" to "/assets/bad.txt"
+    When I send "GET" to "/small/eleven.txt"
     Then the body is "Internal Server Error"
 
   Scenario: A folder that does not exist stops the program when the app is built
     Given the Agentica program "fixtures/missing_root.agc"
     Then the program exits with code 1 within 5000 milliseconds
-
-  Scenario: A file that is not text is said once on stderr, not on every request
-    Given the Agentica program "fixtures/binary_twice.agc"
-    Then the program exits with code 0 within 5000 milliseconds
-    And stdout is:
-      """
-      501
-      501
-
-      """
-    And stderr is:
-      """
-      bond: a static file is not text, and a binary file needs a body of bytes in std/http (Agentica #805, #803)
-
-      """

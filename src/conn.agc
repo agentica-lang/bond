@@ -12,6 +12,8 @@ export INTERNAL_ERROR = "Internal Server Error"
 
 PARSE_PREFIX = "JSON.parse: "
 
+NO_BODY = "".bytes
+
 REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 
 # The characters besides letters and digits that the server accepts in a header name (RFC 9110 token).
@@ -25,18 +27,20 @@ export type Handler = Fn[Conn, Result[Conn]]
 export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 
 ## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
-## names are in lowercase. `response_stream` is the channel of a streamed body (`stream`, `sse`); when it is set, the
-## answer is that body and `response_body` is empty. A new `Conn` answers 200 with no body.
+## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
+## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed
+## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. A new `Conn` answers
+## 200 with no body.
 export struct Conn
   method: String
   path: String
   query: String
   params: Map[String, String]
   headers: List[Header]
-  body: String
+  body: Bytes
   status: Int
   response_headers: List[Header]
-  response_body: String
+  response_body: Bytes
   response_stream: Optional[Channel[Bytes]]
   halted: Bool
 end
@@ -58,7 +62,7 @@ export def from_request(request: HttpRequest) -> Conn
     body: request.body,
     status: 200,
     response_headers: [],
-    response_body: "",
+    response_body: NO_BODY,
     response_stream: none,
     halted: false,
   )
@@ -66,13 +70,21 @@ end
 
 ## Answers `body` as plain text. It sets `Content-Type`; call `header` after it to use another.
 export def text(conn: Conn, status: Int, body: String) -> Conn
-  return header(release(conn), "content-type", "text/plain; charset=utf-8").with(status: status, response_body: body)
+  typed = header(release(conn), "content-type", "text/plain; charset=utf-8")
+  return typed.with(status: status, response_body: body.bytes)
 end
 
 ## Answers `body` as HTML. It sets `Content-Type`; call `header` after it to use another. The text is sent as it is,
 ## with no escaping: escape what comes from a client before you put it in `body`.
 export def html(conn: Conn, status: Int, body: String) -> Conn
-  return header(release(conn), "content-type", "text/html; charset=utf-8").with(status: status, response_body: body)
+  typed = header(release(conn), "content-type", "text/html; charset=utf-8")
+  return typed.with(status: status, response_body: body.bytes)
+end
+
+## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets no `Content-Type`: call `header` after
+## it, since a body with no type is guessed by the client.
+export def bytes(conn: Conn, status: Int, body: Bytes) -> Conn
+  return release(conn).with(status: status, response_body: body)
 end
 
 ## Sets the status of the answer and nothing else.
@@ -92,7 +104,7 @@ export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
 
   kept = conn.response_headers.select do |field| field.name.downcase != "content-type" end
   untyped = release(conn).with(response_headers: kept)
-  return header(untyped, "location", location).with(status: code, response_body: "", halted: true)
+  return header(untyped, "location", location).with(status: code, response_body: NO_BODY, halted: true)
 end
 
 ## Answers `value` (a `Json`, such as `JSON.from(scores)` for a list or a map) as JSON. It sets `Content-Type`; call
@@ -100,7 +112,7 @@ end
 export def json(conn: Conn, status: Int, value: Json) -> Conn
   return header(release(conn), "content-type", "application/json").with(
     status: status,
-    response_body: JSON.encode(value),
+    response_body: JSON.encode(value).bytes,
   )
 end
 
@@ -111,7 +123,7 @@ end
 export def json_as[T](conn: Conn, status: Int, codec: JSON.Codec[T], value: T) -> Conn
   return header(release(conn), "content-type", "application/json").with(
     status: status,
-    response_body: codec.encode(value),
+    response_body: codec.encode(value).bytes,
   )
 end
 
@@ -126,7 +138,7 @@ end
 ## the old channel is then up to the caller. A 204 or a 304 has no body, so its channel is closed. `Testing.request`
 ## collects the pieces into the body.
 export def stream(conn: Conn, status: Int, body: Channel[Bytes]) -> Conn
-  return conn.with(status: status, response_body: "", response_stream: some(body))
+  return conn.with(status: status, response_body: NO_BODY, response_stream: some(body))
 end
 
 ## Answers a 200 stream of server-sent events (`text/event-stream`, no caching) from `events`: the producer sends the
@@ -211,9 +223,25 @@ export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
     return bad_request("the body is empty")
   end
 
-  case codec.decode(conn.body)
-    ok(value) -> return ok(value)
-    error(message) -> return bad_request("invalid body: #{decode_problem(message)}")
+  case String.from_bytes(conn.body)
+    ok(text) ->
+      case codec.decode(text)
+        ok(value) -> return ok(value)
+        error(message) -> return bad_request("invalid body: #{decode_problem(message)}")
+      end
+
+    error(_) -> return bad_request("invalid body: not UTF-8 text")
+  end
+end
+
+## The body of the request as text, decoded as `HTTP.text` does: UTF-8 only, and a `charset` in `Content-Type` other
+## than `utf-8` (or `us-ascii`) is refused. A body that does not decode is an error that makes a 400 (see
+## `bad_request`), with a fixed message, so `try Bond.body_text(conn)` answers it. Read `conn.body` for the bytes as
+## they came. The size of the body is limited by the server (`max_body_bytes`).
+export def body_text(conn: Conn) -> Result[String]
+  case HTTP.text(conn.body, conn.headers)
+    ok(text) -> return ok(text)
+    error(_) -> return bad_request("the body is not UTF-8 text")
   end
 end
 
@@ -250,11 +278,10 @@ end
 ## 304 loses its body, and the other cases are a 500 with a warning on stderr. `Testing.request` comes through here,
 ## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees what a client would.
 ##
-## A streamed body is read here to its end, as one text, for a test. It is read until the producer closes the channel,
-## `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body (one gap between pieces may take all of it),
-## and then the channel is closed so the producer stops; a body cut by the time limit says so on stderr. A `HEAD` gets
-## no body and its channel is closed, as over a socket. A body that is not UTF-8 text is a 500 with the body `the
-## stream is not UTF-8 text`, since an `HttpResponse` holds text.
+## A streamed body is read here to its end, as one `Bytes`, for a test. It is read until the producer closes the
+## channel, `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body (one gap between pieces may take all
+## of it), and then the channel is closed so the producer stops; a body cut by the time limit says so on stderr. A
+## `HEAD` gets no body and its channel is closed, as over a socket.
 ##
 ## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
 ## `Testing.request` and `specs/steps.agc`.
@@ -266,15 +293,13 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
 
   if conn.status == 204 or conn.status == 304 or (conn.method == "HEAD" and conn.response_stream.some?)
     close_stream(conn)
-    return HttpResponse(status: conn.status, headers: conn.response_headers, body: "")
+    return HttpResponse(status: conn.status, headers: conn.response_headers, body: NO_BODY)
   end
 
   case conn.response_stream
     some(body) ->
-      case collect(conn, body, max_pieces, timeout_ms)
-        ok(text) -> return HttpResponse(status: conn.status, headers: conn.response_headers, body: text)
-        error(reason) -> return plain_error(conn, reason)
-      end
+      pieces = collect(conn, body, max_pieces, timeout_ms)
+      return HttpResponse(status: conn.status, headers: conn.response_headers, body: pieces)
 
     none -> return HttpResponse(status: conn.status, headers: conn.response_headers, body: conn.response_body)
   end
@@ -286,18 +311,18 @@ export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
   problem = refusal(conn)
   if not problem.empty?
     plain = refused(conn, problem)
-    return HTTP.StreamResponse(status: plain.status, headers: plain.headers, body: HTTP.whole(plain.body.bytes))
+    return HTTP.StreamResponse(status: plain.status, headers: plain.headers, body: HTTP.whole(plain.body))
   end
 
   if conn.status == 204 or conn.status == 304
     close_stream(conn)
-    return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: HTTP.whole("".bytes))
+    return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: HTTP.whole(NO_BODY))
   end
 
   case conn.response_stream
     some(body) -> return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: body)
     none ->
-      whole = HTTP.whole(conn.response_body.bytes)
+      whole = HTTP.whole(conn.response_body)
       return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
   end
 end
@@ -315,23 +340,16 @@ def refused(conn: Conn, problem: String) -> HttpResponse
   return plain_500(INTERNAL_ERROR)
 end
 
-# A 500 for a stream that cannot be given as text (not UTF-8): the reason is the body, since only a test sees it.
-def plain_error(conn: Conn, reason: String) -> HttpResponse
-  IO.warn("bond: #{conn.method} #{conn.path}: #{reason}")
-  return plain_500(reason)
-end
-
 def plain_500(body: String) -> HttpResponse
   headers = [Header(name: "content-type", value: "text/plain; charset=utf-8")]
-  return HttpResponse(status: 500, headers: headers, body: body)
+  return HttpResponse(status: 500, headers: headers, body: body.bytes)
 end
 
-# The pieces of a stream until the producer closes it, as one text. It stops at `max_pieces` pieces (when it is above
-# 0) or when `timeout_ms` is spent for the whole body, and then the channel is closed so the producer stops. Each wait
-# for a piece is the time that is left, so one gap may take all of it. Only a cut by time is reported on stderr: the
-# producer closing is the end and the piece limit was asked for. The result is an error when the pieces are not UTF-8
-# text.
-def collect(conn: Conn, body: Channel[Bytes], max_pieces: Int, timeout_ms: Int) -> Result[String]
+# The pieces of a stream until the producer closes it, as one `Bytes`. It stops at `max_pieces` pieces (when it is
+# above 0) or when `timeout_ms` is spent for the whole body, and then the channel is closed so the producer stops. Each
+# wait for a piece is the time that is left, so one gap may take all of it. Only a cut by time is reported on stderr:
+# the producer closing is the end and the piece limit was asked for.
+def collect(conn: Conn, body: Channel[Bytes], max_pieces: Int, timeout_ms: Int) -> Bytes
   pieces: List[Bytes] = []
   deadline = Time.monotonic_ms() + timeout_ms
   while true
@@ -357,10 +375,7 @@ def collect(conn: Conn, body: Channel[Bytes], max_pieces: Int, timeout_ms: Int) 
     end
   end
 
-  case String.from_bytes(Bytes.concat(pieces))
-    ok(text) -> return ok(text)
-    error(_) -> return error("the stream is not UTF-8 text")
-  end
+  return Bytes.concat(pieces)
 end
 
 def cut(conn: Conn, body: Channel[Bytes]) -> Void

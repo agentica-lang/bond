@@ -6,7 +6,7 @@ description: The Conn struct and the helpers that build an answer.
 
 # Conn and helpers
 
-`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) and `body`. It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body`, `response_stream` (the channel of a streamed body, see [Streaming](/guide/streaming/)) and `halted`.
+`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) and `body`, the `Bytes` that the client sent, whatever they hold. It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (the channel of a streamed body, see [Streaming](/guide/streaming/)) and `halted`.
 
 Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 200, "hello"))` and a helper can wrap another.
 
@@ -14,12 +14,14 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 |---|---|
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text; see [HTML and escaping](/guide/escaping/) |
+| `Bond.bytes(conn, status, body)` | answers `Bytes` as they are (an image, a download); sets no `Content-Type`, so call `header` after it |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
 | `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec (`JSON.codec(Todo)`), written once with no `Json` in between; sets `Content-Type`; see [JSON bodies](/guide/json/) |
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308, and any other code is a runtime error, so a 500 |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
+| `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`: UTF-8 only, and a `charset` other than `utf-8` or a body that does not decode is a 400; `conn.body` has the bytes |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
 | `Bond.param(conn, name)` | the text of a `:name` segment, as a `Result[String]` |
 | `Bond.param_int(conn, name)` | the same, as a whole number; text that is not one is a 400 |
@@ -34,7 +36,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; see [Cookies](/guide/cookies/) |
 | `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` with `Path=/`, `HttpOnly` and `SameSite=Lax`, as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` with every attribute |
 | `Bond.delete_cookie(conn, name)` | adds a `Set-Cookie` that deletes the cookie (`Max-Age=0`) |
-| `Bond.static(app, prefix, root)` | serves the files of a folder under a path (`GET` and `HEAD`, UTF-8 text up to `max_bytes`); an app function, not a `Conn` one; see [Static files](/guide/static/) |
+| `Bond.static(app, prefix, root)` | serves the files of a folder under a path (`GET` and `HEAD`, any file up to `max_bytes`); an app function, not a `Conn` one; see [Static files](/guide/static/) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
 
@@ -72,7 +74,7 @@ def main() -> Void
   )
   moved = Testing.request(app, "GET", "/old")
   puts("#{moved.status} #{HTTP.header_values(moved.headers, "location")[0]}")
-  puts(Testing.request(app, "GET", "/new").body)
+  puts(Testing.text(Testing.request(app, "GET", "/new")).unwrap!)
   puts(Testing.request(app, "GET", "/wrong").status)
 end
 ```
@@ -92,17 +94,18 @@ import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
 def create(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.body.empty?
+  title = try Bond.body_text(conn)
+  if title.empty?
     return Bond.bad_request("title is empty")
   end
 
-  return ok(Bond.text(conn, 201, "created #{conn.body}"))
+  return ok(Bond.text(conn, 201, "created #{title}"))
 end
 
 def main() -> Void
   app = Bond.app() |> Bond.post("/todos", &create)
   empty = Testing.request(app, "POST", "/todos")
-  puts("#{empty.status} #{empty.body}")
+  puts("#{empty.status} #{Testing.text(empty).unwrap!}")
 end
 ```
 

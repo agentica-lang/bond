@@ -31,7 +31,7 @@ end
 def post(app: Bond.App, type: String, body: String) -> Void
   headers = [Header(name: "Content-Type", value: type)]
   response = Testing.request(app, "POST", "/users", headers, body)
-  puts("#{response.status} #{response.body}")
+  puts("#{response.status} #{Testing.text(response).unwrap!}")
 end
 
 def main() -> Void
@@ -85,7 +85,7 @@ def main() -> Void
   )
   for path in ["/user", "/ages"]
     response = Testing.request(app, "GET", path)
-    puts("#{response.status} #{response.body}")
+    puts("#{response.status} #{Testing.text(response).unwrap!}")
   end
 end
 ```

@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 Needs Agentica 0.19.0-beta.2 or later.
 
 ### Added
@@ -59,6 +61,7 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.2.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/agentica-lang/bond/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/agentica-lang/bond/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/agentica-lang/bond/releases/tag/0.1.0

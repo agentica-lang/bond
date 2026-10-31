@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-31
+
 Needs Agentica 0.19.0-beta.3 or later, which has `HTTP.StreamResponse(length:)` (agentica-lang/agentica#872) and the removal of `HTTP.server_options()` and `HTTP.client_options()` (agentica-lang/agentica#888).
 
 ### Added
@@ -15,7 +17,7 @@ Needs Agentica 0.19.0-beta.3 or later, which has `HTTP.StreamResponse(length:)` 
 
 - **Breaking:** the default `max_bytes` of `Bond.static` is 1 GiB (it was 1 MiB), and the most is 1 TiB. `Bond.static` sends its files with `send_file`, so a file is no longer read whole: a file between 1 MiB and 1 GiB under a static root is now served (it used to be a 500 through the error handler). Pass `max_bytes` to keep a smaller limit. Static files also have `Accept-Ranges` and ranges.
 - `Testing.request` adds the `Content-Length` header to the answer of a stream that has a length, and a `HEAD` request for a static file has no body there (as over a socket).
-- `Bond.start`, `run` and the examples use `HttpServerOptions()` instead of `HTTP.server_options()`, and the specs use `HTTP.client()` (agentica-lang/agentica#888).
+- **Breaking:** needs Agentica 0.19.0-beta.3, which removes `HTTP.server_options()` and `HTTP.client_options()`. The options of `Bond.start_with` and `run_with` are an `HttpServerOptions`: write `HttpServerOptions(max_body_bytes: 4_194_304)` for `HTTP.server_options().with(max_body_bytes: 4_194_304)`. `Bond.start`, `run` and the examples use `HttpServerOptions()`, and the specs use `HTTP.client()` (#28).
 
 ## [0.3.0] - 2026-10-31
 
@@ -74,7 +76,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.3.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/agentica-lang/bond/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/agentica-lang/bond/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/agentica-lang/bond/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/agentica-lang/bond/releases/tag/0.1.0

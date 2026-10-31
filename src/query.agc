@@ -24,14 +24,14 @@ export def form_params(conn: Conn) -> Result[Map[String, List[String]]]
     return Conns.bad_request("content type must be #{FORM_TYPE}")
   end
 
-  text = String.from_bytes(conn.body)
-  if not text.ok?
-    return Conns.bad_request("the form is not valid")
-  end
+  case String.from_bytes(conn.body)
+    ok(text) ->
+      case URI.decode_www_form(text)
+        ok(pairs) -> return ok(group(pairs))
+        error(_) -> return Conns.bad_request("the form is not valid")
+      end
 
-  case URI.decode_www_form(text.unwrap!)
-    ok(pairs) -> return ok(group(pairs))
-    error(_) -> return Conns.bad_request("the form is not valid")
+    error(_) -> return Conns.bad_request(Conns.NOT_UTF8)
   end
 end
 

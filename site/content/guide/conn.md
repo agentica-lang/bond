@@ -14,14 +14,14 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 |---|---|
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text; see [HTML and escaping](/guide/escaping/) |
-| `Bond.bytes(conn, status, body)` | answers `Bytes` as they are (an image, a download); sets no `Content-Type`, so call `header` after it |
+| `Bond.bytes(conn, status, body)` | answers `Bytes` as they are (an image, a download); sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
 | `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec (`JSON.codec(Todo)`), written once with no `Json` in between; sets `Content-Type`; see [JSON bodies](/guide/json/) |
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308, and any other code is a runtime error, so a 500 |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
-| `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`: UTF-8 only, and a `charset` other than `utf-8` or a body that does not decode is a 400; `conn.body` has the bytes |
+| `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`: UTF-8 only, and a `charset` other than `utf-8` (`us-ascii` is read as UTF-8) or a body that does not decode is a 400; `conn.body` has the bytes |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
 | `Bond.param(conn, name)` | the text of a `:name` segment, as a `Result[String]` |
 | `Bond.param_int(conn, name)` | the same, as a whole number; text that is not one is a 400 |

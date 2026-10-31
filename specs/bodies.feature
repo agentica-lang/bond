@@ -39,6 +39,12 @@ Feature: Request bodies
     And the header "content-type" is "application/octet-stream"
     And the body bytes are "255 254 0 128 10"
 
-  Scenario: A JSON body that is not UTF-8 is a 400
+  Scenario: A JSON body that is not UTF-8 is a 400 with the same message
     When I post the bytes "123 34 255 34 125" to "/users" as "application/json"
     Then the status is 400
+    And the body is "the body is not UTF-8 text"
+
+  Scenario: A form body that is not UTF-8 is a 400 with the same message
+    When I post the bytes "97 61 255" to "/signup" as "application/x-www-form-urlencoded"
+    Then the status is 400
+    And the body is "the body is not UTF-8 text"

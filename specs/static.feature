@@ -57,6 +57,11 @@ Feature: Static files
       | /assets/blob.bin  | application/octet-stream | 255 254 0 1 |
       | /assets/notes.xyz | application/octet-stream | 120 121 122 |
 
+  Scenario: An empty file is a 200 with no bytes
+    When I send "GET" to "/assets/empty.txt"
+    Then the status is 200
+    And the body bytes are ""
+
   Scenario: A text file is not checked to be UTF-8
     When I send "GET" to "/assets/bad.txt"
     Then the status is 200

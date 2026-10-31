@@ -256,7 +256,7 @@ end
 
 # The bytes of the body, sent back as they came.
 def body_echo(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(Bond.bytes(conn, 200, conn.body), "content-type", "application/octet-stream"))
+  return ok(Bond.bytes(conn, 200, conn.body))
 end
 
 def latest(conn: Bond.Conn) -> Result[Bond.Conn]

@@ -12,6 +12,9 @@ export INTERNAL_ERROR = "Internal Server Error"
 
 PARSE_PREFIX = "JSON.parse: "
 
+# The 400 of a body that is not UTF-8 text, the same for `body_text`, `json_body` and the form readers.
+export NOT_UTF8 = "the body is not UTF-8 text"
+
 NO_BODY = "".bytes
 
 REDIRECT_STATUSES = [301, 302, 303, 307, 308]
@@ -81,10 +84,11 @@ export def html(conn: Conn, status: Int, body: String) -> Conn
   return typed.with(status: status, response_body: body.bytes)
 end
 
-## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets no `Content-Type`: call `header` after
-## it, since a body with no type is guessed by the client.
+## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets `Content-Type` to
+## `application/octet-stream`; call `header` after it to use the real type.
 export def bytes(conn: Conn, status: Int, body: Bytes) -> Conn
-  return release(conn).with(status: status, response_body: body)
+  typed = header(release(conn), "content-type", "application/octet-stream")
+  return typed.with(status: status, response_body: body)
 end
 
 ## Sets the status of the answer and nothing else.
@@ -230,18 +234,18 @@ export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
         error(message) -> return bad_request("invalid body: #{decode_problem(message)}")
       end
 
-    error(_) -> return bad_request("invalid body: not UTF-8 text")
+    error(_) -> return bad_request(NOT_UTF8)
   end
 end
 
-## The body of the request as text, decoded as `HTTP.text` does: UTF-8 only, and a `charset` in `Content-Type` other
-## than `utf-8` (or `us-ascii`) is refused. A body that does not decode is an error that makes a 400 (see
-## `bad_request`), with a fixed message, so `try Bond.body_text(conn)` answers it. Read `conn.body` for the bytes as
-## they came. The size of the body is limited by the server (`max_body_bytes`).
+## The body of the request as text, decoded as `HTTP.text` does: UTF-8 only (`us-ascii` is read as UTF-8), and a
+## `charset` in `Content-Type` other than `utf-8` or `us-ascii` is refused. A body that does not decode is an error
+## that makes a 400 (see `bad_request`), with a fixed message, so `try Bond.body_text(conn)` answers it. Read
+## `conn.body` for the bytes as they came. The size of the body is limited by the server (`max_body_bytes`).
 export def body_text(conn: Conn) -> Result[String]
   case HTTP.text(conn.body, conn.headers)
     ok(text) -> return ok(text)
-    error(_) -> return bad_request("the body is not UTF-8 text")
+    error(_) -> return bad_request(NOT_UTF8)
   end
 end
 

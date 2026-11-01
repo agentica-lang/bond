@@ -9,8 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `Bond.body_text` reads the body in its `charset` as `HTTP.text` of Agentica
   0.19.0 does (Latin-1, Windows-1252, UTF-16 and UTF-32 now decode); a charset
   it cannot decode is still a 400.
-- CI and the documentation use Agentica 0.20.0; the sources need no change for
-  it.
+- CI now tests with Agentica 0.20.0; the sources need no change for it, so
+  Agentica 0.19.0 is still the minimum.
 
 ## [0.4.0] - 2026-10-31
 

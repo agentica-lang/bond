@@ -16,7 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `Bond.body_text` reads the body in its `charset` as `HTTP.text` of Agentica
   0.19.0 does (Latin-1, Windows-1252, UTF-16 and UTF-32 now decode); a charset
   it cannot decode is still a 400.
-- **Breaking:** needs Agentica 0.22.0, which removed `HTTP.listen_stream` and the other `listen` forms. `Bond.start`, `start_with`, `run` and `run_with` serve with `HTTP.serve` and keep their signatures, so a program that calls them needs no change. The body is read whole (up to `max_body_bytes`) before the app runs, as before; one that does not arrive whole is now answered by `HTTP.body_refusal` (413, 431 or 400, with `Connection: close`). CI now tests with Agentica 0.22.0.
+- **Breaking:** needs Agentica 0.22.0, which removed `HTTP.listen_stream` and
+  the other `listen` forms. `Bond.start`, `start_with`, `run` and `run_with`
+  serve with `HTTP.serve` and keep their signatures, so a program that calls
+  them needs no change. The body is read whole (up to `max_body_bytes`) before
+  the app runs, as before. A refused body is now answered by
+  `HTTP.body_refusal`: 413 over the limit, 431 for a chunk line that is too
+  long, 400 for a bad chunk, all with `Connection: close`; a client that
+  leaves gets no answer. CI now tests with Agentica 0.22.0.
 
 ## [0.4.0] - 2026-10-31
 

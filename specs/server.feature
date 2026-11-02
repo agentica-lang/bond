@@ -76,3 +76,25 @@ Feature: Server
     And the body is the text "data: one\\n\\nevent: note\\ndata: two\\ndata: lines\\n\\n"
     When I get "/hello" over the socket
     Then the body is "hello"
+
+  Scenario Outline: A chunked body that is refused after the app could have started never reaches it (<case>)
+    Given the server with a small body limit listens on a free port
+    When I post the chunks "<chunks>" to "/todos" over a raw socket
+    Then the status is <status>
+    And the header "connection" is "close"
+    When I get "/todos" over the socket
+    Then the body is "[]"
+
+    Examples:
+      | case                     | chunks              | status |
+      | two chunks over 8 bytes  | 5~aaaaa~5~bbbbb~0~~ | 413    |
+      | a bad chunk size         | zz~aaaaa~0~~        | 400    |
+
+  Scenario: A chunked body within the limit reaches the app and keeps the connection
+    Given the server with a small body limit listens on a free port
+    When I post the chunks "3~abc~0~~" to "/todos" over a raw socket
+    Then the status is 201
+    And the header "connection" is not set
+    When I get "/todos" over the socket
+    Then the body is "[{\"id\":1,\"title\":\"abc\"}]"
+

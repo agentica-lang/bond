@@ -140,6 +140,10 @@ def main() -> Void
       found = try Multipart.disposition(field)
       try Test.eq(found.name, "a;b")
       try Test.eq(found.filename, some("x \"y\".txt"))
+      path = [Header(name: "content-disposition", value: "form-data; name=\"f\"; filename=\"C:\\temp\\a.txt\"")]
+      raw = (try Multipart.disposition(path)).filename.unwrap_or("")
+      try Test.eq(raw, "C:\\temp\\a.txt")
+      try Test.eq(Multipart.safe_filename(raw), "a.txt")
       try Test.error?(Multipart.disposition([]))
       try Test.error?(Multipart.disposition([Header(name: "content-disposition", value: "attachment; name=\"a\"")]))
       Test.error?(Multipart.disposition([Header(name: "content-disposition", value: "form-data; filename=\"a\"")]))
@@ -151,10 +155,13 @@ def main() -> Void
       body = Bytes.concat([head, every, "\r\n--XyZ".bytes.take(5), every, tail])
       Test.eq(data_of(body, 7), ok(Bytes.concat([every, "\r\n--XyZ".bytes.take(5), every])))
     end,
-    Test.test("safe_filename keeps the last part of a path and no control character") do
+    Test.test("safe_filename keeps the last part of a path, no control character and no direction mark") do
       try Test.eq(Multipart.safe_filename("../../etc/passwd"), "passwd")
       try Test.eq(Multipart.safe_filename("C:\\Users\\ana\\photo.png"), "photo.png")
       try Test.eq(Multipart.safe_filename("re#{String.from_code(0)}port\n.pdf"), "report.pdf")
+      try Test.eq(Multipart.safe_filename("a#{String.from_code(0x85)}b"), "ab")
+      try Test.eq(Multipart.safe_filename("#{String.from_code(0x202E)}gpj.exe"), "gpj.exe")
+      try Test.eq(Multipart.safe_filename("x#{String.from_code(0x2066)}#{String.from_code(0x200F)}.txt"), "x.txt")
       try Test.eq(Multipart.safe_filename(".."), "file")
       try Test.eq(Multipart.safe_filename("dir/"), "file")
       Test.eq(Multipart.safe_filename(List.repeat("x", 300).join("")).length, 255)

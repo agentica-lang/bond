@@ -3,7 +3,9 @@
 ## most one piece and the bytes of a delimiter, so a big file goes through it without being kept. It does no I/O.
 ##
 ## The bytes are searched as Latin-1 text, where one character is one byte, so `String.index_of` finds a delimiter
-## and its index is the byte offset.
+## and its index is the byte offset. A piece is read from an offset that moves forward, and each search looks at a
+## window that grows only when it finds nothing, so a piece of many small parts costs its size, not its size times its
+## parts.
 
 # Where the parser is: before the first delimiter, right after a delimiter (the rest of its line, or `--` for the
 # last one), in the headers of a part, in its data, or after the last delimiter (the epilogue, which is ignored).
@@ -26,11 +28,20 @@ BOUNDARY_SYMBOLS = "'()+_,-./:=? "
 MAX_BOUNDARY = 70
 MAX_FILENAME = 255
 
-## The state between two pieces. `delimiter` is CRLF, `--` and the boundary; `buffer` holds what is not decided yet.
+# The first window of a search; each next one is 4 times larger.
+SEARCH_WINDOW = 4096
+
+## The most parts of a body, and the error of `feed` for a body with more.
+export MAX_PARTS = 1000
+export TOO_MANY_PARTS = "the multipart body has more than 1000 parts"
+
+## The state between two pieces. `delimiter` is CRLF, `--` and the boundary; `buffer` holds what is not decided yet;
+## `parts` counts the parts so far.
 export struct Parser
   delimiter: String
   phase: Int
   buffer: Bytes
+  parts: Int = 0
 end
 
 ## What a piece told: a new part with its headers (names in lowercase), a piece of the data of the current part, or
@@ -43,6 +54,13 @@ end
 
 export struct Step
   parser: Parser
+  events: List[Event]
+end
+
+# Where one step of `feed` left the piece: the phase, the offset of the bytes not used yet, and what it found.
+struct Move
+  phase: Int
+  at: Int
   events: List[Event]
 end
 
@@ -90,22 +108,42 @@ export def start(boundary: String) -> Parser
 end
 
 ## The events of the next piece of the body. An error when the body is not `multipart/form-data` as RFC 2046 frames
-## it: a delimiter line with other text after it, or the headers of a part over 16 KiB or not `Name: value` lines.
+## it: a delimiter line with other text after it, or the headers of a part over 16 KiB or not `Name: value` lines; and
+## `TOO_MANY_PARTS` when it has more than `MAX_PARTS` parts.
 export def feed(parser: Parser, piece: Bytes) -> Result[Step]
-  current = parser.with(buffer: parser.buffer + piece)
+  buffer = parser.buffer + piece
+  current = Move(phase: parser.phase, at: 0, events: [])
   events: List[Event] = []
+  parts = parser.parts
   while true
-    step = try advance(current)
-    moved = not step.events.empty? or step.parser.phase != current.phase
-    moved = moved or step.parser.buffer.size != current.buffer.size
-    current = step.parser
-    events = events.concat(step.events)
+    # A step that cannot go on gives back the move it got, so that move must carry no event.
+    step = try advance(parser.delimiter, buffer, current.with(events: []))
+    moved = not step.events.empty? or step.phase != current.phase or step.at != current.at
+    for event in step.events
+      case event
+        Event.Part(_) -> parts = parts + 1
+        _ -> nil
+      end
+
+      events = events.push(event)
+    end
+
+    if parts > MAX_PARTS
+      return error(TOO_MANY_PARTS)
+    end
+
+    current = step
     if not moved or current.phase == DONE
       break
     end
   end
 
-  return ok(Step(parser: current, events: events))
+  rest = buffer.drop(current.at)
+  if current.phase == DONE
+    rest = "".bytes
+  end
+
+  return ok(Step(parser: parser.with(phase: current.phase, buffer: rest, parts: parts), events: events))
 end
 
 ## An error when the body ended before its last delimiter, so a part may be cut.
@@ -150,11 +188,12 @@ export def disposition(headers: List[Header]) -> Result[Disposition]
 end
 
 ## The name of a file as a client gave it, made safe to show: the part after the last `/` or `\` (an old browser sends
-## the whole path), with no control character, at most 255 characters, and `file` for a name that is empty, `.` or
+## the whole path), with no control character (C0, DEL, C1) and no mark that turns the direction of the text (so
+## `\u202Egpj.exe` cannot show as `exe.jpg`), at most 255 characters, and `file` for a name that is empty, `.` or
 ## `..`. It is never a path on the server: Bond saves a file under a name of its own.
 export def safe_filename(raw: String) -> String
   last = raw.split("/").last.split("\\").last
-  kept = last.split("").select do |ch| ch.code >= 32 and ch.code != 127 end.join("").strip
+  kept = last.split("").select do |ch| shown?(ch.code) end.join("").strip
   if kept == "" or kept == "." or kept == ".."
     return "file"
   end
@@ -166,124 +205,116 @@ export def safe_filename(raw: String) -> String
   return kept
 end
 
-# One step of the state machine: the buffer is used as far as the phase can go with it. A step that needs more bytes
-# gives the parser as it was (no event, the same phase and buffer).
-def advance(parser: Parser) -> Result[Step]
-  if parser.phase == PREAMBLE
-    return ok(skip_preamble(parser))
+# One step of the state machine from `move.at`: the buffer is used as far as the phase can go with it. A step that
+# needs more bytes gives the move as it was (no event, the same phase and offset).
+def advance(delimiter: String, buffer: Bytes, move: Move) -> Result[Move]
+  if move.phase == PREAMBLE
+    return ok(skip_preamble(delimiter, buffer, move))
   end
 
-  if parser.phase == AFTER_DELIMITER
-    return after_delimiter(parser)
+  if move.phase == AFTER_DELIMITER
+    return after_delimiter(buffer, move)
   end
 
-  if parser.phase == HEADERS
-    return headers(parser)
+  if move.phase == HEADERS
+    return headers(buffer, move)
   end
 
-  if parser.phase == DATA
-    return ok(data(parser))
+  if move.phase == DATA
+    return ok(data(delimiter, buffer, move))
   end
 
-  return ok(Step(parser: parser.with(buffer: "".bytes), events: []))
+  return ok(Move(phase: DONE, at: buffer.size, events: []))
 end
 
-def skip_preamble(parser: Parser) -> Step
-  case find(parser.buffer, parser.delimiter)
-    some(at) ->
-      rest = parser.buffer.drop(at + parser.delimiter.length)
-      return Step(parser: parser.with(phase: AFTER_DELIMITER, buffer: rest), events: [])
-
-    none -> return Step(parser: parser.with(buffer: tail(parser)), events: [])
+def skip_preamble(delimiter: String, buffer: Bytes, move: Move) -> Move
+  case find(buffer, move.at, delimiter)
+    some(at) -> return Move(phase: AFTER_DELIMITER, at: at + delimiter.length, events: [])
+    none -> return move.with(at: tail(delimiter, buffer, move.at))
   end
 end
 
 # After a delimiter: `--` ends the body; else the line may have spaces and tabs and then ends.
-def after_delimiter(parser: Parser) -> Result[Step]
-  buffer = parser.buffer
-  if buffer.size < 2
-    return ok(Step(parser: parser, events: []))
+def after_delimiter(buffer: Bytes, move: Move) -> Result[Move]
+  if buffer.size - move.at < 2
+    return ok(move)
   end
 
-  if buffer.take(2) == LAST.bytes
-    return ok(Step(parser: parser.with(phase: DONE, buffer: "".bytes), events: [Event.Finished]))
+  if buffer.slice(move.at, 2) == LAST.bytes
+    return ok(Move(phase: DONE, at: buffer.size, events: [Event.Finished]))
   end
 
-  case find(buffer, CRLF)
+  case find(buffer, move.at, CRLF)
     some(at) ->
-      padding = latin1(buffer.take(at))
+      padding = latin1(buffer.slice(move.at, at - move.at))
       if not padding.split("").all? do |ch| ch == " " or ch == "\t" end
         return error("a boundary line has more text after the boundary")
       end
 
-      return ok(Step(parser: parser.with(phase: HEADERS, buffer: buffer.drop(at + 2)), events: []))
+      return ok(Move(phase: HEADERS, at: at + 2, events: []))
 
     none ->
-      if buffer.size > MAX_PADDING_BYTES
+      if buffer.size - move.at > MAX_PADDING_BYTES
         return error("a boundary line has more text after the boundary")
       end
 
-      return ok(Step(parser: parser, events: []))
+      return ok(move)
   end
 end
 
-def headers(parser: Parser) -> Result[Step]
-  buffer = parser.buffer
-  if buffer.size >= 2 and buffer.take(2) == CRLF.bytes
-    return ok(Step(parser: parser.with(phase: DATA, buffer: buffer.drop(2)), events: [Event.Part([])]))
+def headers(buffer: Bytes, move: Move) -> Result[Move]
+  if buffer.size - move.at >= 2 and buffer.slice(move.at, 2) == CRLF.bytes
+    return ok(Move(phase: DATA, at: move.at + 2, events: [Event.Part([])]))
   end
 
-  case find(buffer, HEAD_END)
+  case find(buffer, move.at, HEAD_END)
     some(at) ->
-      if at > MAX_HEAD_BYTES
+      if at - move.at > MAX_HEAD_BYTES
         return error("the headers of a part are too long")
       end
 
-      fields = try header_lines(buffer.take(at))
-      next_parser = parser.with(phase: DATA, buffer: buffer.drop(at + HEAD_END.length))
-      return ok(Step(parser: next_parser, events: [Event.Part(fields)]))
+      fields = try header_lines(buffer.slice(move.at, at - move.at))
+      return ok(Move(phase: DATA, at: at + HEAD_END.length, events: [Event.Part(fields)]))
 
     none ->
-      if buffer.size > MAX_HEAD_BYTES
+      if buffer.size - move.at > MAX_HEAD_BYTES
         return error("the headers of a part are too long")
       end
 
-      return ok(Step(parser: parser, events: []))
+      return ok(move)
   end
 end
 
 # The data of a part goes out as it comes, except the last bytes, which may be the start of the delimiter.
-def data(parser: Parser) -> Step
-  buffer = parser.buffer
-  case find(buffer, parser.delimiter)
+def data(delimiter: String, buffer: Bytes, move: Move) -> Move
+  case find(buffer, move.at, delimiter)
     some(at) ->
       events: List[Event] = []
-      if at > 0
-        events = [Event.Data(buffer.take(at))]
+      if at > move.at
+        events = [Event.Data(buffer.slice(move.at, at - move.at))]
       end
 
-      rest = buffer.drop(at + parser.delimiter.length)
-      return Step(parser: parser.with(phase: AFTER_DELIMITER, buffer: rest), events: events)
+      return Move(phase: AFTER_DELIMITER, at: at + delimiter.length, events: events)
 
     none ->
-      kept = tail(parser)
-      sent = buffer.size - kept.size
-      if sent <= 0
-        return Step(parser: parser, events: [])
+      kept = tail(delimiter, buffer, move.at)
+      if kept <= move.at
+        return move
       end
 
-      return Step(parser: parser.with(buffer: kept), events: [Event.Data(buffer.take(sent))])
+      return move.with(at: kept, events: [Event.Data(buffer.slice(move.at, kept - move.at))])
   end
 end
 
-# The end of the buffer that may be the start of a delimiter: one byte less than a delimiter.
-def tail(parser: Parser) -> Bytes
-  keep = parser.delimiter.length - 1
-  if parser.buffer.size <= keep
-    return parser.buffer
+# Where the end of the buffer that may be the start of a delimiter begins: one byte less than a delimiter, and never
+# before `at`.
+def tail(delimiter: String, buffer: Bytes, at: Int) -> Int
+  start = buffer.size - (delimiter.length - 1)
+  if start < at
+    return at
   end
 
-  return parser.buffer.drop(parser.buffer.size - keep)
+  return start
 end
 
 # `Name: value` lines; the names in lowercase, the values as UTF-8 (Latin-1 when they are not).
@@ -308,7 +339,8 @@ def header_lines(head: Bytes) -> Result[List[Header]]
 end
 
 # The value and the parameters of a header such as `form-data; name="a"; filename="b.txt"`: the first item is the
-# value (as a name with an empty value), then each `key=value`, a quoted value with `\` escapes unquoted.
+# value (as a name with an empty value), then each `key=value`, a quoted value unquoted. In quotes only `\"` and `\\`
+# are escapes, as browsers write them: another backslash stays, so `C:\temp\a.txt` keeps its path for `safe_filename`.
 def parameters(header: String) -> List[Header]
   items: List[Header] = []
   chars = header.split("")
@@ -337,6 +369,10 @@ def read_item(chars: List[String], at: Int) -> Item
     ch = chars[index]
     if quoted
       if escaped
+        if ch != "\"" and ch != "\\"
+          value = value.push("\\")
+        end
+
         value = value.push(ch)
         escaped = false
       elsif ch == "\\"
@@ -372,12 +408,48 @@ def read_item(chars: List[String], at: Int) -> Item
   return Item(header: Header(name: key.join("").strip, value: text), next: index)
 end
 
-def find(bytes: Bytes, text: String) -> Optional[Int]
-  return latin1(bytes).index_of(text)
+# The first `text` in `bytes` from `at`, as an offset in `bytes`. The search looks at a window from `at` that grows 4
+# times while it finds nothing, so a match near `at` costs little, and the whole search costs a few times the bytes up
+# to the match (or to the end).
+def find(bytes: Bytes, at: Int, text: String) -> Optional[Int]
+  rest = bytes.size - at
+  window = SEARCH_WINDOW
+  while true
+    size = window
+    if size > rest
+      size = rest
+    end
+
+    case latin1(bytes.slice(at, size)).index_of(text)
+      some(found) -> return some(at + found)
+      none ->
+        if size == rest
+          return none
+        end
+    end
+
+    window = window * 4
+  end
+
+  return none
 end
 
 def latin1(bytes: Bytes) -> String
   return bytes.decode("latin-1").unwrap!
+end
+
+# A character `safe_filename` keeps: not a control character (C0, DEL, C1) and not a mark of the direction of the text
+# (LRM, RLM, ALM, the embeddings and overrides U+202A to U+202E, the isolates U+2066 to U+2069).
+def shown?(code: Int) -> Bool
+  if code < 32 or (code >= 127 and code <= 159)
+    return false
+  end
+
+  if code == 0x200E or code == 0x200F or code == 0x061C
+    return false
+  end
+
+  return not ((code >= 0x202A and code <= 0x202E) or (code >= 0x2066 and code <= 0x2069))
 end
 
 def boundary_char?(ch: String) -> Bool

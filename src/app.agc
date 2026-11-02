@@ -153,6 +153,16 @@ export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
   return Conns.to_stream_response(answer(app, request))
 end
 
+## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
+## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
+export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
+  conn = answer(app, request)
+  case Conns.accepted_upgrade(conn)
+    some(upgrade) -> return HTTP.Answer.Upgrade(upgrade)
+    none -> return HTTP.Answer.Stream(Conns.to_stream_response(conn))
+  end
+end
+
 # The `Conn` that answers the request, before it is turned into a response.
 def answer(app: App, request: HttpRequest) -> Conn
   conn = Conns.from_request(request)
@@ -269,7 +279,8 @@ end
 
 # The error handler runs in a task of its own, like the chain: if it crashes, the request still gets an answer. It
 # gets the request with nothing of the answer built so far, in both paths, so that no header of a filter or of the
-# handler that failed is in a 500. A stream the conn already held is dropped, so it is closed: its producer stops.
+# handler that failed is in a 500. A stream the conn already held is dropped, so it is closed: its producer stops. An
+# upgrade it held is dropped too, so its WebSocket never starts.
 def answer_error(app: App, conn: Conn, message: String) -> Conn
   Conns.close_stream(conn)
   failing = conn.with(
@@ -278,6 +289,7 @@ def answer_error(app: App, conn: Conn, message: String) -> Conn
     response_body: "".bytes,
     response_stream: none,
     response_length: none,
+    upgrade: none,
   )
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)

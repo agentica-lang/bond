@@ -23,6 +23,9 @@ REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 # The characters besides letters and digits that the server accepts in a header name (RFC 9110 token).
 TOKEN_SYMBOLS = "!#$%&'*+-.^_`|~"
 
+# The status of an accepted WebSocket upgrade (Switching Protocols).
+export SWITCHING = 101
+
 ASCII_LIMIT = 127
 LATIN1_LIMIT = 255
 
@@ -36,7 +39,9 @@ export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 ## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. `response_length` is
 ## the size of a streamed body when it is known (`stream` with a `length`, `send_file`). `session` is the session of the
 ## request that `Bond.sessions` loaded, and `session_changed` says that a handler changed it, so the answer has to
-## carry it (`session.agc`). A new `Conn` answers 200 with no body and has an empty session.
+## carry it (`session.agc`). `upgrade` is the WebSocket handshake that a route of `Bond.websocket` accepted
+## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
+## and is not halted (`accepted_upgrade`). A new `Conn` answers 200 with no body, has an empty session and no upgrade.
 export struct Conn
   method: String
   path: String
@@ -52,6 +57,7 @@ export struct Conn
   halted: Bool
   session: Map[String, String]
   session_changed: Bool
+  upgrade: Optional[HTTP.Upgrade] = none
 end
 
 ## The `Conn` of a request, before any route or filter.
@@ -305,6 +311,9 @@ end
 ## 304 loses its body, and the other cases are a 500 with a warning on stderr. `Testing.request` comes through here,
 ## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees what a client would.
 ##
+## An accepted WebSocket upgrade is a 101 with `Upgrade: websocket` and no body, since a test has no socket for the
+## WebSocket to run on.
+##
 ## A streamed body is read here to its end, as one `Bytes`, for a test. It is read until the producer closes the
 ## channel, `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body (one gap between pieces may take all
 ## of it), and then the channel is closed so the producer stops; a body cut by the time limit says so on stderr. A
@@ -313,6 +322,10 @@ end
 ## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
 ## `Testing.request` and `specs/steps.agc`.
 export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HttpResponse
+  if accepted_upgrade(conn).some?
+    return switching()
+  end
+
   problem = refusal(conn)
   if not problem.empty?
     return refused(conn, problem)
@@ -361,6 +374,24 @@ export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
       whole = HTTP.whole(conn.response_body)
       return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
   end
+end
+
+## The upgrade that the conn answers with: the one a WebSocket route accepted, while the conn still has its status 101
+## and is not halted. An `after` filter that answers something else (`text`, `html`, `status`, `halt`, `redirect`)
+## changes the status or halts, so its answer is sent and the WebSocket never starts.
+export def accepted_upgrade(conn: Conn) -> Optional[HTTP.Upgrade]
+  if conn.status != SWITCHING or conn.halted
+    return none
+  end
+
+  return conn.upgrade
+end
+
+# The answer of an accepted upgrade for a test: the head of the server's 101, without the `Sec-WebSocket-Accept` that
+# the server computes from the key.
+def switching() -> HttpResponse
+  headers = [Header(name: "upgrade", value: "websocket"), Header(name: "connection", value: "Upgrade")]
+  return HttpResponse(status: 101, headers: headers, body: NO_BODY)
 end
 
 # The headers of the answer for a test: the `Content-Length` of a stream with a length is added, as the server does.

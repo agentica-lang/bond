@@ -34,7 +34,7 @@ struct Account
   tags: List[String]
 end
 
-# A comment of the room view (the views of the guide are further down).
+# A comment of the room view below.
 struct RoomComment
   author: String
   text: String
@@ -288,8 +288,7 @@ def eag_page(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.html(conn, 200, body.strip))
 end
 
-# The views of the guide: a partial and a page are functions that return a String, and the layout takes the inner HTML.
-# Each escapes its own `<%= %>`, and the inner HTML goes into the layout with `<%== %>`, since it is already escaped.
+# The views of the guide: functions that return a String; the layout takes the inner HTML.
 def view_comment(comment: RoomComment) -> String
   return <<~EAG
     <%@ escape &Bond.escape %>

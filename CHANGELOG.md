@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- A guide page, [Views](https://agentica-lang.github.io/bond/guide/views/), on pages, partials and a layout built from EAG templates with `Bond.escape` and `Bond.html`. There is no new function: a view is a function that returns a `String`, and a layout takes the inner HTML.
+- A guide page, Views, on pages, partials and a layout built from EAG templates with `Bond.escape` and `Bond.html`. There is no new function: a view is a function that returns a `String`, and a layout takes the inner HTML.
 
 - `Bond.escape(text)` escapes `&`, `<`, `>`, `"` and `'` for HTML (it is `HTML.escape` of `std/html`). An EAG template of Agentica 0.22.0 can start with `<%@ escape &Bond.escape %>` to escape every `<%= %>`; `<%== %>` stays raw. The guide has a section on it.
 

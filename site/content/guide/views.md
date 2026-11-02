@@ -83,10 +83,14 @@ A layout is a function with the title and the inner HTML as arguments. The handl
 
 ## `<%==` takes only your own HTML
 
-The result of a view is already escaped, so a layout or a page inserts it with `<%==`: with `<%=` it would be escaped twice, and `&lt;` would show on the page. That is the one use of `<%==`, besides markup you wrote yourself. Never put a value of a client in a `<%==`, and never pass the text of a client to a view as if it were HTML.
+The result of a view is already escaped, so a layout or a page inserts it with `<%==`: with `<%=` it would be escaped twice, and `&lt;` would show on the page. That is the one use of `<%==`, besides markup you wrote yourself. Never put a value of a client in a `<%==`.
+
+Nothing checks this rule, since a `String` is a `String`. With the views above, `layout(title, name)` is wrong: `name` came from the client, the layout inserts it raw, and it type-checks, so a name like `<script>` runs in the page. `layout(title, room(name, messages))` is right, because `room` escapes `name` before the layout sees it.
+
+A view without `<%@ escape &Bond.escape %>` on its first line escapes nothing, and the checker does not warn. Test each view with a value like `<script>`, as `specs/views.feature` does for the page of the sample.
 
 `-%>` after a `<%==` that inserts a view takes away the line break that the view ends with, so the page has no blank line there.
 
 ## Where to put views
 
-A view of an app can sit in its own file (`views/rooms.agc`) with an `export def` for each page, imported by the file of the handlers (`import Rooms from "views/rooms"` from a file at the root of the project), then `Rooms.show(...)`. The routes, the handlers and the views stay three places that call each other, and none of them needs to know how another one is made.
+A view of an app can sit in its own file (`views/rooms.agc`) with an `export def` for each page. The views file has its own `import EAG from "std/eag"` and `import Bond from "pkg/bond/bond"` (without them its templates are `CHECK-EAG-IMPORT` and `&Bond.escape` is `CHECK-UNKNOWN-NAME`). The file of the handlers imports it with `import Rooms from "views/rooms"`, and then calls `Rooms.show(...)`. An import is relative to the file that writes it: from a file in a subfolder, such as `handlers/rooms.agc`, it is `"../views/rooms"`. The routes, the handlers and the views stay three places that call each other, and none of them needs to know how another one is made.

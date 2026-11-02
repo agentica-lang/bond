@@ -35,13 +35,9 @@ A request with `If-Range` is also answered with the whole file: `Bond.send_file`
 
 `HEAD` gets the same headers as `GET` (a 206 for a range) with the length and no body, and the file is not opened.
 
-## `Bond.static`
-
-`Bond.static` answers through the same function, so the files of a folder have ranges and `Content-Length` too, and a big file is no longer read whole (see [Static files](/guide/static/)).
+`Bond.static` answers through the same function, so its files have ranges and `Content-Length` too (see [Static files](/guide/static/)).
 
 ## An example
-
-The sample makes a file of ten bytes, sends it whole, as a download and by range, and removes it.
 
 ```agentica
 import HTTP from "std/http"

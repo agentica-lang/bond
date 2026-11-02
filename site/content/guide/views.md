@@ -75,17 +75,17 @@ end
 
 ## Partials
 
-A partial is a function like `message` above. A page puts its result in with `<%== %>`, and a loop is a `for` in a tag (`<% for m in messages %>`). The template of a function takes its values as arguments, so a partial sees only what the page passes it.
+A partial is a function like `message` above. A page puts its result in with `<%== %>`, and a loop is a `for` in a tag (`<% for m in messages %>`). A partial sees only what the page passes it.
 
 ## The layout
 
-A layout is a function with the title and the inner HTML as arguments. The handler renders the page first and gives it to the layout: `layout(name, room(name, messages))`. Another layout (a page for the admin, a page for a mail) is another function.
+A layout is a function with the title and the inner HTML as arguments. The handler renders the page first and gives it to the layout: `layout(name, room(name, messages))`. Another layout is another function.
 
 ## `<%==` takes only your own HTML
 
-The result of a view is already escaped, so a layout or a page inserts it with `<%==`: with `<%=` it would be escaped twice, and `&lt;` would show on the page. That is the one use of `<%==`, besides markup you wrote yourself. Never put a value of a client in a `<%==`.
+The result of a view is already escaped, so a layout or a page inserts it with `<%==` (with `<%=` it would be escaped twice). That is the one use of `<%==`, besides markup you wrote yourself. Never put a value of a client in a `<%==`.
 
-Nothing checks this rule, since a `String` is a `String`. With the views above, `layout(title, name)` is wrong: `name` came from the client, the layout inserts it raw, and it type-checks, so a name like `<script>` runs in the page. `layout(title, room(name, messages))` is right, because `room` escapes `name` before the layout sees it.
+Nothing checks this rule, since a `String` is a `String`. With the views above, `layout(title, name)` type-checks but is wrong: `name` came from the client and the layout inserts it raw. `layout(title, room(name, messages))` is right, because `room` escapes `name` first.
 
 A view without `<%@ escape &Bond.escape %>` on its first line escapes nothing, and the checker does not warn. Test each view with a value like `<script>`, as `specs/views.feature` does for the page of the sample.
 

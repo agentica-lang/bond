@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `Bond.websocket(app, pattern, handler)` adds a WebSocket route on the server of the app, so a page, a stream and a WebSocket share one port. The handler gets the `Conn` of the handshake (params, session) and the `HTTP.WebSocket`. A handshake from another site's page is a 403 (its `Origin` must name the host, or be one of `allowed_origins`), and a request that does not ask for the upgrade is a 426. A quiet WebSocket is pinged after 30 s and dropped after 120 s (`Bond.WEBSOCKET_OPTIONS`), since each open one holds a connection of the server. The guide has a page on it.
 
+- A guide page, Views, on pages, partials and a layout built from EAG templates with `Bond.escape` and `Bond.html`. There is no new function: a view is a function that returns a `String`, and a layout takes the inner HTML.
+
 - `Bond.escape(text)` escapes `&`, `<`, `>`, `"` and `'` for HTML (it is `HTML.escape` of `std/html`). An EAG template of Agentica 0.22.0 can start with `<%@ escape &Bond.escape %>` to escape every `<%= %>`; `<%== %>` stays raw. The guide has a section on it.
 
 - `Bond.sessions(app, options)` keeps a session in a cookie signed with HMAC-SHA256: `Bond.session`, `Bond.get_session`, `Bond.set_session`, `Bond.delete_session` and `Bond.clear_session`, `Bond.SessionOptions` (`secret`, `old_secrets` to rotate it, `name`, `max_age`, `secure`, `same_site`, `path`, `domain`; always `HttpOnly`) and `Testing.session_cookie`. A changed, expired or unknown cookie is an empty session. `Conn` has two new fields, `session` and `session_changed`.

@@ -18,7 +18,7 @@ def main() -> Void
 end
 ```
 
-Bond 0.4.0 has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, signed cookie sessions, a cross-site request check, static files (any file, as bytes), files sent in pieces with ranges, streamed bodies (server-sent events), a guide to HTML escaping, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. The next release adds [WebSocket routes](/guide/websockets/) on the same port.
+Bond 0.4.0 has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, signed cookie sessions, a cross-site request check, static files (any file, as bytes), files sent in pieces with ranges, streamed bodies (server-sent events), a guide to HTML escaping and one to views built on EAG templates, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. The next release adds [WebSocket routes](/guide/websockets/) on the same port.
 
 - [Getting started](/getting-started/) installs Bond and runs a first app.
 - The [guide](/guide/) has a page for each part.

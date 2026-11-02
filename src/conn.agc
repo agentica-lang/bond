@@ -94,8 +94,9 @@ export def html(conn: Conn, status: Int, body: String) -> Conn
 end
 
 ## The text for HTML: `&`, `<`, `>`, `"` and `'` become `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, which is right
-## between tags and inside a quoted attribute. It is `HTML.escape` of `std/html`, named so that an EAG template can say
-## `<%@ escape &Bond.escape %>` and have every `<%= %>` escaped (`<%== %>` stays raw).
+## between tags and inside a quoted attribute. It is `HTML.escape` of `std/html` under a short name, beside `html` in
+## the module that a handler already imports; an EAG template can use it as `<%@ escape &Bond.escape %>`, which
+## escapes every `<%= %>` (`<%== %>` stays raw).
 export def escape(text: String) -> String
   return HTML.escape(text)
 end

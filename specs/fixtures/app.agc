@@ -269,8 +269,8 @@ def greet(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.html(conn, 200, "<p>Hello, #{HTML.escape(name)}</p>"))
 end
 
-# An EAG template that escapes with `Bond.escape`: `<%= %>` is escaped in the text and in the attribute (quoted with `'` here, so the feature can write the body), and `<%== %>`
-# is the raw form, here for a markup of the app.
+# An EAG template that escapes with `Bond.escape`: `<%= %>` is escaped in the text and in the attribute (quoted with
+# `'` here, so the feature can write the body), and `<%== %>` is the raw form, here for a markup of the app.
 def eag_page(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
   note = "<em>trusted</em>"

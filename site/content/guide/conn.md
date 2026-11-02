@@ -14,6 +14,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 |---|---|
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text; see [HTML and escaping](/guide/escaping/) |
+| `Bond.escape(text)` | the text for HTML: `&`, `<`, `>`, `"` and `'` become entities; for a value of a client that goes into `Bond.html` or an EAG template |
 | `Bond.bytes(conn, status, body)` | answers `Bytes` as they are (an image, a download); sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
 | `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec (`JSON.codec(Todo)`), written once with no `Json` in between; sets `Content-Type`; see [JSON bodies](/guide/json/) |
@@ -43,7 +44,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 ## HTML and escaping
 
-`Bond.html` sends the text as it is. Escape every value of a client with `HTML.escape` of `std/html` before it goes into the text: see [HTML and escaping](/guide/escaping/).
+`Bond.html` sends the text as it is. Escape every value of a client with `Bond.escape` before it goes into the text: see [HTML and escaping](/guide/escaping/).
 
 ## Redirects
 

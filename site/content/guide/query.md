@@ -14,7 +14,7 @@ Each one is a `Result`, and a failure is an error that makes a 400, so `try` ans
 
 ## Read many fields at once
 
-Each call decodes the whole query string again, so a handler that reads several fields calls `Bond.query_params(conn)` once. It gives a `Map[String, List[String]]`: each name with its values in the order they were sent, the names in the order of their first appearance. `Bond.form_params(conn)` does the same for a form body. A form of 1 MiB read field by field with `Bond.form` costs the decoding of 1 MiB each time.
+Each call decodes the whole query string again, so a handler that reads several fields calls `Bond.query_params(conn)` once. It gives a `Map[String, List[String]]`: each name with its values in the order they were sent, the names in the order of their first appearance. `Bond.form_params(conn)` does the same for a form body.
 
 ## Invalid is not missing
 

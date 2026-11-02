@@ -20,6 +20,7 @@ WEBSOCKET = "websocket"
 WEBSOCKET_KEY = "dGhlIHNhbXBsZSBub25jZQ=="
 TEXT_FRAME = 1
 CLOSE_FRAME = 8
+PING_FRAME = 9
 FINAL_BIT = 128
 MASK_BIT = 128
 LENGTH_BITS = 127
@@ -158,6 +159,7 @@ def main() -> Void
       talk_websocket(ctx, args[0], [], args[1])
     end,
     BDD.step("I open a WebSocket to {string} with no origin, send {string} and leave", &leave_websocket),
+    BDD.step("I open a WebSocket to {string} with no origin and say nothing", &stay_silent),
     BDD.step("the server prints {string}", &server_prints),
     BDD.step("the WebSocket answers {string}", &websocket_answers),
     BDD.step("the WebSocket closes with the code {int}", &websocket_closes_with),
@@ -772,4 +774,27 @@ end
 def server_prints(ctx: BDD.Context, args: List[String]) -> BDD.Context
   line = BDD.read_line(ctx, SOCKET_MS).unwrap_or("")
   return BDD.assert(ctx, line == args[0], "the server printed #{line.inspect}")
+end
+
+# A client that opens a WebSocket and sends nothing, not even a pong to the server's pings: it reads what the server
+# sends until the server ends the connection (an empty read) or `SOCKET_MS` passes. `answer` is "ping" when the first
+# frame was a ping.
+def stay_silent(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  TCP.send(socket, handshake(args[0], port, []), SOCKET_MS).unwrap!
+  response = read_raw_answer(socket)
+  first = ""
+  if response.status == 101 and read_frame(socket).opcode == PING_FRAME
+    first = "ping"
+  end
+
+  piece = TCP.recv_bytes(socket, 1024, SOCKET_MS)
+  while piece.ok? and not piece.unwrap!.empty?
+    piece = TCP.recv_bytes(socket, 1024, SOCKET_MS)
+  end
+
+  TCP.close(socket)
+  replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+  return BDD.set(replied, WEBSOCKET, JSON.from(Heard(answer: first, close_code: 0)))
 end

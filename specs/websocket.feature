@@ -43,6 +43,13 @@ Feature: WebSocket routes
     And the WebSocket answers "gone: hi"
     And the server prints "closed gone 1006"
 
+  Scenario: The options of a route reach the WebSocket: a silent peer is pinged, then dropped after idle_ms
+    Given the WebSocket server listens on a free port
+    When I open a WebSocket to "/quiet/hush" with no origin and say nothing
+    Then the status is 101
+    And the WebSocket answers "ping"
+    And the server prints "closed hush 1006"
+
   Scenario: Two Origin headers are refused, even when one is this server
     Given the WebSocket server listens on a free port
     When I open a WebSocket to "/chat/lobby" from the origins "http://127.0.0.1:PORT" and "https://app.example.com" and send "hi"

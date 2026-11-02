@@ -52,7 +52,7 @@ export def websocket(
   allowed_origins: List[String] = [],
   options: Optional[HTTP.WebSocketOptions] = none,
 ) -> App
-  chosen = options.unwrap_or(WEBSOCKET_OPTIONS)
+  chosen = chosen_options(options)
   origins = Csrf.checked_origins(allowed_origins)
   # `accept_websocket` checks the options before the request, so a request with no headers shows a bad option now,
   # at the start; it is no handshake, so its `Reply` is never sent and `idle` never runs.
@@ -67,6 +67,12 @@ export def websocket(
   end
 
   return Apps.get(app, pattern) do |conn| handshake(conn, handler, origins, chosen) end
+end
+
+## The options of a route: the ones it was given, or `WEBSOCKET_OPTIONS` for `none`. For `websocket` and its test; it
+## is not part of `Bond`.
+export def chosen_options(options: Optional[HTTP.WebSocketOptions]) -> HTTP.WebSocketOptions
+  return options.unwrap_or(WEBSOCKET_OPTIONS)
 end
 
 def handshake(

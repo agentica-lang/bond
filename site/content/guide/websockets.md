@@ -49,7 +49,7 @@ An open WebSocket holds one of the server's connections until it closes, and the
 - `ping_ms: 30_000`: after 30 s with nothing to send, the server sends a ping. A browser answers every ping by itself, and the traffic keeps proxies and NATs, which often drop a connection idle for 60 s, from closing it.
 - `idle_ms: 120_000`: a peer that sent nothing for 120 s, not even a pong, is dropped, and the handler gets `Close` with code 1006.
 
-The rest are the defaults of `HTTP.WebSocketOptions` of `std/http` (whose own `idle_ms` is no limit): `max_message_bytes` (1 MiB), `close_ms` and `protocols`. The last argument of `Bond.websocket` changes them; keep the bounds when you change one option: `Bond.websocket(app, "/live", &live, [], some(Bond.WEBSOCKET_OPTIONS.with(max_message_bytes: 65_536)))`. Raise `max_connections` for an app that keeps many sockets open.
+The rest are the defaults of `HTTP.WebSocketOptions` of `std/http` (whose own `idle_ms` is no limit): `max_message_bytes` (1 MiB), `close_ms` and `protocols`. The last argument of `Bond.websocket` changes them; keep the bounds when you change one option: `Bond.websocket(app, "/live", &live, [], some(Bond.WEBSOCKET_OPTIONS.with(max_message_bytes: 65_536)))`. The argument is an `Optional`, so a bare `HTTP.WebSocketOptions(...)` is a type error, not a silent loss of the bounds. Raise `max_connections` for an app that keeps many sockets open.
 
 ## What the route answers
 

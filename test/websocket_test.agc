@@ -1,6 +1,7 @@
 import HTTP from "std/http"
 import Bond from "../bond"
 import Testing from "../testing"
+import WebSockets from "../src/websocket"
 
 HANDSHAKE = [
   Header(name: "upgrade", value: "websocket"),
@@ -112,6 +113,16 @@ def main() -> Void
       response = Testing.request(sessions_app(), "GET", "/live", HANDSHAKE, "")
       try Test.eq(response.status, 101)
       Test.eq(HTTP.header_values(response.headers, "set-cookie"), [])
+    end,
+    Test.test("a route with no options gets WEBSOCKET_OPTIONS, which drop a quiet socket") do
+      chosen = WebSockets.chosen_options(none)
+      try Test.eq(chosen, Bond.WEBSOCKET_OPTIONS)
+      try Test.assert(chosen.idle_ms > 0, "idle_ms bounds a quiet socket")
+      Test.assert(chosen.ping_ms > 0 and chosen.ping_ms < chosen.idle_ms, "a ping comes before the idle limit")
+    end,
+    Test.test("a route with options gets them") do
+      given = HTTP.WebSocketOptions(idle_ms: 5_000, max_message_bytes: 1024)
+      Test.eq(WebSockets.chosen_options(some(given)), given)
     end,
     Test.test("another method of the path is a 405, as for any GET route") do
       Test.eq(Testing.request(app(), "POST", "/live", HANDSHAKE, "").status, 405)

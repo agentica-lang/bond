@@ -1,7 +1,8 @@
 ## The program of `websocket.feature`: a page, a stream and a WebSocket route of one app on 127.0.0.1 and a free port.
 ## It says the port on its first line. The WebSocket of `/chat/:room` answers each text message with the room and the
 ## text, and the text `crash` makes its handler crash; when the WebSocket ends, the handler prints `closed`, the room
-## and the code. A page of https://app.example.com may open it too.
+## and the code. A page of https://app.example.com may open it too. `/quiet/:room` is the same WebSocket with small
+## options: a ping after 300 ms with nothing to send, and a peer silent for 1 s is dropped.
 
 import HTTP from "std/http"
 import Bond from "../../bond"
@@ -54,6 +55,7 @@ def main() -> Void
     |> Bond.get("/hello", &hello)
     |> Bond.get("/ticks", &ticks)
     |> Bond.websocket("/chat/:room", &chat, ["https://app.example.com"])
+    |> Bond.websocket("/quiet/:room", &chat, [], some(HTTP.WebSocketOptions(idle_ms: 1_000, ping_ms: 300)))
   )
   server = Bond.start(app, "127.0.0.1", 0).unwrap!
   puts("listening on #{Bond.local_port(server)}")

@@ -22,6 +22,7 @@ import Filters from "src/filters"
 import Queries from "src/query"
 import Servers from "src/server"
 import Sessions from "src/session"
+import Uploads from "src/uploads"
 import WebSockets from "src/websocket"
 
 export Apps.App
@@ -90,6 +91,11 @@ export Servers.local_port
 export Servers.wait
 export Servers.stop
 export Servers.run
+export Apps.UploadOptions
+export Conns.UploadedFile
+export Uploads.uploads
+export Uploads.file
+export Uploads.file_all
 export WebSockets.WebSocketHandler
 export WebSockets.websocket
 export WebSockets.WEBSOCKET_OPTIONS

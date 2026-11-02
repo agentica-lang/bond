@@ -5,6 +5,7 @@ import Conns from "conn"
 import {Conn} from "conn"
 
 FORM_TYPE = "application/x-www-form-urlencoded"
+MULTIPART_TYPE = "multipart/form-data"
 
 ## Every name of the query string with its values, decoded (`+` is a space and `%XX` is a byte), in the order they
 ## were sent. It decodes the whole string once: a handler that reads many fields uses it, and one that reads one or
@@ -18,8 +19,18 @@ export def query_params(conn: Conn) -> Result[Map[String, List[String]]]
 end
 
 ## Like `query_params`, for the body of a form (`application/x-www-form-urlencoded`). The request must have exactly
-## one `Content-Type`, and it must be that type; the body is read as UTF-8 whatever its charset says.
+## one `Content-Type`, and it must be that type; the body is read as UTF-8 whatever its charset says. With
+## `Bond.uploads`, a `multipart/form-data` body works too: these are its text fields (`Bond.file` reads its files).
 export def form_params(conn: Conn) -> Result[Map[String, List[String]]]
+  case conn.form
+    some(parts) -> return ok(group(parts.fields))
+    none -> nil
+  end
+
+  if Conns.media_type(conn) == MULTIPART_TYPE
+    return Conns.bad_request("a multipart/form-data body needs Bond.uploads")
+  end
+
   if Conns.media_type(conn) != FORM_TYPE
     return Conns.bad_request("content type must be #{FORM_TYPE}")
   end

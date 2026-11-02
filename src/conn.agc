@@ -3,6 +3,7 @@
 
 import HTML from "std/html"
 import HTTP from "std/http"
+import URI from "std/uri"
 
 # An `error` whose message starts with this text is a 400, and the rest is the body. `bad_request` is the way to
 # make one; the text is not part of the API. No error message may start with it unless it is meant for the client:
@@ -41,7 +42,8 @@ export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 ## request that `Bond.sessions` loaded, and `session_changed` says that a handler changed it, so the answer has to
 ## carry it (`session.agc`). `upgrade` is the WebSocket handshake that a route of `Bond.websocket` accepted
 ## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
-## and is not halted (`accepted_upgrade`). A new `Conn` answers 200 with no body, has an empty session and no upgrade.
+## and is not halted (`accepted_upgrade`). `form` is the `multipart/form-data` body that `Bond.uploads` read (then
+## `body` is empty). A new `Conn` answers 200 with no body, has an empty session, no upgrade and no form.
 export struct Conn
   method: String
   path: String
@@ -58,6 +60,26 @@ export struct Conn
   session: Map[String, String]
   session_changed: Bool
   upgrade: Optional[HTTP.Upgrade] = none
+  form: Optional[Form] = none
+end
+
+## A file of a `multipart/form-data` request, saved by `Bond.uploads`. `name` is the name of the form field. `filename`
+## is the name the client gave, made safe to show (`Multipart.safe_filename`): never use it as a path. `content_type`
+## is the type the client said (`application/octet-stream` when it said none), so check the content before you trust
+## it. `path` is where Bond saved the file, under a name of its own in a private folder, and `size` its size in bytes.
+## The file is removed after the answer: move it (`Path.rename`) or copy it to keep it.
+export struct UploadedFile
+  name: String
+  filename: String
+  content_type: String
+  path: String
+  size: Int
+end
+
+## The parts of a `multipart/form-data` body, in order: the text fields and the files.
+export struct Form
+  fields: List[URI.Pair]
+  files: List[UploadedFile]
 end
 
 ## The `Conn` of a request, before any route or filter.

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `Bond.uploads(app, options)` reads a `multipart/form-data` body as it arrives: its text fields go to `Bond.form` and its files to a private temporary folder, given by `Bond.file` and `Bond.file_all` as `Bond.UploadedFile` (field, safe filename, content type, path, size) and removed after the answer. A file over `max_file_bytes` or a body over `max_total_bytes` (`Bond.UploadOptions`) is a 413. The guide has a page on it.
+
 - `Bond.websocket(app, pattern, handler)` adds a WebSocket route on the server of the app, so a page, a stream and a WebSocket share one port. The handler gets the `Conn` of the handshake (params, session) and the `HTTP.WebSocket`. A handshake from another site's page is a 403 (its `Origin` must name the host, or be one of `allowed_origins`), and a request that does not ask for the upgrade is a 426. A quiet WebSocket is pinged after 30 s and dropped after 120 s (`Bond.WEBSOCKET_OPTIONS`), since each open one holds a connection of the server. The guide has a page on it.
 
 - A guide page, Views, on pages, partials and a layout built from EAG templates with `Bond.escape` and `Bond.html`. There is no new function: a view is a function that returns a `String`, and a layout takes the inner HTML.

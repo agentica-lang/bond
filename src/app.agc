@@ -5,7 +5,7 @@ import Conns from "conn"
 import Pattern from "pattern"
 import Router from "router"
 import Statics from "static"
-import {Conn, ErrorHandler, Handler} from "conn"
+import {Conn, ErrorHandler, Form, Handler} from "conn"
 
 NOT_FOUND = "not found"
 
@@ -19,6 +19,16 @@ export struct App
   statics: List[Statics.Mount]
   not_found: Handler
   on_error: ErrorHandler
+  uploads: Optional[UploadOptions] = none
+end
+
+## The limits of `Bond.uploads`: the largest file, and the largest `multipart/form-data` body (its fields, files and
+## framing, at most 256 MiB). `dir` is the folder where each request gets a private folder for its files; "" is the
+## temporary folder of the system (`TMPDIR`, `TEMP` or `TMP`, else `/tmp`).
+export struct UploadOptions
+  max_file_bytes: Int = 10_485_760
+  max_total_bytes: Int = 52_428_800
+  dir: String = ""
 end
 
 export def app() -> App
@@ -137,14 +147,15 @@ end
 ## response the server would refuse is a plain 500 (`Conns.to_response`). The chain runs in a task of its own so
 ## that a runtime error ends the request and not the program; the after filters do not run for a crash. A streamed
 ## body is read into the response, as `Conns.to_response` says (`max_pieces` and `timeout_ms` bound it); the server
-## uses `handle_stream` instead.
+## uses `handle_stream` instead. `form` is the `multipart/form-data` body that `Bond.uploads` read, for the `Conn`.
 export def handle(
   app: App,
   request: HttpRequest,
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Testing.request and specs/steps.agc
+  form: Optional[Form] = none,
 ) -> HttpResponse
-  return Conns.to_response(answer(app, request), max_pieces, timeout_ms)
+  return Conns.to_response(answer(app, request, form), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
@@ -154,9 +165,10 @@ export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
 end
 
 ## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
-## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
-export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
-  conn = answer(app, request)
+## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`. `form` is as
+## for `handle`.
+export def handle_answer(app: App, request: HttpRequest, form: Optional[Form] = none) -> HTTP.Answer
+  conn = answer(app, request, form)
   case Conns.accepted_upgrade(conn)
     some(upgrade) -> return HTTP.Answer.Upgrade(upgrade)
     none -> return HTTP.Answer.Stream(Conns.to_stream_response(conn))
@@ -164,8 +176,8 @@ export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
 end
 
 # The `Conn` that answers the request, before it is turned into a response.
-def answer(app: App, request: HttpRequest) -> Conn
-  conn = Conns.from_request(request)
+def answer(app: App, request: HttpRequest, form: Optional[Form] = none) -> Conn
+  conn = Conns.from_request(request).with(form: form)
   task = Task.spawn() do serve(app, conn) end
   case Task.await(task)
     ok(done) -> return done

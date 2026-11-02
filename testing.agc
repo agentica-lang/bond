@@ -9,6 +9,7 @@
 ## ```
 
 import Apps from "src/app"
+import Uploads from "src/uploads"
 import Sessions from "src/session"
 import HTTP from "std/http"
 import {App} from "src/app"
@@ -22,6 +23,9 @@ import {SessionOptions} from "src/session"
 ## (0, the default, is no limit) or `timeout_ms` for the whole body (10 s by default; one gap between pieces may take
 ## all of it); then the channel is closed, so a producer that never ends stops. A body cut by the time says so on
 ## stderr. A `HEAD` gets no body. The body of the response is `Bytes`, whatever it holds (`HTTP.text` reads text).
+##
+## With `Bond.uploads`, a `multipart/form-data` body is read as the server reads it (in pieces of 64 KiB): its files are
+## saved, given to the handler and removed after the answer, and a body over a limit is the same 413.
 export def request(
   app: App,
   method: String,
@@ -58,7 +62,10 @@ export def request_bytes(
 
   lowered = headers.map do |header| Header(name: header.name.downcase, value: header.value) end
   request = HttpRequest(method: method, target: target, path: path, headers: lowered, body: body)
-  return Apps.handle(app, request, max_pieces, timeout_ms)
+  case Uploads.applies(app, request)
+    some(options) -> return Uploads.handle(app, options, request, max_pieces, timeout_ms)
+    none -> return Apps.handle(app, request, max_pieces, timeout_ms)
+  end
 end
 
 ## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would

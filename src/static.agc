@@ -14,17 +14,27 @@ export MISS = "not a static file"
 
 # Names that Windows opens as a device, whatever the extension and the case.
 DEVICES = Set.new([
-  "CON", "PRN", "AUX", "NUL",
-  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+  "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+  "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ])
 
+## The longest `max_age`, one year in seconds: the longest that a cache is told to keep a file (RFC 9111 section 1.2.2),
+## and what a fingerprinted file gets.
+export MAX_AGE_SECONDS = 31_536_000
+
+HEX_DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"])
+
+# The length of the digest in a fingerprinted name: 8 hex digits (a short hash) to 64 (a SHA-256).
+FINGERPRINT_MIN = 8
+FINGERPRINT_MAX = 64
+
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
-## served.
+## served. `max_age` is the seconds that a cache may keep a file whose name has no fingerprint (0 is "ask each time").
 export struct Mount
   prefix: String
   root: String
   max_bytes: Int
+  max_age: Int = 0
 end
 
 ## The real path of the folder of a mount, when it is a folder. It is read once, when the app is built.
@@ -166,10 +176,73 @@ def send(mount: Mount, file: String, name: String, conn: Conn) -> Result[Conn]
     return error("the static file #{name} is over #{mount.max_bytes} bytes")
   end
 
+  etag = etag_of(info.unwrap!)
+  cache = cache_control(mount, name)
+  if matches?(conn, etag)
+    return ok(
+      Conns.header(
+        Conns.header(conn.with(status: 304, response_body: "".bytes), "etag", etag),
+        "cache-control",
+        cache,
+      ),
+    )
+  end
+
   sent = Files.send(conn, file, name)
   if not sent.ok?
     return error("the static file #{name} cannot be read")
   end
 
-  return sent
+  return ok(Conns.header(Conns.header(sent.unwrap!, "etag", etag), "cache-control", cache))
+end
+
+# A strong validator from what `stat` gives, with no read of the file: the size and the time of the last change in
+# seconds. An edit that keeps the size and happens in the same second as the last one is not seen.
+def etag_of(info: FileInfo) -> String
+  return "\"#{info.size_bytes.to_s}-#{info.modified_seconds.to_s}\""
+end
+
+# Whether `If-None-Match` lists the tag (or is `*`). The comparison is the weak one that this header uses (RFC 9110
+# section 13.1.2): a `W/` prefix is dropped on both sides. A tag with a comma inside is not told apart, which the
+# tags of
+# Bond never have.
+def matches?(conn: Conn, etag: String) -> Bool
+  header = Conns.request_header(conn, "if-none-match").unwrap_or("")
+  return header.split(",").any? do |item|
+    tag = item.strip
+    tag == "*" or tag.replace("W/", "") == etag
+  end
+end
+
+# A name with a fingerprint can never change its content, so it is cached for as long as allowed and never asked for
+# again. The others are cached for the `max_age` of the mount: 0 asks the server each time, which is a cheap 304 now.
+def cache_control(mount: Mount, name: String) -> String
+  if fingerprinted?(name)
+    return "public, max-age=#{MAX_AGE_SECONDS}, immutable"
+  end
+
+  if mount.max_age == 0
+    return "no-cache"
+  end
+
+  return "public, max-age=#{mount.max_age}"
+end
+
+# `app.3f9a1c2b.css`, `app-3f9a1c2b.css` and `main.3f9a1c2b.chunk.js`: a part of 8 to 64 lowercase hex digits between
+# the first part of the name and the extension. A name with no extension has no fingerprint.
+def fingerprinted?(name: String) -> Bool
+  parts = name.replace("-", ".").split(".")
+  if parts.size < 3
+    return false
+  end
+
+  return parts.drop(1).take(parts.size - 2).any? do |part| hex_digest?(part) end
+end
+
+def hex_digest?(part: String) -> Bool
+  if part.length < FINGERPRINT_MIN or part.length > FINGERPRINT_MAX
+    return false
+  end
+
+  return part.split("").all? do |ch| HEX_DIGITS.include?(ch) end
 end

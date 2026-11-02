@@ -46,6 +46,18 @@ Feature: Server
     And the header "x-content-type-options" is "nosniff"
     And the header "accept-ranges" is "bytes"
 
+  Scenario: A static file over a socket has a validator, and a matching If-None-Match is a 304 with no body
+    Given the server listens on a free port
+    When I get "/assets/hello.txt" over the socket
+    Then the header "etag" starts with "\""
+    And the header "cache-control" is "no-cache"
+    When I get "/assets/hello.txt" over the socket with the header "if-none-match" set to "*"
+    Then the status is 304
+    And the body is ""
+    And the header "content-length" is not set
+    When I get "/hello" over the socket
+    Then the body is "hello"
+
   Scenario: A range of a file over a socket is a 206 that has the length of the part
     Given the server listens on a free port
     When I get "/assets/hello.txt" over the socket with the header "range" set to "bytes=6-9"

@@ -31,7 +31,7 @@ A client that resumes a download, or a player that jumps in a video, sends `Rang
 | `bytes=SIZE-` or more, `bytes=-0` | `416` with `Content-Range: bytes */SIZE` and no body |
 | two ranges (`bytes=0-1,5-6`), a range that is not made of digits, one that ends before it starts, another unit | ignored: `200` with the whole file |
 
-A request with `If-Range` is also answered with the whole file: Bond sets no `ETag` or `Last-Modified` to compare it with, so a client that asks "this part, if the file has not changed" gets the file. `File` cannot seek, so the bytes before the start of a range are read and dropped: a range near the end of a big file reads the file up to it.
+A request with `If-Range` is also answered with the whole file: `Bond.send_file` sets no `ETag` or `Last-Modified` to compare it with (`Bond.static` sets an `ETag`, but does not read `If-Range` either), so a client that asks "this part, if the file has not changed" gets the file. `File` cannot seek, so the bytes before the start of a range are read and dropped: a range near the end of a big file reads the file up to it.
 
 `HEAD` gets the same headers as `GET` (a 206 for a range) with the length and no body, and the file is not opened.
 

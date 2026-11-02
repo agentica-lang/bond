@@ -17,7 +17,65 @@ Only `GET` and `HEAD` read a file. Any other method on a path under the prefix i
 - `Content-Length` is added by the HTTP server. A `HEAD` answer has the same headers, with the length of the file, and no body.
 - `Accept-Ranges: bytes`, and a `Range` header is answered with a 206 or a 416, as for [`Bond.send_file`](/guide/files/), which sends every file of a folder.
 
-Bond sets no cache headers: no `ETag`, no `Last-Modified`, no `Cache-Control` and no `304`. Add a `Cache-Control` with an `after` filter if you want one.
+- `ETag` and `Cache-Control`, as the next section says.
+
+Bond sends no `Last-Modified`, and no `If-Modified-Since` or `If-Range` is read.
+
+## Caching
+
+Every file has an `ETag` made from its size and the time of its last change in seconds, so Bond does not read the file to make it. A `GET` or `HEAD` whose `If-None-Match` lists the tag (or is `*`) is a `304 Not Modified` with the `ETag` and the `Cache-Control`, no body, and the file is not opened. A `W/` prefix on the tag of the request is ignored, as the header's weak comparison says. An edit that keeps the size of the file and happens in the same second as the last one is not seen, so give a file that changes often and fast another name, as below.
+
+`Cache-Control` depends on the name of the file:
+
+- A name with a fingerprint is `public, max-age=31536000, immutable`: a browser keeps it for a year and never asks again. A fingerprint is a part of 8 to 64 lowercase hex digits between the first part of the name and the extension, split by `.` or `-`: `app.3f9a1c2b.css`, `app-3f9a1c2b.css`, `main.3f9a1c2b.chunk.js`. A build tool that puts the hash of the content in the name (and changes the name when the content changes) is what makes this safe; if yours does not, a file with such a name is cached for a year when it changes.
+- Any other file is `no-cache` by default: a browser or a proxy may keep it but asks each time, which is a cheap `304` when nothing changed. `Bond.static(app, "/assets", "public", 1_073_741_824, 300)` sets `max_age` (in seconds, 0 to a year) for them: `public, max-age=300`.
+
+```agentica
+import HTTP from "std/http"
+import Bond from "pkg/bond/bond"
+import Testing from "pkg/bond/testing"
+
+def get(app: Bond.App, path: String, tag: String) -> HttpResponse
+  headers = [Header(name: "If-None-Match", value: tag)]
+  return Testing.request(app, "GET", path, headers)
+end
+
+def etag(response: HttpResponse) -> String
+  return HTTP.header_values(response.headers, "etag").first
+end
+
+def main() -> Void
+  Dir.mkdir("static_cache_sample").unwrap!
+  File.write_text("static_cache_sample/app.css", "body {}").unwrap!
+  File.write_text("static_cache_sample/app.3f9a1c2b.css", "body {}").unwrap!
+  app = Bond.app() |> Bond.static("/assets", "static_cache_sample")
+
+  first = Testing.request(app, "GET", "/assets/app.css")
+  puts("#{first.status} #{HTTP.header_values(first.headers, "cache-control").first}")
+  puts(get(app, "/assets/app.css", etag(first)).status)
+  puts(get(app, "/assets/app.css", "\"0-0\"").status)
+
+  File.write_text("static_cache_sample/app.css", "body { margin: 0 }").unwrap!
+  changed = get(app, "/assets/app.css", etag(first))
+  puts("#{changed.status} #{etag(changed) != etag(first)}")
+
+  fingerprinted = Testing.request(app, "GET", "/assets/app.3f9a1c2b.css")
+  puts(HTTP.header_values(fingerprinted.headers, "cache-control").first)
+  Path.remove("static_cache_sample/app.css").unwrap!
+  Path.remove("static_cache_sample/app.3f9a1c2b.css").unwrap!
+  Path.remove("static_cache_sample").unwrap!
+end
+```
+
+```output
+200 no-cache
+304
+200
+200 true
+public, max-age=31536000, immutable
+```
+
+An `after` filter can still set another `Cache-Control` (`Bond.header` replaces the one of the same name), for example `no-store` for a folder of private files.
 
 ## Which paths are a file
 
@@ -35,7 +93,7 @@ There is a short time between this check and the read of the file. Do not let un
 
 Bond sends the file with [`Bond.send_file`](/guide/files/), which reads it in pieces while the server sends them, so the memory does not grow with the size. The bytes are sent as they are: HTML, CSS, JavaScript, JSON and SVG, and also images, fonts, archives and PDFs. A text file is not checked to be UTF-8, and its `charset=utf-8` is a claim of the type, not a test of the file.
 
-A file over `max_bytes` is a 500. A file of exactly `max_bytes` is served. The default is 1 GiB (it was 1 MiB, the most of one read: a larger file was a 500, and is now served): `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` that is 0 or over 1 TiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built, like a bad route pattern. Bond has no cache headers, no compression and no `If-Modified-Since`, so a large file that many clients ask for belongs on a web server or a CDN in front of Bond.
+A file over `max_bytes` is a 500. A file of exactly `max_bytes` is served. The default is 1 GiB (it was 1 MiB, the most of one read: a larger file was a 500, and is now served): `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` that is 0 or over 1 TiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built, like a bad route pattern. Bond has no compression and no `Last-Modified`, so a large file that many clients ask for belongs on a web server or a CDN in front of Bond (a `304` already saves the bytes).
 
 A 500 for a file is a failure like the `error` of a handler: it goes to the [`on_error` handler](/guide/errors/), which gets the reason in words (`the static file app.css is over 10 bytes`), and the reason is written to stderr. The default handler answers the fixed text of every 500.
 

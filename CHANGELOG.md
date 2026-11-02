@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `Bond.static` answers every file with an `ETag` (size and time of change) and a `Cache-Control`, and a `GET` or `HEAD` with a matching `If-None-Match` is a 304 with no body. A name with a fingerprint (`app.3f9a1c2b.css`) is `public, max-age=31536000, immutable`; the others are `no-cache`, or `public, max-age=<max_age>` with the new `max_age` argument (0 to a year, 0 by default).
 - `Bond.body_text` reads the body in its `charset` as `HTTP.text` of Agentica
   0.19.0 does (Latin-1, Windows-1252, UTF-16 and UTF-32 now decode); a charset
   it cannot decode is still a 400.

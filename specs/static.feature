@@ -138,3 +138,65 @@ Feature: Static files
   Scenario: A folder that does not exist stops the program when the app is built
     Given the Agentica program "fixtures/missing_root.agc"
     Then the program exits with code 1 within 5000 milliseconds
+
+  Scenario: A folder with a negative max_age stops the program when the app is built
+    Given the Agentica program "fixtures/bad_max_age.agc"
+    Then the program exits with code 1 within 5000 milliseconds
+
+  Scenario: A file has a validator and is asked about each time
+    When I send "GET" to "/assets/hello.txt"
+    Then the status is 200
+    And the header "etag" starts with "\""
+    And the header "etag" ends with "\""
+    And the header "cache-control" is "no-cache"
+
+  Scenario Outline: A request that lists the validator is a 304 with no body (<value>)
+    When I send "GET" to "/assets/hello.txt"
+    And I send "GET" to "/assets/hello.txt" with If-None-Match "<value>"
+    Then the status is 304
+    And the body is ""
+    And the header "cache-control" is "no-cache"
+    And the header "etag" starts with "\""
+
+    Examples:
+      | value                |
+      | {etag}               |
+      | W/{etag}             |
+      | *                    |
+      | {other}, {etag}      |
+      | {etag},{other}       |
+
+  Scenario: A HEAD request is a 304 too
+    When I send "GET" to "/assets/hello.txt"
+    And I send "HEAD" to "/assets/hello.txt" with If-None-Match "{etag}"
+    Then the status is 304
+
+  Scenario: Another validator gets the file
+    When I send "GET" to "/assets/hello.txt"
+    And I send "GET" to "/assets/hello.txt" with If-None-Match "{other}"
+    Then the status is 200
+    And the body is "hello from a file"
+
+  Scenario: The validator of one file does not answer for another
+    When I send "GET" to "/assets/hello.txt"
+    And I send "GET" to "/assets/style.css" with If-None-Match "{etag}"
+    Then the status is 200
+
+  Scenario Outline: A name with a fingerprint is cached for a year (<path>)
+    When I send "GET" to "<path>"
+    Then the status is 200
+    And the header "cache-control" is "<cache>"
+
+    Examples:
+      | path                            | cache                                  |
+      | /assets/app.3f9a1c2b.js         | public, max-age=31536000, immutable    |
+      | /assets/main-0123abcd.chunk.css | public, max-age=31536000, immutable    |
+      | /assets/short.abc123.txt        | no-cache                               |
+      | /cached/hello.txt               | public, max-age=3600                   |
+      | /cached/app.3f9a1c2b.js         | public, max-age=31536000, immutable    |
+
+  Scenario: The answer to a Range request has the validator
+    When I send "GET" to "/assets/hello.txt" with the header "range" set to "bytes=0-4"
+    Then the status is 206
+    And the header "etag" starts with "\""
+

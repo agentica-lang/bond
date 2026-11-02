@@ -91,6 +91,7 @@ def main() -> Void
       "I send {string} to {string} with the origin {string}, the fetch site {string} and the host {string}",
       &send_as_browser,
     ),
+    BDD.step("I send {string} to {string} with If-None-Match {string}", &send_if_none_match),
     BDD.step(
       "I send {string} to {string} with the origins {string} and {string} and the host {string}",
       &send_two_origins,
@@ -203,6 +204,16 @@ def send_as_browser(ctx: BDD.Context, args: List[String]) -> BDD.Context
   end
 
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+end
+
+# `{etag}` in the value is the `ETag` of the last answer, and `{other}` is a tag that no file has.
+def send_if_none_match(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  etag = last_reply(ctx).headers.get("etag", "")
+  value = args[2].replace("{etag}", etag).replace("{other}", "\"0-0\"")
+  return send(
+    ctx,
+    Ask(method: args[0], path: args[1], headers: [Header(name: "if-none-match", value: value)], body: ""),
+  )
 end
 
 def send_two_origins(ctx: BDD.Context, args: List[String]) -> BDD.Context

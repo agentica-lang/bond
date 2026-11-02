@@ -73,7 +73,23 @@ end
 ## extension; a file over `max_bytes` (1 GiB, the default) is a failure (a 500 through the error handler).
 ## The program stops when `prefix` is not a path or has a `:param`, when `max_bytes` is out of range, or when `root`
 ## is not a folder now: it is checked when the app is built, and its real path is kept.
-export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_073_741_824) -> App
+##
+## Every file has an `ETag` (its size and its time of change, no read of the file) and a `Cache-Control`, and a `GET`
+## or `HEAD` whose `If-None-Match` lists the tag is a 304 with no body. The `Cache-Control` is `no-cache` (a cache asks
+## each time, a cheap 304) or, with `max_age` seconds (0 to a year), `public, max-age=<max_age>`; `public` lets a shared
+## cache keep the file, so a folder behind a login keeps `max_age` at 0 or sets `no-store` in an `after` filter. With
+## `fingerprint: true`, a name with a fingerprint (`app.3f9a1c2b.css`: 8 to 64 hex digits, with a letter and a digit,
+## between the name and the extension) is `public, max-age=31536000, immutable`: only for a folder where a build puts a
+## hash of the content in the name, since a browser never asks again for such a file. The program stops when `max_age`
+## is out of range.
+export def static(
+  app: App,
+  prefix: String,
+  root: String,
+  max_bytes: Int = 1_073_741_824,
+  max_age: Int = 0,
+  fingerprint: Bool = false,
+) -> App
   if not Pattern.valid?(prefix) or Pattern.segments(prefix).any? do |part| part.start_with?(":") end
     bad: Result[App] = error("bond: the static prefix #{prefix} must start with / and have no :param")
     return bad.unwrap!
@@ -84,13 +100,24 @@ export def static(app: App, prefix: String, root: String, max_bytes: Int = 1_073
     return bad.unwrap!
   end
 
+  if max_age < 0 or max_age > Statics.MAX_AGE_SECONDS
+    bad: Result[App] = error("bond: max_age of a static folder must be 0 to #{Statics.MAX_AGE_SECONDS}")
+    return bad.unwrap!
+  end
+
   real = Statics.real_root(root)
   if not real.ok?
     bad: Result[App] = error("bond: the static folder #{root} must be a folder that exists")
     return bad.unwrap!
   end
 
-  mount = Statics.Mount(prefix: prefix, root: real.unwrap!, max_bytes: max_bytes)
+  mount = Statics.Mount(
+    prefix: prefix,
+    root: real.unwrap!,
+    max_bytes: max_bytes,
+    max_age: max_age,
+    fingerprint: fingerprint,
+  )
   return app.with(statics: app.statics.push(mount))
 end
 

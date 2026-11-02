@@ -39,6 +39,8 @@ def main() -> Void
     BDD.step("the todo app with custom handlers", &keep_custom_app),
     BDD.step("the sessions app", &keep_sessions_app),
     BDD.step("the sessions app after the secret was rotated", &keep_rotated_sessions_app),
+    BDD.step("the app with CSRF protection", &keep_csrf_app),
+    BDD.step("the app with CSRF protection that allows https://admin.example.net", &keep_allowing_csrf_app),
     BDD.step("the app with a file of {int} bytes", &keep_big_app),
     BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
@@ -81,6 +83,10 @@ def main() -> Void
       &send_with_first_secret,
     ),
     BDD.step("I send {string} to {string} with an expired session for the user {string}", &send_with_expired_session),
+    BDD.step(
+      "I send {string} to {string} with the origin {string}, the fetch site {string} and the host {string}",
+      &send_as_browser,
+    ),
     BDD.step("I send {string} to {string} with the range {string} and the validator {string}", &send_range),
     BDD.step("the header {string} appears {int} times", &header_count_is),
     BDD.step("the header {string} has the value {string}", &header_has_value),
@@ -165,6 +171,18 @@ end
 def send_with_signed(ctx: BDD.Context, args: List[String], options: Bond.SessionOptions) -> BDD.Context
   cookie = Testing.session_cookie(options, {"user": args[2]}).unwrap!
   return send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: cookie)], body: ""))
+end
+
+# A request as a browser makes it: a header that is "" is not sent.
+def send_as_browser(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers: List[Header] = []
+  for pair in [["origin", args[2]], ["sec-fetch-site", args[3]], ["host", args[4]]]
+    if pair[1] != ""
+      headers = headers.push(Header(name: pair[0], value: pair[1]))
+    end
+  end
+
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
 def send_range(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -256,6 +274,16 @@ end
 def keep_custom_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   producers: Fixture.Producers = Channel.new(PRODUCERS)
   return keep(ctx, Fixture.build_custom(producers), producers)
+end
+
+def keep_csrf_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_csrf(false), producers)
+end
+
+def keep_allowing_csrf_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_csrf(true), producers)
 end
 
 def keep_sessions_app(ctx: BDD.Context, args: List[String]) -> BDD.Context

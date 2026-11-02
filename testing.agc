@@ -24,8 +24,9 @@ import {SessionOptions} from "src/session"
 ## all of it); then the channel is closed, so a producer that never ends stops. A body cut by the time says so on
 ## stderr. A `HEAD` gets no body. The body of the response is `Bytes`, whatever it holds (`HTTP.text` reads text).
 ##
-## With `Bond.uploads`, a `multipart/form-data` body is read as the server reads it (in pieces of 64 KiB): its files are
-## saved, given to the handler and removed after the answer, and a body over a limit is the same 413.
+## With `Bond.uploads`, a `multipart/form-data` body is read as the server reads it (in pieces of 64 KiB, after the
+## before filters): its files are saved, given to the handler and removed after the answer, and a body over a limit is
+## the same 413.
 export def request(
   app: App,
   method: String,

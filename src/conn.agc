@@ -34,6 +34,10 @@ export type Handler = Fn[Conn, Result[Conn]]
 
 export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 
+## Reads the `multipart/form-data` body of a request that passed the `before` filters and found its route
+## (`Bond.uploads`). Its error is the status of the refusal, such as "413" or "400".
+export type Receiver = Fn[Conn, Result[Form]]
+
 ## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
 ## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
 ## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed

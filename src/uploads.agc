@@ -1,5 +1,6 @@
 ## File uploads: a `multipart/form-data` body read as it arrives, its files saved to a private temporary folder with
-## a size cap, and its text fields kept for `Bond.form`. The folder is removed after the answer.
+## size caps, and its text fields kept for `Bond.form`. The body is read only for a request that reached its route,
+## after the `before` filters, and the folder is removed after the answer.
 
 import HTTP from "std/http"
 import URI from "std/uri"
@@ -7,13 +8,10 @@ import Apps from "app"
 import Conns from "conn"
 import Multipart from "multipart"
 import {App, UploadOptions} from "app"
-import {Conn, Form, UploadedFile} from "conn"
+import {Conn, Form, Receiver, UploadedFile} from "conn"
 
 MULTIPART_TYPE = "multipart/form-data"
 DEFAULT_TYPE = "application/octet-stream"
-
-# The most parts of one body, so a body of many tiny parts cannot make the parser loop for long.
-MAX_PARTS = 1_000
 
 # The most bytes the server takes in one body (`HttpServerOptions.max_body_bytes`).
 SERVER_MAX_BODY = 268_435_456
@@ -24,18 +22,10 @@ PIECE_WAIT_MS = 3_600_000
 # The pieces of a body that a test gives as one `Bytes`.
 TEST_PIECE = 65_536
 
-# The errors of the reading, which `refusal` turns into an answer: a status, or the server's message of a body it
-# cut after `SERVER`.
+# The errors of the reading: the status of the refusal, as `Receiver` asks.
 TOO_LARGE = "413"
 BAD = "400"
 FAILED = "500"
-SERVER = "server: "
-
-# What `receive` read: the form, and the folder of its files.
-struct Received
-  form: Form
-  dir: String
-end
 
 # The part being read: its field, the file it goes to (none for a text field) and what it holds so far.
 struct Part
@@ -48,28 +38,35 @@ struct Part
   text: List[Bytes]
 end
 
-# The form so far, while the body arrives.
+# The form so far, while the body arrives. `dir` is made on the first file (`made`); `fields_size` is the size of
+# every text field so far.
 struct Reading
+  dir: String
+  made: Bool
   parser: Multipart.Parser
   part: Optional[Part]
   fields: List[URI.Pair]
   files: List[UploadedFile]
-  parts: Int
+  fields_size: Int
   total: Int
 end
 
-## Turns on uploads: a request whose `Content-Type` is `multipart/form-data` is read as it arrives, before the
-## filters run. Each file goes to a new private folder under `options.dir` (a name of Bond's own, never the client's),
-## and its text fields to `Bond.form`, `form_all` and `form_int`. `Bond.file(conn, name)` gives a file. A file over
-## `max_file_bytes`, or a body over `max_total_bytes`, is a 413 that closes the connection, and the handler does not
-## run; a body that is not `multipart/form-data` as RFC 7578 frames it is a 400. The folder and every file in it are
-## removed when the answer is ready (for a stream, before it is sent), so a handler that keeps a file moves it. Other
-## requests keep the body limit of the server (`max_body_bytes` of `Bond.start_with`); the server takes a body up to
+## Turns on uploads: a request whose `Content-Type` is `multipart/form-data` has its body read as it arrives, once the
+## `before` filters passed it and its route was found. A filter that halts (`Bond.csrf`, a login check), a path with no
+## route (404) or with no route for the method (405) is answered without reading the body. Each file goes to a private
+## folder made for the request under `options.dir`, under a name of Bond's own, never the client's; the text fields go
+## to `Bond.form`, `form_all`, `form_int` and `form_params`; `Bond.file(conn, name)` gives a file. A file over
+## `max_file_bytes`, a text field over `max_field_bytes`, all the text fields over `max_fields_bytes`, a body over
+## `max_total_bytes` or more than 1000 parts is a 413 that closes the connection, and the handler does not run; a body
+## that is not `multipart/form-data` as RFC 7578 frames it is a 400. The folder and every file in it are removed when
+## the answer is ready (for a stream, before it is sent), so a handler that keeps a file moves it. Other requests keep
+## the body limit of the server (`max_body_bytes` of `Bond.start_with`); the server takes a body up to
 ## `max_total_bytes` for these. The program stops when a limit is below 1, when `max_file_bytes` is above
 ## `max_total_bytes`, or when `max_total_bytes` is above 256 MiB.
 export def uploads(app: App, options: UploadOptions = UploadOptions()) -> App
-  if options.max_file_bytes < 1 or options.max_total_bytes < options.max_file_bytes
-    bad: Result[App] = error("bond: the upload limits must be 1 or more, max_file_bytes at most max_total_bytes")
+  fields_ok = options.max_field_bytes >= 1 and options.max_fields_bytes >= 1
+  if options.max_file_bytes < 1 or options.max_file_bytes > options.max_total_bytes or not fields_ok
+    bad: Result[App] = error("bond: the upload limits must be 1 or more, and max_file_bytes at most max_total_bytes")
     return bad.unwrap!
   end
 
@@ -124,17 +121,14 @@ export def server_limit(app: App, limit: Int) -> Int
   end
 end
 
-## The answer of `HTTP.serve` for a request that `applies`: the body read to the files, the app with the form, and
-## the folder removed; or the refusal of the body.
+## The answer of `HTTP.serve` for a request that `applies`: the app runs with a `Receiver` that reads the body when
+## the request reaches its route, and the folder of the files is removed after.
 export def answer(app: App, options: UploadOptions, request: HttpRequest, body: HTTP.RequestBody) -> HTTP.Answer
-  case receive(options, request, body)
-    ok(received) ->
-      answered = Apps.handle_answer(app, request.with(body: "".bytes), some(received.form))
-      remove(received.dir)
-      return answered
-
-    error(problem) -> return refusal(problem)
-  end
+  dir = folder(options)
+  read = receiving() do |conn| receive(options, dir, request, body) end
+  answered = Apps.handle_answer(app, request.with(body: "".bytes), some(read))
+  remove(dir)
+  return answered
 end
 
 ## Like `answer`, for `Testing.request`: the body is given whole, in pieces of 64 KiB, and the answer is whole.
@@ -154,22 +148,20 @@ export def handle(
 
   pieces.close
   done = Task.spawn() do arrived() end
-  outcome = receive(options, request, HTTP.RequestBody(pieces: pieces, done: done))
-  # A refusal may come before `receive` awaits the task; a test must not end with it running.
+  body = HTTP.RequestBody(pieces: pieces, done: done)
+  dir = folder(options)
+  read = receiving() do |conn| receive(options, dir, request, body) end
+  response = Apps.handle(app, request.with(body: "".bytes), max_pieces, timeout_ms, some(read))
+  # The body may be left unread (a filter halted, no route); a test must not end with this task running.
   Task.await(done)
-  case outcome
-    ok(received) ->
-      empty = request.with(body: "".bytes)
-      response = Apps.handle(app, empty, max_pieces, timeout_ms, some(received.form))
-      remove(received.dir)
-      return response
+  remove(dir)
+  return response
+end
 
-    error(problem) ->
-      case refusal(problem)
-        HTTP.Answer.Whole(response) -> return response
-        _ -> return HttpResponse(status: 500, headers: [], body: "".bytes)
-      end
-  end
+# `Apps.handle_answer` takes the receiver before its last argument, so a block cannot be written there: this gives
+# the block a name first.
+def receiving(read: Receiver) -> Receiver
+  return read
 end
 
 def arrived() -> Result[Void]
@@ -177,20 +169,28 @@ def arrived() -> Result[Void]
 end
 
 # Reads the body piece by piece through the parser. A refusal removes what was saved; a body cut by the server
-# (`done` is an error) is the server's refusal (413 over its limit, 400 for a bad chunk or a client that left).
-def receive(options: UploadOptions, request: HttpRequest, body: HTTP.RequestBody) -> Result[Received]
+# (`done` is an error) is the server's refusal (413 over its limit, 431 or 400 for a bad chunk or a client that left).
+def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTTP.RequestBody) -> Result[Form]
   content_type = HTTP.header_values(request.headers, "content-type")[0]
   boundary = Multipart.boundary(content_type)
   if not boundary.ok?
     return error(BAD)
   end
 
-  dir = try make_dir(options)
-  reading = Reading(parser: Multipart.start(boundary.unwrap!), part: none, fields: [], files: [], parts: 0, total: 0)
+  reading = Reading(
+    dir: dir,
+    made: false,
+    parser: Multipart.start(boundary.unwrap!),
+    part: none,
+    fields: [],
+    files: [],
+    fields_size: 0,
+    total: 0,
+  )
   while true
     case body.pieces.recv(PIECE_WAIT_MS)
       ok(piece) ->
-        case take(options, dir, reading, piece)
+        case take(options, reading, piece)
           ok(next) -> reading = next
           error(status) ->
             close_part(reading.part)
@@ -206,27 +206,27 @@ def receive(options: UploadOptions, request: HttpRequest, body: HTTP.RequestBody
   if not done.ok?
     close_part(reading.part)
     remove(dir)
-    return error("#{SERVER}#{done.message}")
+    case HTTP.body_refusal(done.message)
+      HTTP.Answer.Whole(response) -> return error(response.status.to_s)
+      _ -> return error(BAD)
+    end
   end
 
-  if not Multipart.finish(reading.parser).ok?
+  finished = Multipart.finish(reading.parser)
+  ended = end_part(reading)
+  if not finished.ok? or not ended.ok?
     close_part(reading.part)
     remove(dir)
     return error(BAD)
   end
 
-  finished = end_part(reading)
-  if not finished.ok?
-    remove(dir)
-    return error(BAD)
-  end
-
-  form = finished.unwrap!
-  return ok(Received(form: Form(fields: form.fields, files: form.files), dir: dir))
+  form = ended.unwrap!
+  return ok(Form(fields: form.fields, files: form.files))
 end
 
-# One piece: its bytes count toward the total, then each event of the parser. The error is the status to answer.
-def take(options: UploadOptions, dir: String, reading: Reading, piece: Bytes) -> Result[Reading]
+# One piece: its bytes count toward the total, then each event of the parser. The error is the status to answer; a
+# part opened by this piece is closed before it is returned.
+def take(options: UploadOptions, reading: Reading, piece: Bytes) -> Result[Reading]
   total = reading.total + piece.size
   if total > options.max_total_bytes
     return error(TOO_LARGE)
@@ -234,18 +234,27 @@ def take(options: UploadOptions, dir: String, reading: Reading, piece: Bytes) ->
 
   step = Multipart.feed(reading.parser, piece)
   if not step.ok?
+    if step.message == Multipart.TOO_MANY_PARTS
+      return error(TOO_LARGE)
+    end
+
     return error(BAD)
   end
 
   current = reading.with(parser: step.unwrap!.parser, total: total)
   for event in step.unwrap!.events
-    current = try event_of(options, dir, current, event)
+    case event_of(options, current, event)
+      ok(next) -> current = next
+      error(status) ->
+        close_part(current.part)
+        return error(status)
+    end
   end
 
   return ok(current)
 end
 
-def event_of(options: UploadOptions, dir: String, reading: Reading, event: Multipart.Event) -> Result[Reading]
+def event_of(options: UploadOptions, reading: Reading, event: Multipart.Event) -> Result[Reading]
   case event
     Multipart.Event.Part(headers) ->
       ended = end_part(reading)
@@ -253,20 +262,11 @@ def event_of(options: UploadOptions, dir: String, reading: Reading, event: Multi
         return error(BAD)
       end
 
-      done = ended.unwrap!
-      if done.parts >= MAX_PARTS
-        return error(TOO_LARGE)
-      end
-
-      part = try begin_part(dir, done.parts, headers)
-      return ok(done.with(part: some(part), parts: done.parts + 1))
+      return begin_part(ended.unwrap!, headers)
 
     Multipart.Event.Data(bytes) ->
       case reading.part
-        some(part) ->
-          grown = try write_part(options, part, bytes)
-          return ok(reading.with(part: some(grown)))
-
+        some(part) -> return write_part(options, reading, part, bytes)
         none -> return ok(reading)
       end
 
@@ -274,8 +274,9 @@ def event_of(options: UploadOptions, dir: String, reading: Reading, event: Multi
   end
 end
 
-# A new part: a file gets a file of its own in the folder, named by its number.
-def begin_part(dir: String, number: Int, headers: List[Header]) -> Result[Part]
+# A new part. A file gets a file of its own, named by its number among the files (1, 2, 3), in the folder of the
+# request, which the first file makes.
+def begin_part(reading: Reading, headers: List[Header]) -> Result[Reading]
   disposition = Multipart.disposition(headers)
   if not disposition.ok?
     return error(BAD)
@@ -298,20 +299,28 @@ def begin_part(dir: String, number: Int, headers: List[Header]) -> Result[Part]
     text: [],
   )
   if found.filename.none?
-    return ok(part)
+    return ok(reading.with(part: some(part)))
   end
 
-  where = Path.join([dir, "#{number + 1}"]).unwrap_or("")
-  handle = File.open(where, "create_private")
-  if where == "" or not handle.ok?
-    IO.warn("bond: cannot save an upload in #{dir}")
+  if not reading.made and (reading.dir == "" or not Dir.mkdir_private(reading.dir).ok?)
+    IO.warn("bond: cannot make a folder for uploads at #{reading.dir}: the dir of UploadOptions must exist")
     return error(FAILED)
   end
 
-  return ok(part.with(handle: some(handle.unwrap!), path: where))
+  where = Path.join([reading.dir, "#{reading.files.size + 1}"]).unwrap_or("")
+  handle = File.open(where, "create_private")
+  if where == "" or not handle.ok?
+    IO.warn("bond: cannot save an upload in #{reading.dir}")
+    return error(FAILED)
+  end
+
+  opened = part.with(handle: some(handle.unwrap!), path: where)
+  return ok(reading.with(made: true, part: some(opened)))
 end
 
-def write_part(options: UploadOptions, part: Part, bytes: Bytes) -> Result[Part]
+# The caps are checked before the bytes are written or kept: a file against `max_file_bytes`, a text field against
+# `max_field_bytes`, and all the text fields against `max_fields_bytes`.
+def write_part(options: UploadOptions, reading: Reading, part: Part, bytes: Bytes) -> Result[Reading]
   size = part.size + bytes.size
   case part.handle
     some(handle) ->
@@ -324,9 +333,16 @@ def write_part(options: UploadOptions, part: Part, bytes: Bytes) -> Result[Part]
         return error(FAILED)
       end
 
-      return ok(part.with(size: size))
+      return ok(reading.with(part: some(part.with(size: size))))
 
-    none -> return ok(part.with(size: size, text: part.text.push(bytes)))
+    none ->
+      fields_size = reading.fields_size + bytes.size
+      if size > options.max_field_bytes or fields_size > options.max_fields_bytes
+        return error(TOO_LARGE)
+      end
+
+      grown = part.with(size: size, text: part.text.push(bytes))
+      return ok(reading.with(part: some(grown), fields_size: fields_size))
   end
 end
 
@@ -374,20 +390,15 @@ def close_part(part: Optional[Part]) -> Void
   end
 end
 
-# A new private folder for the files of one request, under the folder of the options or the system's.
-def make_dir(options: UploadOptions) -> Result[String]
+# The path of the private folder for the files of one request, under the folder of the options or the system's; it
+# is made on the first file. "" when the path cannot be built (then a file is a 500).
+def folder(options: UploadOptions) -> String
   root = options.dir
   if root == ""
     root = system_temp()
   end
 
-  where = Path.join([root, "bond-upload-#{SecureRandom.hex(16)}"])
-  if not where.ok? or not Dir.mkdir_private(where.unwrap!).ok?
-    IO.warn("bond: cannot make a folder for uploads under #{root}")
-    return error(FAILED)
-  end
-
-  return ok(where.unwrap!)
+  return Path.join([root, "bond-upload-#{SecureRandom.hex(16)}"]).unwrap_or("")
 end
 
 def system_temp() -> String
@@ -405,19 +416,9 @@ def system_temp() -> String
   return "/tmp"
 end
 
+# A folder that was never made is no error (`Path.remove` of a missing path is `ok`).
 def remove(dir: String) -> Void
-  if not Path.remove(dir).ok?
+  if dir != "" and not Path.remove(dir).ok?
     IO.warn("bond: cannot remove the upload folder #{dir}")
   end
-end
-
-# The answer to a body that `receive` refused: the server's own for a body it cut, else the status, with no body and
-# `Connection: close` (the rest of the body is not read).
-def refusal(problem: String) -> HTTP.Answer
-  if problem.start_with?(SERVER)
-    return HTTP.body_refusal(problem.slice(SERVER.length, problem.length - SERVER.length))
-  end
-
-  headers = [Header(name: "connection", value: "close")]
-  return HTTP.Answer.Whole(HttpResponse(status: problem.to_i!, headers: headers, body: "".bytes))
 end

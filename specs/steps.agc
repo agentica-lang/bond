@@ -158,6 +158,12 @@ def main() -> Void
     BDD.step("I post the fields {string} and a file of {int} bytes to {string} over the socket") do |ctx, args|
       send_upload(ctx, args[0], "big.bin", List.repeat("x", args[1].to_i!).join(""), args[2])
     end,
+    BDD.step("I post a text field of {int} bytes and a file to {string} over the socket") do |ctx, args|
+      send_upload(ctx, "title=#{List.repeat("y", args[0].to_i!).join("")}", "a.txt", "small", args[1])
+    end,
+    BDD.step("I post the file {string} holding {string} to {string} over the socket from another site") do |ctx, args|
+      send_upload(ctx, "title=x", args[0], args[1], args[2], [Header(name: "sec-fetch-site", value: "cross-site")])
+    end,
     BDD.step("the body has the line {string}", &body_has_line),
     BDD.step("the saved file of the answer is removed", &saved_file_removed),
     BDD.step("the saved path of the answer does not have {string}", &saved_path_lacks),
@@ -820,8 +826,15 @@ def post_upload(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 # A `multipart/form-data` POST written by hand: the fields of `fields` (`name=value&...`, not encoded) and one file
-# in the field `photo`, sent by the client of `std/http` with its `Content-Length`.
-def send_upload(ctx: BDD.Context, fields: String, filename: String, content: String, path: String) -> BDD.Context
+# in the field `photo`, sent by the client of `std/http` with its `Content-Length` and the `headers`.
+def send_upload(
+  ctx: BDD.Context,
+  fields: String,
+  filename: String,
+  content: String,
+  path: String,
+  headers: List[Header] = [],
+) -> BDD.Context
   parts = fields.split("&").map do |pair|
     at = pair.index_of("=").unwrap!
     name = pair.slice(0, at)
@@ -833,7 +846,7 @@ def send_upload(ctx: BDD.Context, fields: String, filename: String, content: Str
   file = "--#{UPLOAD_BOUNDARY}\r\n#{disposition}\r\nContent-Type: text/plain\r\n\r\n#{content}\r\n"
   body = "#{parts.join("")}#{file}--#{UPLOAD_BOUNDARY}--\r\n"
   content_type = Header(name: "content-type", value: "multipart/form-data; boundary=#{UPLOAD_BOUNDARY}")
-  return over_socket(ctx, "POST", path, body, [content_type])
+  return over_socket(ctx, "POST", path, body, headers.push(content_type))
 end
 
 def body_has_line(ctx: BDD.Context, args: List[String]) -> BDD.Context

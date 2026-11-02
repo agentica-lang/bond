@@ -1,6 +1,6 @@
 ---
 title: Running and options
-weight: 10
+weight: 12
 description: Bond.run, Bond.start and the options of the HTTP server.
 ---
 

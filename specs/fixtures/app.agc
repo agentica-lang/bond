@@ -49,6 +49,25 @@ export def build_custom(producers: Producers) -> Bond.App
   )
 end
 
+## A small app with `Bond.csrf`: `GET /balance` is safe, and `/transfer` answers every unsafe method. The app with
+## `allowed` also lets the origin `https://admin.example.net` through.
+export def build_csrf(allowed: Bool) -> Bond.App
+  origins: List[String] = []
+  if allowed
+    origins = ["https://admin.example.net"]
+  end
+
+  return (
+    Bond.app()
+    |> Bond.csrf(origins)
+    |> Bond.get("/balance", &balance)
+    |> Bond.post("/transfer", &transfer)
+    |> Bond.put("/transfer", &transfer)
+    |> Bond.patch("/transfer", &transfer)
+    |> Bond.delete("/transfer", &transfer)
+  )
+end
+
 ## The options of the session app. `rotated` is the app after the secret changed: it signs with the second secret and
 ## still reads what the first signed.
 export def session_options(rotated: Bool) -> Bond.SessionOptions
@@ -642,4 +661,12 @@ end
 # A session too big for a cookie.
 def blob(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.text(Bond.set_session(conn, "blob", List.repeat("x", 5000).join("")), 200, "stored"))
+end
+
+def balance(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "balance 10"))
+end
+
+def transfer(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "transferred"))
 end

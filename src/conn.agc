@@ -328,8 +328,9 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
   end
 end
 
-## The response of the `Conn` for `HTTP.listen_stream`: the rules of `to_response`, with the channel of a stream sent
-## as it is and any other body as one closed piece (`HTTP.whole`), which the server sends with `Content-Length`.
+## The response of the `Conn` for the `Answer.Stream` of `HTTP.serve`: the rules of `to_response`, with the channel
+## of a stream sent as it is and any other body as one closed piece (`HTTP.whole`), which the server sends with
+## `Content-Length`.
 export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
   problem = refusal(conn)
   if not problem.empty?

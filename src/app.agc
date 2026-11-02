@@ -147,8 +147,8 @@ export def handle(
   return Conns.to_response(answer(app, request), max_pieces, timeout_ms)
 end
 
-## Like `handle`, for `HTTP.listen_stream`: the channel of a streamed body is sent as it is, and any other body is one
-## closed piece.
+## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
+## other body is one closed piece.
 export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
   return Conns.to_stream_response(answer(app, request))
 end

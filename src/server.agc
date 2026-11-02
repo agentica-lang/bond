@@ -14,8 +14,9 @@ end
 ## Like `start`, with the options of the server of `std/http` (`HttpServerOptions`: the timeouts, the connections
 ## at once and the body limit), such as `HttpServerOptions(max_body_bytes: 4_194_304)`.
 export def start_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[HttpServer]
-  handler = answering() do |request| ok(Apps.handle_stream(app, request)) end
-  return HTTP.listen_stream(host, port, handler, options)
+  limit = options.max_body_bytes
+  served = serving() do |request, body| answer(app, limit, request, body) end
+  return HTTP.serve(host, port, served, options)
 end
 
 export def local_port(server: HttpServer) -> Int
@@ -42,10 +43,19 @@ export def run_with(app: App, host: String, port: Int, options: HttpServerOption
   return wait(server)
 end
 
-# `HTTP.listen_stream` takes the handler before its last argument, so a block cannot be written there: this gives
-# the block a name first.
-def answering(
-  handler: Fn[HttpRequest, Result[HTTP.StreamResponse]],
-) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
-  return handler
+# The body is read whole before the app runs, as the app of Bond takes the request whole (`Conn` has the body as
+# bytes). A body that is over `limit`, or that did not arrive whole, is answered by `HTTP.body_refusal` (413, 431 or
+# 400, and the connection closes) and the app is not called. The answer is a stream: a body sent in pieces is sent as
+# it is, and any other is one closed piece with `Content-Length`.
+def answer(app: App, limit: Int, request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  case HTTP.read_all(body, limit)
+    ok(data) -> return ok(HTTP.Answer.Stream(Apps.handle_stream(app, request.with(body: data))))
+    error(message) -> return ok(HTTP.body_refusal(message))
+  end
+end
+
+# `HTTP.serve` takes the app before its last argument, so a block cannot be written there: this gives the block a
+# name first.
+def serving(app: HTTP.App) -> HTTP.App
+  return app
 end

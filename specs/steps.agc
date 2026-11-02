@@ -120,6 +120,7 @@ def main() -> Void
     BDD.step("I get {string} over the socket", &get_over_socket),
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
+    BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
   ])
 end
 
@@ -559,4 +560,37 @@ def over_socket(
   response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, headers)
   HTTP.close_client(client)
   return BDD.set(ctx, REPLY, JSON.from(reply_of(response.unwrap!)))
+end
+
+# A chunked `POST` written by hand, since the client of `std/http` always sends a `Content-Length`. In the chunks a `~`
+# is a CRLF, so `5~hello~0~~` is one chunk of five bytes and the end of the body. The answer is read as far as its
+# `Content-Length`, and the connection is not asked to close, so the `Connection: close` of a refusal is the server's.
+def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  head = "POST #{args[1]} HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n"
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  TCP.send(socket, head + args[0].replace("~", "\r\n"), SOCKET_MS).unwrap!
+  response = read_raw_answer(socket)
+  TCP.close(socket)
+  return BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+end
+
+def read_raw_answer(socket: Socket) -> HttpResponse
+  status = TCP.read_line(socket, SOCKET_MS).unwrap!.strip.split(" ")[1].to_i!
+  headers: List[Header] = []
+  line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
+  while not line.empty?
+    at = line.index_of(":").unwrap!
+    headers = headers.push(Header(name: line.slice(0, at), value: line.slice(at + 1, line.length - at - 1).strip))
+    line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
+  end
+
+  # A refusal has `Content-Length: 0`, so no body is read; an answer without one (a streamed one) would read as empty.
+  wanted = HTTP.header_values(headers, "content-length").map do |value| value.to_i! end.reduce(0) do |_, size| size end
+  body = "".bytes
+  while body.size < wanted
+    body = Bytes.concat([body, TCP.recv_bytes(socket, wanted - body.size, SOCKET_MS).unwrap!])
+  end
+
+  return HttpResponse(status: status, headers: headers, body: body)
 end

@@ -92,6 +92,10 @@ def origin_problem(origin: String) -> String
     return "has a port that is not a number"
   end
 
+  if port != "" and (port.length > 5 or port.to_i! < 1 or port.to_i! > 65535)
+    return "has a port out of 1 to 65535"
+  end
+
   if (parts[0] == "https" and port == "443") or (parts[0] == "http" and port == "80")
     return "has the default port of its scheme, which a browser leaves out of the Origin: write it with no port"
   end

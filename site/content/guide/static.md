@@ -1,6 +1,6 @@
 ---
 title: Static files
-weight: 6
+weight: 8
 description: Serve the files of a folder under a path, with the type from std/mime and no way out of the folder.
 ---
 

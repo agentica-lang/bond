@@ -1,6 +1,6 @@
 ---
 title: Filters
-weight: 8
+weight: 10
 description: Code that runs before and after every route.
 ---
 

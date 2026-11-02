@@ -23,7 +23,7 @@ The scheme of the origin is not compared with the request, since the server may 
 
 ## Allowing another site
 
-`allowed_origins` lists the sites that may call your app on purpose, for example a front end on another domain. An origin is written as a browser writes it: `"https://admin.example.com"`, with a port when it is not the default, and no path. The comparison ignores case. The program stops at the call when an entry could never be the `Origin` of a browser: a path, a query, a fragment or a user (`/`, `?`, `#`, `@`), no host, a bad port, a scheme that is not `http` or `https`, or the default port of the scheme (`https://example.com:443`), which a browser leaves out of the header: write `https://example.com`.
+`allowed_origins` lists the sites that may call your app on purpose, for example a front end on another domain. An origin is written as a browser writes it: `"https://admin.example.com"`, with a port when it is not the default, and no path. The comparison ignores case. The program stops at the call when an entry could never be the `Origin` of a browser: a path, a query, a fragment or a user (`/`, `?`, `#`, `@`), no host, a port that is not 1 to 65535, a scheme that is not `http` or `https`, or the default port of the scheme (`https://example.com:443`), which a browser leaves out of the header: write `https://example.com`.
 
 ```agentica
 import Bond from "pkg/bond/bond"

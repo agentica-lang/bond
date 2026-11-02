@@ -63,8 +63,9 @@ end
 
 ## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would
 ## sign it (`_bond_session=...`, for `options.name`): `[Header(name: "cookie", value: cookie)]` is a request of a
-## visitor who is logged in, with no round trip to a login route. An `error` when the session is over the size of a
-## cookie.
+## visitor who is logged in, with no round trip to a login route. The options are not checked as `sessions` checks
+## them (a short secret and a negative `max_age` are accepted, so a test can make an expired cookie). An `error` when
+## the session is over the size of a cookie.
 export def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
   value = try Sessions.seal(options, data)
   return ok("#{options.name}=#{value}")

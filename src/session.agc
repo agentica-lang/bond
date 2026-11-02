@@ -21,12 +21,15 @@ SAME_SITE_VALUES = ["Strict", "Lax", "None"]
 
 ## How a session cookie is signed and sent. `secret` signs the cookie and must have at least 32 bytes (draw it from
 ## `SecureRandom.random_bytes` once and keep it out of the source). `old_secrets` are the secrets that signed cookies
-## before: a cookie with one of them is read, and written again with `secret`, so a secret is rotated by putting the
-## new one in `secret` and the old one in `old_secrets` until the last cookie that it signed has expired. `name` is the
+## before: a cookie with one of them is read, and written again with `secret` and a new `max_age` from that moment (so
+## a session that is in use outlives the rotation), so a secret is rotated by putting the new one in `secret` and the
+## old one in `old_secrets` until the last cookie that it signed has expired. `name` is the
 ## cookie, `max_age` its life in seconds (the signed cookie holds the date too, so a client that keeps an old cookie
 ## does not get a longer session), `secure` adds `Secure` (set it in production, over HTTPS), `same_site` is `Strict`,
 ## `Lax` (the default: not sent with a cross-site `POST`) or `None` (which needs `secure`). The cookie is always
-## `HttpOnly`. `path` and `domain` are those of the cookie.
+## `HttpOnly`. `path` and `domain` are those of the cookie. In production use `name: "__Host-session"` with
+## `secure: true` (and the default `path` and no `domain`): a browser then refuses a cookie of that name from a sibling
+## subdomain, which could otherwise plant a cookie that is signed, but is its own.
 export struct SessionOptions
   secret: String
   old_secrets: List[String] = []
@@ -110,7 +113,8 @@ end
 
 ## The value of the session cookie for `data`, signed with `options.secret` and valid for `options.max_age` seconds
 ## from now: what `sessions` would send. `Testing.session_cookie` uses it to make the `Cookie` header of a request
-## that has a session. An `error` when the value would be over the size of a cookie.
+## that has a session. It does not check the options (a short secret or a negative `max_age` are accepted, which is how
+## a test makes an expired cookie). An `error` when the value would be over the size of a cookie.
 export def seal(options: SessionOptions, data: Map[String, String]) -> Result[String]
   envelope = Envelope(exp: Time.now_ms() + options.max_age * 1000, data: data)
   payload = Base64.urlsafe_encode64(JSON.codec(Envelope).encode(envelope).bytes, false)
@@ -169,6 +173,11 @@ end
 
 # Checks the signature against every secret, so the time does not tell which one matched, and then the end date.
 def unseal(options: SessionOptions, text: String) -> Result[Opened]
+  # No cookie of Bond is this long, so a bigger one is not worth a MAC for each secret.
+  if text.length > MAX_COOKIE_BYTES
+    return error("the session cookie is too big")
+  end
+
   parts = text.split(".")
   if parts.size != 2
     return error("malformed session cookie")

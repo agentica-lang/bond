@@ -62,3 +62,35 @@ Feature: Cross-site request protection
       | https://ADMIN.example.net | 200    |
       | https://evil.test         | 403    |
       | http://admin.example.net  | 403    |
+
+  Scenario Outline: The value of Sec-Fetch-Site is read without regard to case (<site>)
+    Given the app with CSRF protection
+    When I send "POST" to "/transfer" with the origin "https://evil.test", the fetch site "<site>" and the host "example.com"
+    Then the status is <status>
+
+    Examples:
+      | site        | status |
+      | Same-Origin | 200    |
+      | NONE        | 200    |
+      | Cross-Site  | 403    |
+
+  Scenario Outline: Two Origin headers are refused, whichever is first (<first> <second>)
+    Given the app with CSRF protection
+    When I send "POST" to "/transfer" with the origins "<first>" and "<second>" and the host "example.com"
+    Then the status is 403
+
+    Examples:
+      | first               | second              |
+      | https://example.com | https://evil.test   |
+      | https://evil.test   | https://example.com |
+      | https://example.com | https://example.com |
+
+  Scenario Outline: An allowed origin that a browser never sends stops the program (<program>)
+    Given the Agentica program "fixtures/<program>.agc"
+    Then the program exits with code 1 within 5000 milliseconds
+
+    Examples:
+      | program          |
+      | bad_origin_port  |
+      | bad_origin_query |
+

@@ -15,13 +15,15 @@ A page on `evil.test` can make a visitor's browser send a `POST` to your site, a
 3. It has no `Sec-Fetch-Site` but has an `Origin`: it passes when the host of the origin, with its port, is the `Host` of the request. `Origin: null` is refused.
 4. It has neither: it passes. A browser sends one of them with a request that can carry a cookie, so this is a program such as `curl` or another server, and a forged form cannot be one.
 
+A request with two `Origin` headers, or two `Sec-Fetch-Site` headers, is refused too: a browser sends one of each.
+
 A refused request is a halted `403` with the text `cross-origin request refused`; the `after` filters still run for it, as for any halted answer. A `GET` is never refused, so a `GET` that changes something is not protected: keep the changes in `POST` and the other unsafe methods.
 
-The scheme of the origin is not compared with the request, since the server may sit behind a proxy that ends TLS. The proxy must pass the `Host` header on, or the third rule refuses a browser that sends no `Sec-Fetch-Site`.
+The scheme of the origin is not compared with the request, since the server may sit behind a proxy that ends TLS: an `http://` Origin for the same host and port as the request passes, even if the app is served over `https://`. The proxy must pass the `Host` header on, or the third rule refuses a browser that sends no `Sec-Fetch-Site`.
 
 ## Allowing another site
 
-`allowed_origins` lists the sites that may call your app on purpose, for example a front end on another domain. An origin is written as a browser writes it: `"https://admin.example.com"`, with a port when it is not the default, and no path. The comparison ignores case. The program stops at the call when an entry is not an origin (a path, no scheme, or a scheme that is not `http` or `https`).
+`allowed_origins` lists the sites that may call your app on purpose, for example a front end on another domain. An origin is written as a browser writes it: `"https://admin.example.com"`, with a port when it is not the default, and no path. The comparison ignores case. The program stops at the call when an entry could never be the `Origin` of a browser: a path, a query, a fragment or a user (`/`, `?`, `#`, `@`), no host, a bad port, a scheme that is not `http` or `https`, or the default port of the scheme (`https://example.com:443`), which a browser leaves out of the header: write `https://example.com`.
 
 ```agentica
 import Bond from "pkg/bond/bond"

@@ -67,6 +67,11 @@ Feature: Cookie sessions
     When I send "GET" to "/me" with an expired session for the user "ana"
     Then the body is "user=nobody values=0"
 
+  Scenario: A cookie signed under another cookie name is not accepted
+    Given the sessions app
+    When I send "GET" to "/me" with a session signed for another cookie name for the user "ana"
+    Then the body is "user=nobody values=0"
+
   Scenario: A session signed with the secret before a rotation is read and signed again
     Given the sessions app after the secret was rotated
     When I send "GET" to "/peek" with a session signed with the first secret for the user "ana"

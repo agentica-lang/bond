@@ -18,19 +18,19 @@ The answer carries the new session in a `Set-Cookie`, and only when a handler ch
 
 `Bond.app() |> Bond.sessions(Bond.SessionOptions(secret: secret))` is the whole setup.
 
-`secret` is the only one you must give. It needs at least 32 bytes: draw it once with `SecureRandom.random_bytes` and read it from the environment or a file, never from the source. The program stops at the call of `sessions` when an option is wrong (a short secret, an empty name, a `max_age` below 1, a `same_site` that is not `Strict`, `Lax` or `None`, or `None` without `secure`), as `Bond.static` does for a bad folder.
+`secret` is the only one you must give. It needs at least 32 bytes, and Bond checks only the length, not that it is random: make it once with `SecureRandom.hex(32)` (64 hex digits from 32 random bytes), keep it in the environment or a file, and never put it in the source. The program stops at the call of `sessions` when an option is wrong (a short secret, an empty name, a `max_age` below 1, a `same_site` that is not `Strict`, `Lax` or `None`, or `None` without `secure`), as `Bond.static` does for a bad folder.
 
 | Option | Default | |
 |---|---|---|
 | `secret` | | the key that signs the cookie |
 | `old_secrets` | `[]` | keys that signed cookies before (see the rotation below) |
-| `name` | `_bond_session` | the name of the cookie |
+| `name` | `_bond_session` | the name of the cookie (in production `__Host-session`, see below) |
 | `max_age` | `1_209_600` | seconds that a session lasts (two weeks) |
 | `secure` | `false` | adds `Secure`: set it in production, over HTTPS |
 | `same_site` | `"Lax"` | `"Strict"`, `"Lax"` or `"None"` |
 | `path`, `domain` | `"/"`, `""` | those of the cookie |
 
-The cookie is always `HttpOnly`. `Secure` is off by default for the reason that `Bond.set_cookie` has no `Secure`: a `Secure` cookie is dropped over plain HTTP, which would break a program in development.
+The cookie is always `HttpOnly`. In production use `name: "__Host-session"` with `secure: true`, the default `path` and no `domain`: a browser accepts a `__Host-` cookie only from a secure page for the exact host, so a sibling subdomain cannot plant a cookie of that name (it could plant one that is signed, with its own session, since the first cookie of a name wins). `Secure` is off by default for the reason that `Bond.set_cookie` has no `Secure`: a `Secure` cookie is dropped over plain HTTP, which would break a program in development.
 
 The end date is inside the signed data, so a client that keeps an old cookie does not get a longer session. Every change writes a cookie that lasts `max_age` from that moment; a session that is only read is not extended.
 
@@ -44,11 +44,11 @@ Log in with a new session: call `clear_session` before you set the user, so noth
 
 ## Rotating the secret
 
-To change the secret without ending every session, put the new one in `secret` and the old one in `old_secrets`. Bond reads a cookie signed with any of them, and writes it again with `secret` on the first request that has it. Remove the old secret after `max_age` seconds, when the last cookie that it signed has expired.
+To change the secret without ending every session, put the new one in `secret` and the old one in `old_secrets`. Bond reads a cookie signed with any of them, and writes it again with `secret` on the first request that has it. That cookie gets a new `max_age` from that moment, so a session that is in use outlives the rotation and an old one that nobody uses ends as before. Remove the old secret after `max_age` seconds, when the last cookie that it signed has expired.
 
 ## Testing
 
-`Testing.session_cookie(options, data)` gives the `name=value` of a cookie signed as `sessions` would sign it, so a test of a route for logged-in users needs no login first:
+`Testing.session_cookie(options, data)` gives the `name=value` of a cookie signed as `sessions` would sign it, so a test of a route for logged-in users needs no login first. It does not check the options as `sessions` does: a short secret, or a negative `max_age` (which gives an expired cookie), are accepted.
 
 ```agentica
 import HTTP from "std/http"

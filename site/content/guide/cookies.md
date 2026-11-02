@@ -10,7 +10,7 @@ description: Read the cookies of a request and set or delete them in the answer,
 
 A cookie that is not there is a plain `error`, like `Bond.param` and `Bond.request_header` (a first visit has no cookie, which is no mistake of the client), unlike `Bond.query`, where a missing name is a 400. So `try Bond.cookie(conn, "sid")` on a first visit is a 500: use `unwrap_or` or `case` and answer it yourself, for example with a redirect to the login page.
 
-Bond and `std/cookie` never encode or decode a value: encode it with `URI.encode_www_form_component` (`std/uri`) before you set it, and read it back with `URI.decode_www_form_component`.
+`Bond.cookie`, `Bond.cookies`, `Bond.set_cookie` and `std/cookie` never encode or decode a value: encode it with `URI.encode_www_form_component` (`std/uri`) before you set it, and read it back with `URI.decode_www_form_component`.
 
 ## Setting a cookie
 

@@ -18,7 +18,7 @@ def main() -> Void
 end
 ```
 
-The guide describes the main branch. The release 0.4.0 lacks the sessions, the cross-site check, escaping, views and WebSockets, which the next release adds.
+The guide describes the main branch. The release 0.4.0 lacks the sessions, the cross-site check, `Bond.escape` with the EAG directive, the views guide and WebSockets, which the next release adds.
 
 - [Getting started](/getting-started/) installs Bond and runs a first app.
 - The [guide](/guide/) has a page for each part.

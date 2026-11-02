@@ -1,6 +1,7 @@
 ## The program of `websocket.feature`: a page, a stream and a WebSocket route of one app on 127.0.0.1 and a free port.
 ## It says the port on its first line. The WebSocket of `/chat/:room` answers each text message with the room and the
-## text, and the text `crash` makes its handler crash. A page of https://app.example.com may open it too.
+## text, and the text `crash` makes its handler crash; when the WebSocket ends, the handler prints `closed`, the room
+## and the code. A page of https://app.example.com may open it too.
 
 import HTTP from "std/http"
 import Bond from "../../bond"
@@ -33,7 +34,10 @@ def chat(conn: Bond.Conn, socket: HTTP.WebSocket) -> Result[Void]
 
             try socket.outgoing.send(HTTP.Message.Text("#{room}: #{text}"), SEND_MS)
 
-          HTTP.Message.Close(_, _) -> return ok()
+          HTTP.Message.Close(code, _) ->
+            puts("closed #{room} #{code}")
+            IO.flush()
+            return ok()
           _ -> next
         end
 

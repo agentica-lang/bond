@@ -153,11 +153,11 @@ export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
   return Conns.to_stream_response(answer(app, request))
 end
 
-## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted, or else the
-## stream of `handle_stream`.
+## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
+## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
 export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
   conn = answer(app, request)
-  case conn.upgrade
+  case Conns.accepted_upgrade(conn)
     some(upgrade) -> return HTTP.Answer.Upgrade(upgrade)
     none -> return HTTP.Answer.Stream(Conns.to_stream_response(conn))
   end

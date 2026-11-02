@@ -150,9 +150,15 @@ def main() -> Void
     BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
     BDD.step("the WebSocket server listens on a free port", &start_websocket_server),
     BDD.step("I open a WebSocket to {string} from the origin {string} and send {string}", &open_websocket),
+    BDD.step(
+      "I open a WebSocket to {string} from the origins {string} and {string} and send {string}",
+      &open_websocket_twice,
+    ),
     BDD.step("I open a WebSocket to {string} with no origin and send {string}") do |ctx, args|
       talk_websocket(ctx, args[0], [], args[1])
     end,
+    BDD.step("I open a WebSocket to {string} with no origin, send {string} and leave", &leave_websocket),
+    BDD.step("the server prints {string}", &server_prints),
     BDD.step("the WebSocket answers {string}", &websocket_answers),
     BDD.step("the WebSocket closes with the code {int}", &websocket_closes_with),
   ])
@@ -640,21 +646,20 @@ def open_websocket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return talk_websocket(ctx, args[0], [origin], args[2])
 end
 
+# Two `Origin` headers, which no browser sends.
+def open_websocket_twice(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  origins = [args[1], args[2]].map do |origin| Header(name: "Origin", value: origin.replace("PORT", port.to_s)) end
+  return talk_websocket(ctx, args[0], origins, args[3])
+end
+
 # A WebSocket client written by hand, since `std/http` has none: the handshake of RFC 6455, then, when the answer is
 # a 101, one masked text frame, the server's answer to it, and the closing handshake. The head of the answer is the
 # reply of the step, and what the WebSocket heard is kept under `WEBSOCKET`.
 def talk_websocket(ctx: BDD.Context, path: String, headers: List[Header], text: String) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  fields = [
-    "Host: 127.0.0.1:#{port}",
-    "Upgrade: websocket",
-    "Connection: Upgrade",
-    "Sec-WebSocket-Key: #{WEBSOCKET_KEY}",
-    "Sec-WebSocket-Version: 13",
-  ]
-  lines = fields.concat(headers.map do |field| "#{field.name}: #{field.value}" end)
   socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
-  TCP.send(socket, "GET #{path} HTTP/1.1\r\n#{lines.join("\r\n")}\r\n\r\n", SOCKET_MS).unwrap!
+  TCP.send(socket, handshake(path, port, headers), SOCKET_MS).unwrap!
   response = read_raw_answer(socket)
   heard = Heard(answer: "", close_code: 0)
   if response.status == 101
@@ -664,6 +669,19 @@ def talk_websocket(ctx: BDD.Context, path: String, headers: List[Header], text: 
   TCP.close(socket)
   replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
   return BDD.set(replied, WEBSOCKET, JSON.from(heard))
+end
+
+# The handshake of RFC 6455 for `path`, with the extra `headers`.
+def handshake(path: String, port: Int, headers: List[Header]) -> String
+  fields = [
+    "Host: 127.0.0.1:#{port}",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    "Sec-WebSocket-Key: #{WEBSOCKET_KEY}",
+    "Sec-WebSocket-Version: 13",
+  ]
+  lines = fields.concat(headers.map do |field| "#{field.name}: #{field.value}" end)
+  return "GET #{path} HTTP/1.1\r\n#{lines.join("\r\n")}\r\n\r\n"
 end
 
 # One message and its answer, then the close: the client sends a close frame after the answer, and reads frames until
@@ -736,4 +754,22 @@ end
 def websocket_closes_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
   code = heard(ctx).close_code
   return BDD.assert(ctx, code == args[0].to_i!, "the WebSocket closed with #{code}")
+end
+
+# A client that goes away without the closing handshake: it reads the answer to its message and closes the socket.
+def leave_websocket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  TCP.send(socket, handshake(args[0], port, []), SOCKET_MS).unwrap!
+  response = read_raw_answer(socket)
+  send_frame(socket, TEXT_FRAME, args[1].bytes)
+  answer = String.from_bytes(read_frame(socket).payload).unwrap!
+  TCP.close(socket)
+  replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+  return BDD.set(replied, WEBSOCKET, JSON.from(Heard(answer: answer, close_code: 0)))
+end
+
+def server_prints(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  line = BDD.read_line(ctx, SOCKET_MS).unwrap_or("")
+  return BDD.assert(ctx, line == args[0], "the server printed #{line.inspect}")
 end

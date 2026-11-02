@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- `Bond.websocket(app, pattern, handler)` adds a WebSocket route on the server of the app, so a page, a stream and a WebSocket share one port. The handler gets the `Conn` of the handshake (params, session) and the `HTTP.WebSocket`. A handshake from another site's page is a 403 (its `Origin` must name the host, or be one of `allowed_origins`), and a request that does not ask for the upgrade is a 426. The guide has a page on it.
+- `Bond.websocket(app, pattern, handler)` adds a WebSocket route on the server of the app, so a page, a stream and a WebSocket share one port. The handler gets the `Conn` of the handshake (params, session) and the `HTTP.WebSocket`. A handshake from another site's page is a 403 (its `Origin` must name the host, or be one of `allowed_origins`), and a request that does not ask for the upgrade is a 426. A quiet WebSocket is pinged after 30 s and dropped after 120 s (`Bond.WEBSOCKET_OPTIONS`), since each open one holds a connection of the server. The guide has a page on it.
 
 - `Bond.escape(text)` escapes `&`, `<`, `>`, `"` and `'` for HTML (it is `HTML.escape` of `std/html`). An EAG template of Agentica 0.22.0 can start with `<%@ escape &Bond.escape %>` to escape every `<%= %>`; `<%== %>` stays raw. The guide has a section on it.
 

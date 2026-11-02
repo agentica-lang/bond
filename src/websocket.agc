@@ -10,6 +10,10 @@ import {Conn} from "conn"
 
 UPGRADE_REQUIRED = 426
 
+## The options of a route that sets none: `std/http`'s, with a ping after 30 s with nothing to send and a peer that is
+## silent for 120 s dropped (see `websocket`).
+export WEBSOCKET_OPTIONS = HTTP.WebSocketOptions(idle_ms: 120_000, ping_ms: 30_000)
+
 ## The function that runs one WebSocket of a `Bond.websocket` route: it gets the `Conn` of the handshake (after the
 ## `before` filters, with the params of the route and the session) and the `WebSocket` (`std/http`), and returns when
 ## the WebSocket is done.
@@ -17,39 +21,52 @@ export type WebSocketHandler = Fn[Conn, HTTP.WebSocket, Result[Void]]
 
 ## Adds a WebSocket route: a `GET` of `pattern` that is a WebSocket handshake is upgraded on the server of the app (a
 ## page, a stream and a WebSocket share one port), and `handler` runs the WebSocket in a task of its own.
-## The `before` filters run first, so a filter that halts (a login check) answers the handshake instead. Then:
+## The `before` filters run first, so a filter that halts answers the handshake instead: a route that needs a login
+## checks it there. Then:
 ##
 ## 1. A request that does not ask for the upgrade (no `Upgrade: websocket`) is a 426 with `Upgrade: websocket`.
 ## 2. A handshake from a page of another site is a 403. It passes when it has no `Origin` (not a browser), when its
 ##    `Origin` is one of `allowed_origins` (as in `Bond.csrf`: `"https://app.example.com"`), or when the host of the
-##    `Origin` is the `Host` of the request; two `Origin` headers are refused. Without this check a page on another
-##    site could open a WebSocket to the app with the visitor's cookies.
+##    `Origin` is the `Host` of the request; an empty `Origin` and two `Origin` headers are refused. Without this check
+##    a page on another site could open a WebSocket to the app with the visitor's cookies.
 ## 3. `HTTP.accept_websocket` checks the handshake with `options`: a bad one is a 400 (a 426 for another version).
 ##
-## The `after` filters run for the handshake too; an accepted one has status 101, and its headers and body are not
-## sent, since the server answers the upgrade. So a change to the session in `handler` is not saved: there is no
-## response to carry the cookie. A runtime error in `handler` ends that WebSocket (code 1011) and the server goes on;
-## the message goes to stderr. `Testing.request` answers an accepted handshake with a 101 and does not run `handler`.
+## The `after` filters run for the handshake too. An accepted one has status 101, and an `after` filter that answers
+## something else (`text`, `status`, `halt`, `redirect`) or fails is answered instead, with no upgrade. The headers and
+## the body of an accepted handshake are not sent, since the server answers the upgrade: `handler` cannot change the
+## session (no response carries the cookie), and the session is checked once, at the handshake. A runtime error in
+## `handler` ends that WebSocket (code 1011) and the server goes on; the message goes to stderr. `Testing.request`
+## answers an accepted handshake with a 101 and does not run `handler`.
+##
+## An open WebSocket holds one of the server's `max_connections`, so with no `options` (`none`) a quiet one is dropped
+## (`WEBSOCKET_OPTIONS`): the server pings after 30 s with nothing to send (a browser answers every ping by itself, and
+## the traffic keeps proxies and NATs, which often drop a connection idle for 60 s, from closing it), and a peer that
+## sent nothing for 120 s, not even a pong, is dropped (code 1006 for `handler`).
+## `HTTP.WebSocketOptions()` of `std/http` has no such limit. To change one option keep the others:
+## `some(Bond.WEBSOCKET_OPTIONS.with(max_message_bytes: 65_536))`.
 ## The program stops when `pattern` or an allowed origin is bad, or when `options` is out of range.
 export def websocket(
   app: App,
   pattern: String,
   handler: WebSocketHandler,
   allowed_origins: List[String] = [],
-  options: HTTP.WebSocketOptions = HTTP.WebSocketOptions(),
+  options: Optional[HTTP.WebSocketOptions] = none,
 ) -> App
+  chosen = options.unwrap_or(WEBSOCKET_OPTIONS)
   origins = Csrf.checked_origins(allowed_origins)
+  # `accept_websocket` checks the options before the request, so a request with no headers shows a bad option now,
+  # at the start; it is no handshake, so its `Reply` is never sent and `idle` never runs.
   probe = HTTP.accept_websocket(
     HttpRequest(method: "GET", target: "/", path: "/", headers: [], body: "".bytes),
     &idle,
-    options,
+    chosen,
   )
   if not probe.ok?
     bad: Result[App] = error("bond: the WebSocket options of #{pattern}: #{probe.message}")
     return bad.unwrap!
   end
 
-  return Apps.get(app, pattern) do |conn| handshake(conn, handler, origins, options) end
+  return Apps.get(app, pattern) do |conn| handshake(conn, handler, origins, chosen) end
 end
 
 def handshake(
@@ -87,7 +104,7 @@ def handshake(
         ),
       )
 
-    HTTP.Upgrade.Accept(_, _, _, _) -> return ok(conn.with(status: 101, upgrade: some(decided)))
+    HTTP.Upgrade.Accept(_, _, _, _) -> return ok(conn.with(status: Conns.SWITCHING, upgrade: some(decided)))
   end
 end
 
@@ -98,18 +115,19 @@ def asks_upgrade?(conn: Conn) -> Bool
 end
 
 # The rule of `websocket` for `Origin`: a request with none passes (a browser always sends it with a handshake), and
-# one with an `Origin` passes when it is allowed or names the host of the request.
+# one with an `Origin` passes when it is allowed or names the host of the request. An empty `Origin`, which no browser
+# sends, is refused.
 def origin_allowed?(origins: List[String], conn: Conn) -> Bool
   if Csrf.repeated?(conn, "origin")
     return false
   end
 
-  origin = Conns.request_header(conn, "origin").unwrap_or("").downcase
-  if origin == ""
-    return true
+  case Conns.request_header(conn, "origin")
+    error(_) -> return true
+    ok(value) ->
+      origin = value.downcase
+      return origin != "" and (origins.any? do |allowed| allowed == origin end or Csrf.host_origin?(origin, conn))
   end
-
-  return origins.any? do |allowed| allowed == origin end or Csrf.host_origin?(origin, conn)
 end
 
 # The handler runs in a task of its own, as the handlers of the routes do, so that a runtime error ends the WebSocket

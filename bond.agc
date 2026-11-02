@@ -92,3 +92,4 @@ export Servers.stop
 export Servers.run
 export WebSockets.WebSocketHandler
 export WebSockets.websocket
+export WebSockets.WEBSOCKET_OPTIONS

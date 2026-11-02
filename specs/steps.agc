@@ -585,7 +585,7 @@ def read_raw_answer(socket: Socket) -> HttpResponse
     line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
   end
 
-  # An answer with no Content-Length (what `HTTP.body_refusal` sends) reads as an empty body.
+  # A refusal has `Content-Length: 0`, so no body is read; an answer without one (a streamed one) would read as empty.
   wanted = HTTP.header_values(headers, "content-length").map do |value| value.to_i! end.reduce(0) do |_, size| size end
   body = "".bytes
   while body.size < wanted

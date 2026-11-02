@@ -23,7 +23,6 @@ The handlers are your code, so escape any value of the client that they put in H
 If the error handler gives an `error` or crashes, the answer is the plain 500. It is never called for a `bad_request`, nor for a response that the server would refuse. Both handlers are set once per app; a second call replaces the first.
 
 ```agentica
-import HTML from "std/html"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -32,7 +31,7 @@ def broken(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def page_not_found(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.html(conn, 404, "<h1>Nothing at #{HTML.escape(conn.path)}</h1>"))
+  return ok(Bond.html(conn, 404, "<h1>Nothing at #{Bond.escape(conn.path)}</h1>"))
 end
 
 def page_failed(conn: Bond.Conn, message: String) -> Result[Bond.Conn]

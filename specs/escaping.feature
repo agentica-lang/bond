@@ -1,8 +1,9 @@
 Feature: HTML escaping
-  `Bond.html` sends the text as it is, so a handler escapes what a client sent with `HTML.escape` of `std/html`
-  before it goes into the text. Bond never puts a value of the client into an answer of its own: the 404, the 405 and
-  the 400 have fixed texts, as plain text. The app of `specs/fixtures/app.agc` has `/greet`, which follows the guide,
-  and a `not_found` handler that shows the path.
+  `Bond.html` sends the text as it is, so a handler escapes what a client sent with `Bond.escape`, which is
+  `HTML.escape` of `std/html`, before it goes into the text. Bond never puts a value of the client into an answer of
+  its own: the 404, the 405 and the 400 have fixed texts, as plain text. The app of `specs/fixtures/app.agc` has
+  `/greet`, which follows the guide, `/template`, an EAG template that escapes with `Bond.escape`, and a `not_found`
+  handler that shows the path.
 
   Scenario Outline: A value of the client is escaped in the HTML of a handler (<why>)
     Given the todo app
@@ -17,6 +18,19 @@ Feature: HTML escaping
       | a script     | %3Cscript%3Ex%3C%2Fscript%3E | <p>Hello, &lt;script&gt;x&lt;/script&gt;</p> |
       | quotes       | %22a%22+%27b%27              | <p>Hello, &quot;a&quot; &#39;b&#39;</p>      |
       | an ampersand | a%26lt%3B                    | <p>Hello, a&amp;lt;</p>                      |
+
+  Scenario Outline: An EAG template with the escape directive of Bond.escape escapes its output tags and not its raw tags (<why>)
+    Given the todo app
+    When I send "GET" to "/template?name=<name>"
+    Then the status is 200
+    And the header "content-type" is "text/html; charset=utf-8"
+    And the body is "<body>"
+
+    Examples:
+      | why      | name                         | body                                                                                                 |
+      | a name   | Ana                          | <p title='Ana'>Hello, Ana <em>trusted</em></p>                                                       |
+      | a script | %3Cscript%3Ex%3C%2Fscript%3E | <p title='&lt;script&gt;x&lt;/script&gt;'>Hello, &lt;script&gt;x&lt;/script&gt; <em>trusted</em></p> |
+      | quotes   | %22a%22+%27b%27              | <p title='&quot;a&quot; &#39;b&#39;'>Hello, &quot;a&quot; &#39;b&#39; <em>trusted</em></p>           |
 
   Scenario: The path in the page of a not found handler is escaped
     Given the todo app with custom handlers

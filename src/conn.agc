@@ -33,8 +33,9 @@ export type ErrorHandler = Fn[Conn, String, Result[Conn]]
 ## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
 ## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed
 ## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. `response_length` is
-## the size of a streamed body when it is known (`stream` with a `length`, `send_file`). A new `Conn` answers 200 with
-## no body.
+## the size of a streamed body when it is known (`stream` with a `length`, `send_file`). `session` is the session of the
+## request that `Bond.sessions` loaded, and `session_changed` says that a handler changed it, so the answer has to
+## carry it (`session.agc`). A new `Conn` answers 200 with no body and has an empty session.
 export struct Conn
   method: String
   path: String
@@ -48,6 +49,8 @@ export struct Conn
   response_stream: Optional[Channel[Bytes]]
   response_length: Optional[Int]
   halted: Bool
+  session: Map[String, String]
+  session_changed: Bool
 end
 
 ## The `Conn` of a request, before any route or filter.
@@ -71,6 +74,8 @@ export def from_request(request: HttpRequest) -> Conn
     response_stream: none,
     response_length: none,
     halted: false,
+    session: {},
+    session_changed: false,
   )
 end
 

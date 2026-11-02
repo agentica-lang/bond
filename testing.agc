@@ -9,8 +9,10 @@
 ## ```
 
 import Apps from "src/app"
+import Sessions from "src/session"
 import HTTP from "std/http"
 import {App} from "src/app"
+import {SessionOptions} from "src/session"
 
 ## Sends the request to `app` and gives the response. `target` is the path with its query, as a client sends it
 ## (`/todos?done=1`); header names are lowercased, as the server does. `headers` default to none and `body` to an
@@ -57,4 +59,13 @@ export def request_bytes(
   lowered = headers.map do |header| Header(name: header.name.downcase, value: header.value) end
   request = HttpRequest(method: method, target: target, path: path, headers: lowered, body: body)
   return Apps.handle(app, request, max_pieces, timeout_ms)
+end
+
+## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would
+## sign it (`_bond_session=...`, for `options.name`): `[Header(name: "cookie", value: cookie)]` is a request of a
+## visitor who is logged in, with no round trip to a login route. An `error` when the session is over the size of a
+## cookie.
+export def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
+  value = try Sessions.seal(options, data)
+  return ok("#{options.name}=#{value}")
 end

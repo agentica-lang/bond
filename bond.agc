@@ -20,6 +20,7 @@ import Files from "src/files"
 import Filters from "src/filters"
 import Queries from "src/query"
 import Servers from "src/server"
+import Sessions from "src/session"
 
 export Apps.App
 export Apps.app
@@ -62,6 +63,13 @@ export Cookies.cookie
 export Cookies.set_cookie
 export Cookies.set_cookie_with
 export Cookies.delete_cookie
+export Sessions.SessionOptions
+export Sessions.sessions
+export Sessions.session
+export Sessions.get_session
+export Sessions.set_session
+export Sessions.delete_session
+export Sessions.clear_session
 export Filters.log_request
 export Queries.query
 export Queries.query_int

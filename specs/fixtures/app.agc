@@ -7,6 +7,10 @@ import Bond from "../../bond"
 
 TOKEN = "letmein"
 
+# The secrets of the session app: the first is the one it signs with at first, the second the one after a rotation.
+FIRST_SECRET = "first-secret-first-secret-first-secret"
+SECOND_SECRET = "second-secret-second-secret-second-sec"
+
 struct Todo
   id: Int
   title: String
@@ -42,6 +46,36 @@ export def build_custom(producers: Producers) -> Bond.App
     |> Bond.get("/boom-again", &boom)
     |> Bond.not_found(&custom_not_found)
     |> Bond.on_error(&custom_error)
+  )
+end
+
+## The options of the session app. `rotated` is the app after the secret changed: it signs with the second secret and
+## still reads what the first signed.
+export def session_options(rotated: Bool) -> Bond.SessionOptions
+  if rotated
+    return Bond.SessionOptions(secret: SECOND_SECRET, old_secrets: [FIRST_SECRET])
+  end
+
+  return Bond.SessionOptions(secret: FIRST_SECRET)
+end
+
+## The options of a visitor whose session ended a minute ago: `Testing.session_cookie` signs it with the first secret.
+export def expired_options() -> Bond.SessionOptions
+  return Bond.SessionOptions(secret: FIRST_SECRET, max_age: -60)
+end
+
+## A small app with the signed cookie sessions (`Bond.sessions`) and a few routes that read and change the session.
+export def build_sessions(rotated: Bool) -> Bond.App
+  return (
+    Bond.app()
+    |> Bond.sessions(session_options(rotated))
+    |> Bond.get("/me", &me)
+    |> Bond.get("/login/:name", &login_as)
+    |> Bond.get("/forget", &forget)
+    |> Bond.get("/logout", &sign_out)
+    |> Bond.get("/visits", &visits)
+    |> Bond.get("/peek", &me)
+    |> Bond.get("/blob", &blob)
   )
 end
 
@@ -578,4 +612,34 @@ def endless_stopped(stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.
   end
 
   return ok(Bond.text(conn, 200, "running"))
+end
+
+def me(conn: Bond.Conn) -> Result[Bond.Conn]
+  user = Bond.get_session(conn, "user").unwrap_or("nobody")
+  return ok(Bond.text(conn, 200, "user=#{user} values=#{Bond.session(conn).size}"))
+end
+
+def login_as(conn: Bond.Conn) -> Result[Bond.Conn]
+  signed_in = Bond.set_session(Bond.clear_session(conn), "user", try Bond.param(conn, "name"))
+  return ok(Bond.text(signed_in, 200, "welcome"))
+end
+
+def forget(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(Bond.delete_session(conn, "user"), 200, "forgotten"))
+end
+
+def sign_out(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(Bond.clear_session(conn), 200, "bye"))
+end
+
+# A number is kept as text in the session.
+def visits(conn: Bond.Conn) -> Result[Bond.Conn]
+  count = Bond.get_session(conn, "visits").unwrap_or("0").to_i!
+  counted = Bond.set_session(conn, "visits", (count + 1).to_s)
+  return ok(Bond.text(counted, 200, "visits=#{count + 1}"))
+end
+
+# A session too big for a cookie.
+def blob(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(Bond.set_session(conn, "blob", List.repeat("x", 5000).join("")), 200, "stored"))
 end

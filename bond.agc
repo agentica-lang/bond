@@ -52,6 +52,7 @@ export Conns.body_text
 export Conns.bytes
 export Conns.halt
 export Conns.html
+export Conns.escape
 export Conns.status
 export Conns.redirect
 export Conns.header

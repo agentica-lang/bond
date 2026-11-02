@@ -1,6 +1,7 @@
 ## The connection: the request being served and the response being built. A `Conn` never changes; every helper
 ## gives a new one.
 
+import HTML from "std/html"
 import HTTP from "std/http"
 
 # An `error` whose message starts with this text is a 400, and the rest is the body. `bad_request` is the way to
@@ -86,10 +87,17 @@ export def text(conn: Conn, status: Int, body: String) -> Conn
 end
 
 ## Answers `body` as HTML. It sets `Content-Type`; call `header` after it to use another. The text is sent as it is,
-## with no escaping: escape what comes from a client before you put it in `body`.
+## with no escaping: escape what comes from a client before you put it in `body`, with `escape`.
 export def html(conn: Conn, status: Int, body: String) -> Conn
   typed = header(release(conn), "content-type", "text/html; charset=utf-8")
   return typed.with(status: status, response_body: body.bytes)
+end
+
+## The text for HTML: `&`, `<`, `>`, `"` and `'` become `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, which is right
+## between tags and inside a quoted attribute. It is `HTML.escape` of `std/html`, named so that an EAG template can say
+## `<%@ escape &Bond.escape %>` and have every `<%= %>` escaped (`<%== %>` stays raw).
+export def escape(text: String) -> String
+  return HTML.escape(text)
 end
 
 ## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets `Content-Type` to

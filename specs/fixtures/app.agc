@@ -2,6 +2,7 @@
 ## routes more for the filters and the errors.
 
 import Cookie from "std/cookie"
+import EAG from "std/eag"
 import HTML from "std/html"
 import Bond from "../../bond"
 
@@ -123,6 +124,7 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.after(&sign)
     |> Bond.get("/hello", &hello)
     |> Bond.get("/greet", &greet)
+    |> Bond.get("/template", &eag_page)
     |> Bond.get("/", &root_page)
     |> Bond.post("/only-post", &hello)
     |> Bond.get("/a/lit/:y/z", &deep_z)
@@ -265,6 +267,18 @@ end
 def greet(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
   return ok(Bond.html(conn, 200, "<p>Hello, #{HTML.escape(name)}</p>"))
+end
+
+# An EAG template that escapes with `Bond.escape`: `<%= %>` is escaped in the text and in the attribute (quoted with `'` here, so the feature can write the body), and `<%== %>`
+# is the raw form, here for a markup of the app.
+def eag_page(conn: Bond.Conn) -> Result[Bond.Conn]
+  name = try Bond.query(conn, "name")
+  note = "<em>trusted</em>"
+  body = <<~EAG
+    <%@ escape &Bond.escape %>
+    <p title='<%= name %>'>Hello, <%= name %> <%== note %></p>
+  EAG
+  return ok(Bond.html(conn, 200, body.strip))
 end
 
 # The routes of the precedence scenarios. `/things/:id` is added before `/things/new` on purpose.

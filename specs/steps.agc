@@ -80,6 +80,10 @@ def main() -> Void
       "I send {string} to {string} with a session signed with the first secret for the user {string}",
       &send_with_first_secret,
     ),
+    BDD.step(
+      "I send {string} to {string} with a session signed for another cookie name for the user {string}",
+      &send_with_other_name,
+    ),
     BDD.step("I send {string} to {string} with an expired session for the user {string}", &send_with_expired_session),
     BDD.step("I send {string} to {string} with the range {string} and the validator {string}", &send_range),
     BDD.step("the header {string} appears {int} times", &header_count_is),
@@ -160,6 +164,14 @@ end
 
 def send_with_expired_session(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return send_with_signed(ctx, args, Fixture.expired_options())
+end
+
+# A valid cookie of the same secret, signed under the name `other_session` and sent as `_bond_session`.
+def send_with_other_name(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  options = Bond.SessionOptions(secret: Fixture.session_options(false).secret, name: "other_session")
+  cookie = Testing.session_cookie(options, {"user": args[2]}).unwrap!
+  moved = "_bond_session=#{cookie.replace("other_session=", "")}"
+  return send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: moved)], body: ""))
 end
 
 def send_with_signed(ctx: BDD.Context, args: List[String], options: Bond.SessionOptions) -> BDD.Context

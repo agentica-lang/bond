@@ -34,6 +34,12 @@ struct Account
   tags: List[String]
 end
 
+# A comment of the room view (the views of the guide are further down).
+struct RoomComment
+  author: String
+  text: String
+end
+
 struct Store
   todos: ATS[Int, Todo]
   next_id: ATS[String, Int]
@@ -125,6 +131,7 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/hello", &hello)
     |> Bond.get("/greet", &greet)
     |> Bond.get("/template", &eag_page)
+    |> Bond.get("/room", &room_view)
     |> Bond.get("/", &root_page)
     |> Bond.post("/only-post", &hello)
     |> Bond.get("/a/lit/:y/z", &deep_z)
@@ -279,6 +286,43 @@ def eag_page(conn: Bond.Conn) -> Result[Bond.Conn]
     <p title='<%= name %>'>Hello, <%= name %> <%== note %></p>
   EAG
   return ok(Bond.html(conn, 200, body.strip))
+end
+
+# The views of the guide: a partial and a page are functions that return a String, and the layout takes the inner HTML.
+# Each escapes its own `<%= %>`, and the inner HTML goes into the layout with `<%== %>`, since it is already escaped.
+def view_comment(comment: RoomComment) -> String
+  return <<~EAG
+    <%@ escape &Bond.escape %>
+    <li class='comment'><b><%= comment.author %></b>: <%= comment.text %></li>
+  EAG
+end
+
+def view_room(name: String, comments: List[RoomComment]) -> String
+  return <<~EAG
+    <%@ escape &Bond.escape %>
+    <h1><%= name %></h1>
+    <ul>
+    <% for comment in comments %>
+    <%== view_comment(comment) -%>
+    <% end %>
+    </ul>
+  EAG
+end
+
+def view_layout(title: String, inner: String) -> String
+  return <<~EAG
+    <%@ escape &Bond.escape %>
+    <title><%= title %></title>
+    <main>
+    <%== inner -%>
+    </main>
+  EAG
+end
+
+def room_view(conn: Bond.Conn) -> Result[Bond.Conn]
+  name = try Bond.query(conn, "name")
+  comments = [RoomComment(author: "Ana", text: "hello"), RoomComment(author: name, text: name)]
+  return ok(Bond.html(conn, 200, view_layout(name, view_room(name, comments))))
 end
 
 # The routes of the precedence scenarios. `/things/:id` is added before `/things/new` on purpose.

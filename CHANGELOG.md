@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A guide page, [Views](https://agentica-lang.github.io/bond/guide/views/), on pages, partials and a layout built from EAG templates with `Bond.escape` and `Bond.html`. There is no new function: a view is a function that returns a `String`, and a layout takes the inner HTML.
+
 - `Bond.escape(text)` escapes `&`, `<`, `>`, `"` and `'` for HTML (it is `HTML.escape` of `std/html`). An EAG template of Agentica 0.22.0 can start with `<%@ escape &Bond.escape %>` to escape every `<%= %>`; `<%== %>` stays raw. The guide has a section on it.
 
 - `Bond.sessions(app, options)` keeps a session in a cookie signed with HMAC-SHA256: `Bond.session`, `Bond.get_session`, `Bond.set_session`, `Bond.delete_session` and `Bond.clear_session`, `Bond.SessionOptions` (`secret`, `old_secrets` to rotate it, `name`, `max_age`, `secure`, `same_site`, `path`, `domain`; always `HttpOnly`) and `Testing.session_cookie`. A changed, expired or unknown cookie is an empty session. `Conn` has two new fields, `session` and `session_changed`.

@@ -75,7 +75,7 @@ end
 
 ```
 
-The directive must be on the first line of the template. It does not make every value safe: the rules of the sections below (a URL, an event attribute, JSON in a `<script>`) hold in a template too.
+Pages with partials and a layout are built from these templates: see [Views](/guide/views/). The directive must be on the first line of the template. It does not make every value safe: the rules of the sections below (a URL, an event attribute, JSON in a `<script>`) hold in a template too.
 
 ## What comes from the client
 

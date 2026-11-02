@@ -14,27 +14,31 @@ export MISS = "not a static file"
 
 # Names that Windows opens as a device, whatever the extension and the case.
 DEVICES = Set.new([
-  "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
-  "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+  "CON", "PRN", "AUX", "NUL",
+  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ])
 
 ## The longest `max_age`, one year in seconds: the longest that a cache is told to keep a file (RFC 9111 section 1.2.2),
-## and what a fingerprinted file gets.
+## and what a fingerprinted file gets when `fingerprint` is on.
 export MAX_AGE_SECONDS = 31_536_000
 
-HEX_DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"])
+DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
+LETTERS = Set.new(["a", "b", "c", "d", "e", "f"])
 
 # The length of the digest in a fingerprinted name: 8 hex digits (a short hash) to 64 (a SHA-256).
 FINGERPRINT_MIN = 8
 FINGERPRINT_MAX = 64
 
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
-## served. `max_age` is the seconds that a cache may keep a file whose name has no fingerprint (0 is "ask each time").
+## served. `max_age` is the seconds that a cache may keep a file (0 is "ask each time"). With `fingerprint`, a name that
+## has a fingerprint is kept for a year, whatever `max_age` is.
 export struct Mount
   prefix: String
   root: String
   max_bytes: Int
   max_age: Int = 0
+  fingerprint: Bool = false
 end
 
 ## The real path of the folder of a mount, when it is a folder. It is read once, when the app is built.
@@ -203,21 +207,25 @@ def etag_of(info: FileInfo) -> String
 end
 
 # Whether `If-None-Match` lists the tag (or is `*`). The comparison is the weak one that this header uses (RFC 9110
-# section 13.1.2): a `W/` prefix is dropped on both sides. A tag with a comma inside is not told apart, which the
-# tags of
-# Bond never have.
+# section 13.1.2): a leading `W/` is dropped from the tag of the request. A tag with a comma inside is not told apart,
+# which the tags of Bond never have.
 def matches?(conn: Conn, etag: String) -> Bool
   header = Conns.request_header(conn, "if-none-match").unwrap_or("")
   return header.split(",").any? do |item|
     tag = item.strip
-    tag == "*" or tag.replace("W/", "") == etag
+    if tag.start_with?("W/")
+      tag = tag.slice(2, tag.length - 2)
+    end
+
+    tag == "*" or tag == etag
   end
 end
 
-# A name with a fingerprint can never change its content, so it is cached for as long as allowed and never asked for
-# again. The others are cached for the `max_age` of the mount: 0 asks the server each time, which is a cheap 304 now.
+# With `fingerprint` on, the app says that a name with a fingerprint never changes its content, so it is cached for as
+# long as allowed and never asked for again. The others are cached for the `max_age` of the mount: 0 asks the server
+# each time, which is a cheap 304 now.
 def cache_control(mount: Mount, name: String) -> String
-  if fingerprinted?(name)
+  if mount.fingerprint and fingerprinted?(name)
     return "public, max-age=#{MAX_AGE_SECONDS}, immutable"
   end
 
@@ -229,7 +237,8 @@ def cache_control(mount: Mount, name: String) -> String
 end
 
 # `app.3f9a1c2b.css`, `app-3f9a1c2b.css` and `main.3f9a1c2b.chunk.js`: a part of 8 to 64 lowercase hex digits between
-# the first part of the name and the extension. A name with no extension has no fingerprint.
+# the first part of the name and the extension, with at least one letter and one digit, so a date (`20240131`) or a
+# Unix time (`1712345678`) is not a fingerprint, nor a word (`deadbeef`). A name with no extension has none.
 def fingerprinted?(name: String) -> Bool
   parts = name.replace("-", ".").split(".")
   if parts.size < 3
@@ -244,5 +253,9 @@ def hex_digest?(part: String) -> Bool
     return false
   end
 
-  return part.split("").all? do |ch| HEX_DIGITS.include?(ch) end
+  chars = part.split("")
+  hex = chars.all? do |ch| DIGITS.include?(ch) or LETTERS.include?(ch) end
+  digit = chars.any? do |ch| DIGITS.include?(ch) end
+  letter = chars.any? do |ch| LETTERS.include?(ch) end
+  return hex and digit and letter
 end

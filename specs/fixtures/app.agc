@@ -167,6 +167,7 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.static("/assets", public)
     |> Bond.static("/small", public, 10)
     |> Bond.static("/cached", public, 1_073_741_824, 3600)
+    |> Bond.static("/versioned", public, 1_073_741_824, 0, true)
     |> Bond.get("/raw-cookie", &raw_cookie)
     |> Bond.get("/require-sid", &require_sid)
     |> Bond.get("/set-cookie", &set_from_query)

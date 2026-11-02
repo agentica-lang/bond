@@ -182,18 +182,33 @@ Feature: Static files
     And I send "GET" to "/assets/style.css" with If-None-Match "{etag}"
     Then the status is 200
 
-  Scenario Outline: A name with a fingerprint is cached for a year (<path>)
+  Scenario Outline: A fingerprint is trusted only when the folder says so (<path>)
     When I send "GET" to "<path>"
     Then the status is 200
     And the header "cache-control" is "<cache>"
 
     Examples:
-      | path                            | cache                                  |
-      | /assets/app.3f9a1c2b.js         | public, max-age=31536000, immutable    |
-      | /assets/main-0123abcd.chunk.css | public, max-age=31536000, immutable    |
-      | /assets/short.abc123.txt        | no-cache                               |
-      | /cached/hello.txt               | public, max-age=3600                   |
-      | /cached/app.3f9a1c2b.js         | public, max-age=31536000, immutable    |
+      | path                               | cache                               |
+      | /assets/app.3f9a1c2b.js            | no-cache                            |
+      | /versioned/app.3f9a1c2b.js         | public, max-age=31536000, immutable |
+      | /versioned/main-0123abcd.chunk.css | public, max-age=31536000, immutable |
+      | /versioned/short.abc123.txt        | no-cache                            |
+      | /versioned/hello.txt               | no-cache                            |
+      | /cached/hello.txt                  | public, max-age=3600                |
+      | /cached/app.3f9a1c2b.js            | public, max-age=3600                |
+
+  Scenario Outline: A date or a time in a name is not a fingerprint, even where fingerprints are trusted (<path>)
+    When I send "GET" to "<path>"
+    Then the status is 200
+    And the header "cache-control" is "<cache>"
+
+    Examples:
+      | path                              | cache                |
+      | /assets/report.20240131.pdf       | no-cache             |
+      | /assets/photo-1712345678.png      | no-cache             |
+      | /versioned/report.20240131.pdf    | no-cache             |
+      | /versioned/photo-1712345678.png   | no-cache             |
+      | /cached/report.20240131.pdf       | public, max-age=3600 |
 
   Scenario: The answer to a Range request has the validator
     When I send "GET" to "/assets/hello.txt" with the header "range" set to "bytes=0-4"

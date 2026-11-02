@@ -25,10 +25,11 @@ Bond sends no `Last-Modified`, and no `If-Modified-Since` or `If-Range` is read.
 
 Every file has an `ETag` made from its size and the time of its last change in seconds, so Bond does not read the file to make it. A `GET` or `HEAD` whose `If-None-Match` lists the tag (or is `*`) is a `304 Not Modified` with the `ETag` and the `Cache-Control`, no body, and the file is not opened. A `W/` prefix on the tag of the request is ignored, as the header's weak comparison says. An edit that keeps the size of the file and happens in the same second as the last one is not seen, so give a file that changes often and fast another name, as below.
 
-`Cache-Control` depends on the name of the file:
+The `ETag` shows the size and the time of the last change of the file to anyone who can request it, as the `ETag` of nginx does.
 
-- A name with a fingerprint is `public, max-age=31536000, immutable`: a browser keeps it for a year and never asks again. A fingerprint is a part of 8 to 64 lowercase hex digits between the first part of the name and the extension, split by `.` or `-`: `app.3f9a1c2b.css`, `app-3f9a1c2b.css`, `main.3f9a1c2b.chunk.js`. A build tool that puts the hash of the content in the name (and changes the name when the content changes) is what makes this safe; if yours does not, a file with such a name is cached for a year when it changes.
-- Any other file is `no-cache` by default: a browser or a proxy may keep it but asks each time, which is a cheap `304` when nothing changed. `Bond.static(app, "/assets", "public", 1_073_741_824, 300)` sets `max_age` (in seconds, 0 to a year) for them: `public, max-age=300`.
+`Cache-Control` is `no-cache` by default: a browser or a proxy may keep the file but asks each time, which is a cheap `304` when nothing changed. `Bond.static(app, "/assets", "public", 1_073_741_824, 300)` sets `max_age` (in seconds, 0 to a year): `public, max-age=300`. `public` lets a shared cache keep the file too, so a folder of files that only logged-in users may read keeps `max_age` at 0, or sets `Cache-Control: no-store` in an `after` filter (`Bond.header` replaces the one of the same name).
+
+A file whose name changes with its content can be cached for a year. Pass `fingerprint: true` (the last argument) for a folder where a build tool puts a hash of the content in the name, and a name with a fingerprint is `public, max-age=31536000, immutable`: a browser keeps it and never asks again. A fingerprint is a part of 8 to 64 lowercase hex digits, with at least one letter and one digit, between the first part of the name and the extension, split by `.` or `-`: `app.3f9a1c2b.css`, `app-3f9a1c2b.css`, `main.3f9a1c2b.chunk.js`. A date (`report.20240131.pdf`) or a Unix time (`photo-1712345678.png`) has no letter, so it is not one, but `fingerprint: true` is still a promise by you that every such name is new when its content is new: a file with a fingerprint that you overwrite is stale in every browser for a year, and no `ETag` helps, since an `immutable` file is not asked about. Without `fingerprint: true`, no name is treated differently.
 
 ```agentica
 import HTTP from "std/http"
@@ -49,6 +50,7 @@ def main() -> Void
   File.write_text("static_cache_sample/app.css", "body {}").unwrap!
   File.write_text("static_cache_sample/app.3f9a1c2b.css", "body {}").unwrap!
   app = Bond.app() |> Bond.static("/assets", "static_cache_sample")
+  versioned = Bond.app() |> Bond.static("/assets", "static_cache_sample", 1_073_741_824, 0, true)
 
   first = Testing.request(app, "GET", "/assets/app.css")
   puts("#{first.status} #{HTTP.header_values(first.headers, "cache-control").first}")
@@ -61,6 +63,8 @@ def main() -> Void
 
   fingerprinted = Testing.request(app, "GET", "/assets/app.3f9a1c2b.css")
   puts(HTTP.header_values(fingerprinted.headers, "cache-control").first)
+  fingerprinted = Testing.request(versioned, "GET", "/assets/app.3f9a1c2b.css")
+  puts(HTTP.header_values(fingerprinted.headers, "cache-control").first)
   Path.remove("static_cache_sample/app.css").unwrap!
   Path.remove("static_cache_sample/app.3f9a1c2b.css").unwrap!
   Path.remove("static_cache_sample").unwrap!
@@ -72,6 +76,7 @@ end
 304
 200
 200 true
+no-cache
 public, max-age=31536000, immutable
 ```
 

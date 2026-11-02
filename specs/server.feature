@@ -82,6 +82,7 @@ Feature: Server
     When I post the chunks "<chunks>" to "/todos" over a raw socket
     Then the status is <status>
     And the header "connection" is "close"
+    And the body is ""
     When I get "/todos" over the socket
     Then the body is "[]"
 
@@ -97,4 +98,3 @@ Feature: Server
     And the header "connection" is not set
     When I get "/todos" over the socket
     Then the body is "[{\"id\":1,\"title\":\"abc\"}]"
-

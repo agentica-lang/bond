@@ -96,6 +96,10 @@ def main() -> Void
       "I send {string} to {string} with the origins {string} and {string} and the host {string}",
       &send_two_origins,
     ),
+    BDD.step(
+      "I send {string} to {string} with the fetch sites {string} and {string} and the host {string}",
+      &send_two_fetch_sites,
+    ),
     BDD.step("I send {string} to {string} with the range {string} and the validator {string}", &send_range),
     BDD.step("the header {string} appears {int} times", &header_count_is),
     BDD.step("the header {string} has the value {string}", &header_has_value),
@@ -216,6 +220,15 @@ def send_two_origins(ctx: BDD.Context, args: List[String]) -> BDD.Context
   headers = [
     Header(name: "origin", value: args[2]),
     Header(name: "origin", value: args[3]),
+    Header(name: "host", value: args[4]),
+  ]
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+end
+
+def send_two_fetch_sites(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [
+    Header(name: "sec-fetch-site", value: args[2]),
+    Header(name: "sec-fetch-site", value: args[3]),
     Header(name: "host", value: args[4]),
   ]
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))

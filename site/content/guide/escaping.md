@@ -1,6 +1,6 @@
 ---
 title: HTML and escaping
-weight: 7
+weight: 9
 description: Keep a value of the client from becoming markup, with HTML.escape of std/html.
 ---
 

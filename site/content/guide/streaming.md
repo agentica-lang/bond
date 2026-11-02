@@ -1,6 +1,6 @@
 ---
 title: Streaming
-weight: 12
+weight: 14
 description: Answer with a body that is sent piece by piece, such as server-sent events.
 ---
 

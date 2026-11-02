@@ -90,7 +90,30 @@ Feature: Cross-site request protection
     Then the program exits with code 1 within 5000 milliseconds
 
     Examples:
-      | program          |
-      | bad_origin_port  |
-      | bad_origin_query |
+      | program               |
+      | bad_origin_port       |
+      | bad_origin_http_port  |
+      | bad_origin_port_range |
+      | bad_origin_scheme     |
+      | bad_origin_query      |
+
+  Scenario: Two Sec-Fetch-Site headers are refused
+    Given the app with CSRF protection
+    When I send "POST" to "/transfer" with the fetch sites "same-origin" and "same-origin" and the host "example.com"
+    Then the status is 403
+
+  Scenario Outline: OPTIONS and HEAD need no headers (<method>)
+    Given the app with CSRF protection
+    When I send "<method>" to "/balance" with the origin "https://evil.test", the fetch site "cross-site" and the host "example.com"
+    Then the status is <status>
+
+    Examples:
+      | method  | status |
+      | HEAD    | 200    |
+      | OPTIONS | 405    |
+
+  Scenario: An allowed origin passes with no Sec-Fetch-Site
+    Given the app with CSRF protection that allows https://admin.example.net
+    When I send "POST" to "/transfer" with the origin "https://admin.example.net", the fetch site "" and the host "example.com"
+    Then the status is 200
 

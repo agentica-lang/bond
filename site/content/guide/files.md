@@ -1,6 +1,6 @@
 ---
 title: Sending files
-weight: 13
+weight: 15
 description: Answer with a file of any size, read in pieces, with its length, a download name and byte ranges.
 ---
 

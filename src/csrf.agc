@@ -34,16 +34,36 @@ DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 ## This replaces tokens in forms, but it only protects what a browser sends: `GET` must stay free of side effects.
 ## Filters run in the order they were added, so add it before any filter that does work for a request.
 export def csrf(app: App, allowed_origins: List[String] = []) -> App
+  origins = checked_origins(allowed_origins)
+  return Apps.before(app) do |conn| check(origins, conn) end
+end
+
+## The allowed origins of `csrf` and `Bond.websocket` in lowercase, as a browser writes them. The program stops when
+## one can never be the `Origin` of a browser (see `csrf`), since that is a mistake of the program.
+export def checked_origins(allowed_origins: List[String]) -> List[String]
   origins = allowed_origins.map do |origin| origin.downcase end
   for origin in origins
     problem = origin_problem(origin)
     if problem != ""
-      bad: Result[App] = error("bond: the allowed origin #{origin} #{problem}")
+      bad: Result[List[String]] = error("bond: the allowed origin #{origin} #{problem}")
       return bad.unwrap!
     end
   end
 
-  return Apps.before(app) do |conn| check(origins, conn) end
+  return origins
+end
+
+## True when `origin` (in lowercase) names the host of the request: its part after `://` is the `Host` header. The
+## scheme is not compared, since the server may sit behind a proxy that ends TLS.
+export def host_origin?(origin: String, conn: Conn) -> Bool
+  host = Conns.request_header(conn, "host").unwrap_or("").downcase
+  parts = origin.split("://")
+  return host != "" and parts.size == 2 and parts[1] == host
+end
+
+## True when the request has more than one header `name` (in lowercase), which a browser never sends for `Origin`.
+export def repeated?(conn: Conn, name: String) -> Bool
+  return conn.headers.select do |field| field.name.downcase == name end.size > 1
 end
 
 # Why `origin` can never be the `Origin` header of a browser, or "" when it can: it is `scheme://host` or
@@ -136,11 +156,5 @@ def same_origin?(origins: List[String], conn: Conn) -> Bool
     return true
   end
 
-  host = Conns.request_header(conn, "host").unwrap_or("").downcase
-  parts = origin.split("://")
-  return host != "" and parts.size == 2 and parts[1] == host
-end
-
-def repeated?(conn: Conn, name: String) -> Bool
-  return conn.headers.select do |field| field.name.downcase == name end.size > 1
+  return host_origin?(origin, conn)
 end

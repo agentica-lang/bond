@@ -22,6 +22,7 @@ import Filters from "src/filters"
 import Queries from "src/query"
 import Servers from "src/server"
 import Sessions from "src/session"
+import WebSockets from "src/websocket"
 
 export Apps.App
 export Apps.app
@@ -89,3 +90,5 @@ export Servers.local_port
 export Servers.wait
 export Servers.stop
 export Servers.run
+export WebSockets.WebSocketHandler
+export WebSockets.websocket

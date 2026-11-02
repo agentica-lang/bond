@@ -45,11 +45,12 @@ end
 
 # The body is read whole before the app runs, as the app of Bond takes the request whole (`Conn` has the body as
 # bytes). A body that is over `limit`, or that did not arrive whole, is answered by `HTTP.body_refusal` (413, 431 or
-# 400, and the connection closes) and the app is not called. The answer is a stream: a body sent in pieces is sent as
-# it is, and any other is one closed piece with `Content-Length`.
+# 400, and the connection closes) and the app is not called. The answer is the upgrade of a WebSocket route, or a
+# stream: a body sent in pieces is sent as it is, and any other is one closed piece with `Content-Length`. The body is
+# read whole first, so the server accepts an upgrade (it refuses one before the body of the request was read).
 def answer(app: App, limit: Int, request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, limit)
-    ok(data) -> return ok(HTTP.Answer.Stream(Apps.handle_stream(app, request.with(body: data))))
+    ok(data) -> return ok(Apps.handle_answer(app, request.with(body: data)))
     error(message) -> return ok(HTTP.body_refusal(message))
   end
 end

@@ -1,5 +1,6 @@
 ## The steps of the features. A scenario drives the app of `fixtures/app.agc` in process through `Testing.request`
-## (no socket), except the steps of the server, which talk to the program of `fixtures/server.agc` over a socket.
+## (no socket), except the steps of the server, which talk to the program of `fixtures/server.agc` (or
+## `fixtures/websocket_server.agc`) over a socket.
 
 import BDD from "std/bdd"
 import HTTP from "std/http"
@@ -14,6 +15,19 @@ SOCKET_MS = 5_000
 PRODUCERS = 16
 PRODUCER_MS = 5_000
 PATTERN = 251
+WEBSOCKET = "websocket"
+# The key of RFC 6455 section 1.3, whose `Sec-WebSocket-Accept` is known.
+WEBSOCKET_KEY = "dGhlIHNhbXBsZSBub25jZQ=="
+TEXT_FRAME = 1
+CLOSE_FRAME = 8
+FINAL_BIT = 128
+MASK_BIT = 128
+LENGTH_BITS = 127
+SHORT_LENGTH = 125
+TWO_BYTE_LENGTH = 126
+BYTE = 256
+NORMAL_CLOSE = 1000
+MASK = [55, 250, 33, 61]
 
 struct Ask
   method: String
@@ -23,6 +37,19 @@ struct Ask
   raw: List[Int] = [] # the body as bytes when it is not empty (then `body` is not used)
   max_pieces: Int = 0
   timeout_ms: Int = 10_000 # keep in sync with the defaults of Testing.request
+end
+
+# What a WebSocket of a step heard after its handshake: the text of the answer to its message ("" when none came) and
+# the code of the close frame of the server (0 when there was no upgrade).
+struct Heard
+  answer: String
+  close_code: Int
+end
+
+# A frame of a WebSocket: its opcode and its payload, unmasked.
+struct Frame
+  opcode: Int
+  payload: Bytes
 end
 
 struct Reply
@@ -121,6 +148,13 @@ def main() -> Void
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
     BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
+    BDD.step("the WebSocket server listens on a free port", &start_websocket_server),
+    BDD.step("I open a WebSocket to {string} from the origin {string} and send {string}", &open_websocket),
+    BDD.step("I open a WebSocket to {string} with no origin and send {string}") do |ctx, args|
+      talk_websocket(ctx, args[0], [], args[1])
+    end,
+    BDD.step("the WebSocket answers {string}", &websocket_answers),
+    BDD.step("the WebSocket closes with the code {int}", &websocket_closes_with),
   ])
 end
 
@@ -593,4 +627,113 @@ def read_raw_answer(socket: Socket) -> HttpResponse
   end
 
   return HttpResponse(status: status, headers: headers, body: body)
+end
+
+def start_websocket_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return start_program(ctx, "fixtures/websocket_server.agc")
+end
+
+# `PORT` in the origin is the port of the server, so "http://127.0.0.1:PORT" is the origin of its own pages.
+def open_websocket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  origin = Header(name: "Origin", value: args[1].replace("PORT", port.to_s))
+  return talk_websocket(ctx, args[0], [origin], args[2])
+end
+
+# A WebSocket client written by hand, since `std/http` has none: the handshake of RFC 6455, then, when the answer is
+# a 101, one masked text frame, the server's answer to it, and the closing handshake. The head of the answer is the
+# reply of the step, and what the WebSocket heard is kept under `WEBSOCKET`.
+def talk_websocket(ctx: BDD.Context, path: String, headers: List[Header], text: String) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  fields = [
+    "Host: 127.0.0.1:#{port}",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    "Sec-WebSocket-Key: #{WEBSOCKET_KEY}",
+    "Sec-WebSocket-Version: 13",
+  ]
+  lines = fields.concat(headers.map do |field| "#{field.name}: #{field.value}" end)
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  TCP.send(socket, "GET #{path} HTTP/1.1\r\n#{lines.join("\r\n")}\r\n\r\n", SOCKET_MS).unwrap!
+  response = read_raw_answer(socket)
+  heard = Heard(answer: "", close_code: 0)
+  if response.status == 101
+    heard = converse(socket, text)
+  end
+
+  TCP.close(socket)
+  replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+  return BDD.set(replied, WEBSOCKET, JSON.from(heard))
+end
+
+# One message and its answer, then the close: the client sends a close frame after the answer, and reads frames until
+# the server's close frame. A server that closes first (a handler that crashed) is answered with nothing more.
+def converse(socket: Socket, text: String) -> Heard
+  send_frame(socket, TEXT_FRAME, text.bytes)
+  first = read_frame(socket)
+  if first.opcode == CLOSE_FRAME
+    return Heard(answer: "", close_code: close_code(first.payload))
+  end
+
+  answer = String.from_bytes(first.payload).unwrap!
+  send_frame(socket, CLOSE_FRAME, Bytes.from_list([NORMAL_CLOSE / BYTE, NORMAL_CLOSE % BYTE]).unwrap!)
+  frame = read_frame(socket)
+  while frame.opcode != CLOSE_FRAME
+    frame = read_frame(socket)
+  end
+
+  return Heard(answer: answer, close_code: close_code(frame.payload))
+end
+
+# A final frame from the client, masked as RFC 6455 requires, with a payload of at most 125 bytes.
+def send_frame(socket: Socket, opcode: Int, payload: Bytes) -> Void
+  values = payload.to_a
+  masked = (0...values.size).to_a.map do |at| Int.bit_xor(values[at], MASK[at % MASK.size]) end
+  head = [FINAL_BIT + opcode, MASK_BIT + values.size]
+  TCP.send_bytes(socket, Bytes.from_list(head.concat(MASK).concat(masked)).unwrap!, SOCKET_MS).unwrap!
+end
+
+# A frame from the server, which is never masked: a length of up to 125, or 126 and two bytes of length.
+def read_frame(socket: Socket) -> Frame
+  head = read_exactly(socket, 2).to_a
+  size = Int.bit_and(head[1], LENGTH_BITS)
+  if size == TWO_BYTE_LENGTH
+    longer = read_exactly(socket, 2).to_a
+    size = longer[0] * BYTE + longer[1]
+  end
+
+  return Frame(opcode: Int.bit_and(head[0], 15), payload: read_exactly(socket, size))
+end
+
+def read_exactly(socket: Socket, size: Int) -> Bytes
+  got = "".bytes
+  while got.size < size
+    got = Bytes.concat([got, TCP.recv_bytes(socket, size - got.size, SOCKET_MS).unwrap!])
+  end
+
+  return got
+end
+
+# The status code of a close frame: its first two bytes, or 1005 (none) when it has none.
+def close_code(payload: Bytes) -> Int
+  values = payload.to_a
+  if values.size < 2
+    return 1005
+  end
+
+  return values[0] * BYTE + values[1]
+end
+
+def heard(ctx: BDD.Context) -> Heard
+  return JSON.decode(BDD.get(ctx, WEBSOCKET).unwrap!, Heard).unwrap!
+end
+
+def websocket_answers(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  answer = heard(ctx).answer
+  return BDD.assert(ctx, answer == args[0], "the WebSocket answered #{answer.inspect}")
+end
+
+def websocket_closes_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  code = heard(ctx).close_code
+  return BDD.assert(ctx, code == args[0].to_i!, "the WebSocket closed with #{code}")
 end

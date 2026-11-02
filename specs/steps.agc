@@ -37,6 +37,8 @@ def main() -> Void
   BDD.run([
     BDD.step("the todo app", &keep_app),
     BDD.step("the todo app with custom handlers", &keep_custom_app),
+    BDD.step("the sessions app", &keep_sessions_app),
+    BDD.step("the sessions app after the secret was rotated", &keep_rotated_sessions_app),
     BDD.step("the app with a file of {int} bytes", &keep_big_app),
     BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
@@ -69,10 +71,26 @@ def main() -> Void
       send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: args[2])], body: ""))
     end,
     BDD.step("I send {string} to {string} with the cookies {string} and {string}", &send_two_cookies),
+    BDD.step("I send {string} to {string} with the session cookie of the last answer", &send_with_last_session),
+    BDD.step(
+      "I send {string} to {string} with the session cookie of the last answer changed",
+      &send_with_changed_session,
+    ),
+    BDD.step(
+      "I send {string} to {string} with a session signed with the first secret for the user {string}",
+      &send_with_first_secret,
+    ),
+    BDD.step(
+      "I send {string} to {string} with a session signed for another cookie name for the user {string}",
+      &send_with_other_name,
+    ),
+    BDD.step("I send {string} to {string} with an expired session for the user {string}", &send_with_expired_session),
     BDD.step("I send {string} to {string} with the range {string} and the validator {string}", &send_range),
     BDD.step("the header {string} appears {int} times", &header_count_is),
     BDD.step("the header {string} has the value {string}", &header_has_value),
     BDD.step("the header {string} has the value:", &header_has_doc_value),
+    BDD.step("the header {string} starts with {string}", &header_starts_with),
+    BDD.step("the header {string} ends with {string}", &header_ends_with),
     BDD.step("the status is {int}", &status_is),
     BDD.step("the body is {string}", &body_is),
     BDD.step("the body bytes are {string}", &body_bytes_are),
@@ -115,6 +133,52 @@ def send_two_cookies(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
+# The `name=value` of the session cookie that the last answer set.
+def last_session_cookie(ctx: BDD.Context) -> String
+  fields = last_reply(ctx).fields.select do |field| field.name.downcase == "set-cookie" end
+  return fields.first.value.split(";").first
+end
+
+def send_with_last_session(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  headers = [Header(name: "cookie", value: last_session_cookie(ctx))]
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+end
+
+# Changes the first character of the payload: the signature no longer matches it.
+def send_with_changed_session(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  parts = last_session_cookie(ctx).split("=")
+  value = parts[1]
+  first = value.slice(0, 1)
+  other = "A"
+  if first == "A"
+    other = "B"
+  end
+
+  changed = "#{parts[0]}=#{other}#{value.slice(1, value.length - 1)}"
+  return send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: changed)], body: ""))
+end
+
+def send_with_first_secret(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return send_with_signed(ctx, args, Fixture.session_options(false))
+end
+
+def send_with_expired_session(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return send_with_signed(ctx, args, Fixture.expired_options())
+end
+
+# A valid cookie of the same secret, signed under the name `other_session` and sent as `_bond_session`.
+def send_with_other_name(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  options = Bond.SessionOptions(secret: Fixture.session_options(false).secret, name: "other_session")
+  cookie = Testing.session_cookie(options, {"user": args[2]}).unwrap!
+  moved = "_bond_session=#{cookie.replace("other_session=", "")}"
+  return send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: moved)], body: ""))
+end
+
+def send_with_signed(ctx: BDD.Context, args: List[String], options: Bond.SessionOptions) -> BDD.Context
+  cookie = Testing.session_cookie(options, {"user": args[2]}).unwrap!
+  return send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: cookie)], body: ""))
+end
+
 def send_range(ctx: BDD.Context, args: List[String]) -> BDD.Context
   headers = [Header(name: "range", value: args[2]), Header(name: "if-range", value: args[3])]
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
@@ -137,6 +201,24 @@ def header_has_doc_value(ctx: BDD.Context, args: List[String]) -> BDD.Context
   expected = BDD.doc_string(ctx)
   found = reply.fields.any? do |field| field.name.downcase == args[0].downcase and field.value == expected end
   return BDD.assert(ctx, found, "the headers are #{reply.fields}")
+end
+
+def header_starts_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(
+    ctx,
+    reply.headers.get(args[0].downcase, "").start_with?(args[1]),
+    "the headers are #{reply.headers}",
+  )
+end
+
+def header_ends_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  return BDD.assert(
+    ctx,
+    reply.headers.get(args[0].downcase, "").end_with?(args[1]),
+    "the headers are #{reply.headers}",
+  )
 end
 
 def status_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -186,6 +268,16 @@ end
 def keep_custom_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   producers: Fixture.Producers = Channel.new(PRODUCERS)
   return keep(ctx, Fixture.build_custom(producers), producers)
+end
+
+def keep_sessions_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_sessions(false), producers)
+end
+
+def keep_rotated_sessions_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_sessions(true), producers)
 end
 
 # The folder of the links is made for each request and removed after it, since a scenario has no hook to clean up.
@@ -265,7 +357,8 @@ def settle(before: Int) -> Void
   end
 end
 
-# A file of `size` bytes, written for each request in a folder that is removed after it. Byte `i` is `i % 251` (a prime,
+# A file of `size` bytes, written for each request in a folder that is removed after it. Byte `i` is `i % 251`
+# (a prime,
 # so the pattern does not repeat at the size of a piece), which `body_is_pattern` checks. The routes: `/big` sends the
 # file, `/save` sends it as a download, and `/files` serves its folder.
 def keep_big_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -389,7 +482,13 @@ def get_over_socket_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return over_socket(ctx, "GET", args[0], "", [Header(name: args[1], value: args[2])])
 end
 
-def over_socket(ctx: BDD.Context, method: String, path: String, body: String, headers: List[Header] = []) -> BDD.Context
+def over_socket(
+  ctx: BDD.Context,
+  method: String,
+  path: String,
+  body: String,
+  headers: List[Header] = [],
+) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
   client = HTTP.client().unwrap!
   response = HTTP.request(client, method, "http://127.0.0.1:#{port}#{path}", body.bytes, headers)

@@ -57,7 +57,7 @@ end
 
 ## Forms
 
-`Bond.form`, `Bond.form_int`, `Bond.form_all` and `Bond.form_params` read the body of a form: `application/x-www-form-urlencoded`. The request must have exactly one `Content-Type`, and it must be that type, in any case and with any parameters. Another type, or none, is a 400 with `content type must be application/x-www-form-urlencoded`. A field that is missing is `form field name is missing`, and a body that does not decode is `the form is not valid`.
+`Bond.form`, `Bond.form_int`, `Bond.form_all` and `Bond.form_params` read the body of a form: `application/x-www-form-urlencoded`. The request must have exactly one `Content-Type`, and it must be that type, in any case and with any parameters. Another type, or none, is a 400 with `content type must be application/x-www-form-urlencoded`; with [`Bond.uploads`](/guide/uploads/), the text fields of a `multipart/form-data` body are read the same way. A field that is missing is `form field name is missing`, and a body that does not decode is `the form is not valid`.
 
 The charset parameter is ignored: the body is read as UTF-8. A line break at the end of the body stays in the last value, as in Rack.
 

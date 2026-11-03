@@ -5,7 +5,7 @@ import Conns from "conn"
 import Pattern from "pattern"
 import Router from "router"
 import Statics from "static"
-import {Conn, ErrorHandler, Handler} from "conn"
+import {Conn, ErrorHandler, Handler, Receiver} from "conn"
 
 NOT_FOUND = "not found"
 
@@ -19,6 +19,21 @@ export struct App
   statics: List[Statics.Mount]
   not_found: Handler
   on_error: ErrorHandler
+  uploads: Optional[UploadOptions] = none
+end
+
+## The limits of `Bond.uploads`: the largest file (10 MiB), the largest text field (1 MiB), all the text fields
+## together (2 MiB), and the largest `multipart/form-data` body (its fields, files and framing: 50 MiB, at most
+## 256 MiB). Each is 1 or more, `max_file_bytes` is at most `max_total_bytes` and `max_field_bytes` at most
+## `max_fields_bytes`; the body cap bounds the text fields too.
+## `dir` is the folder where each request that sends a file gets a private folder for its files, and it must exist;
+## "" is the temporary folder of the system (`TMPDIR`, `TEMP` or `TMP`, else `/tmp`).
+export struct UploadOptions
+  max_file_bytes: Int = 10_485_760
+  max_field_bytes: Int = 1_048_576
+  max_fields_bytes: Int = 2_097_152
+  max_total_bytes: Int = 52_428_800
+  dir: String = ""
 end
 
 export def app() -> App
@@ -144,19 +159,40 @@ export def handle(
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Testing.request and specs/steps.agc
 ) -> HttpResponse
-  return Conns.to_response(answer(app, request), max_pieces, timeout_ms)
+  return Conns.to_response(answer(app, request, none), max_pieces, timeout_ms)
+end
+
+## Like `handle`, with the `Receiver` of `Bond.uploads` (for `Testing`; `bond.agc` does not export it): `receive` reads
+## the `multipart/form-data` body into `Conn.form`, after the before filters and once the route is found, so a request
+## halted before it, or with no route, is not read.
+export def handle_with(
+  app: App,
+  request: HttpRequest,
+  max_pieces: Int,
+  timeout_ms: Int,
+  receive: Receiver,
+) -> HttpResponse
+  return Conns.to_response(answer(app, request, some(receive)), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
 ## other body is one closed piece.
 export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
-  return Conns.to_stream_response(answer(app, request))
+  return Conns.to_stream_response(answer(app, request, none))
 end
 
 ## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
 ## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
 export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
-  conn = answer(app, request)
+  return upgrade_or_stream(answer(app, request, none))
+end
+
+## Like `handle_answer`, with the `Receiver` of `Bond.uploads`, as for `handle_with`.
+export def handle_answer_with(app: App, request: HttpRequest, receive: Receiver) -> HTTP.Answer
+  return upgrade_or_stream(answer(app, request, some(receive)))
+end
+
+def upgrade_or_stream(conn: Conn) -> HTTP.Answer
   case Conns.accepted_upgrade(conn)
     some(upgrade) -> return HTTP.Answer.Upgrade(upgrade)
     none -> return HTTP.Answer.Stream(Conns.to_stream_response(conn))
@@ -164,9 +200,9 @@ export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
 end
 
 # The `Conn` that answers the request, before it is turned into a response.
-def answer(app: App, request: HttpRequest) -> Conn
+def answer(app: App, request: HttpRequest, receive: Optional[Receiver]) -> Conn
   conn = Conns.from_request(request)
-  task = Task.spawn() do serve(app, conn) end
+  task = Task.spawn() do serve(app, conn, receive) end
   case Task.await(task)
     ok(done) -> return done
     error(message) ->
@@ -193,16 +229,17 @@ def route(app: App, method: String, pattern: String, handler: Handler) -> App
   return app.with(routes: added.unwrap!)
 end
 
-def serve(app: App, conn: Conn) -> Result[Conn]
+def serve(app: App, conn: Conn, receive: Optional[Receiver]) -> Result[Conn]
   filtered = app.before_filters.reduce(conn) do |acc, filter| apply(app, acc, filter) end
-  routed = dispatch(app, filtered)
+  routed = dispatch(app, filtered, receive)
   return ok(app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end)
 end
 
 # The node of the tree that holds the path (a literal segment before a param), then its handler for the method: a 405
 # when the node has routes for other methods only, a 404 when no node has the path. HEAD uses the route of GET (the
-# server drops the body). Paths are compared as written, without decoding.
-def dispatch(app: App, conn: Conn) -> Conn
+# server drops the body). Paths are compared as written, without decoding. The body of `receive` is read only for a
+# request that has its handler, just before it runs.
+def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
   if conn.halted
     return conn
   end
@@ -225,7 +262,23 @@ def dispatch(app: App, conn: Conn) -> Conn
     return Conns.halt(Conns.header(conn, "allow", allowed(hit.node)), 405, "method not allowed")
   end
 
-  return apply(app, conn.with(params: hit.params), hit.node.handlers[wanted])
+  routed = conn.with(params: hit.params)
+  case receive
+    some(read) ->
+      case read.call(routed)
+        ok(form) -> return apply(app, routed.with(form: some(form)), hit.node.handlers[wanted])
+        error(status) -> return refused(routed, status.to_i!)
+      end
+
+    none -> return apply(app, routed, hit.node.handlers[wanted])
+  end
+end
+
+# A body that `receive` refused: the status with no body, and the connection closes, since the rest of the body is
+# not read.
+def refused(conn: Conn, status: Int) -> Conn
+  answer = conn.with(status: status, response_body: "".bytes, halted: true)
+  return Conns.header(answer, "connection", "close")
 end
 
 # A path under no folder, or with no file, is a 404 for the not found handler; a file that cannot be sent is a failure,

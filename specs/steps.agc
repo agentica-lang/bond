@@ -15,6 +15,7 @@ SOCKET_MS = 5_000
 PRODUCERS = 16
 PRODUCER_MS = 5_000
 PATTERN = 251
+UPLOAD_BOUNDARY = "bond-spec-boundary"
 WEBSOCKET = "websocket"
 # The key of RFC 6455 section 1.3, whose `Sec-WebSocket-Accept` is known.
 WEBSOCKET_KEY = "dGhlIHNhbXBsZSBub25jZQ=="
@@ -149,6 +150,23 @@ def main() -> Void
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
     BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
+    BDD.step("the upload server listens on a free port", &start_upload_server),
+    BDD.step(
+      "I post the fields {string} and the file {string} holding {string} to {string} over the socket",
+      &post_upload,
+    ),
+    BDD.step("I post the fields {string} and a file of {int} bytes to {string} over the socket") do |ctx, args|
+      send_upload(ctx, args[0], "big.bin", List.repeat("x", args[1].to_i!).join(""), args[2])
+    end,
+    BDD.step("I post a text field of {int} bytes and a file to {string} over the socket") do |ctx, args|
+      send_upload(ctx, "title=#{List.repeat("y", args[0].to_i!).join("")}", "a.txt", "small", args[1])
+    end,
+    BDD.step("I post the file {string} holding {string} to {string} over the socket from another site") do |ctx, args|
+      send_upload(ctx, "title=x", args[0], args[1], args[2], [Header(name: "sec-fetch-site", value: "cross-site")])
+    end,
+    BDD.step("the body has the line {string}", &body_has_line),
+    BDD.step("the saved file of the answer is removed", &saved_file_removed),
+    BDD.step("the saved path of the answer does not have {string}", &saved_path_lacks),
     BDD.step("the WebSocket server listens on a free port", &start_websocket_server),
     BDD.step("I open a WebSocket to {string} from the origin {string} and send {string}", &open_websocket),
     BDD.step(
@@ -797,4 +815,61 @@ def stay_silent(ctx: BDD.Context, args: List[String]) -> BDD.Context
   TCP.close(socket)
   replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
   return BDD.set(replied, WEBSOCKET, JSON.from(Heard(answer: first, close_code: 0)))
+end
+
+def start_upload_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return start_program(ctx, "fixtures/upload_server.agc")
+end
+
+def post_upload(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return send_upload(ctx, args[0], args[1], args[2], args[3])
+end
+
+# A `multipart/form-data` POST written by hand: the fields of `fields` (`name=value&...`, not encoded) and one file
+# in the field `photo`, sent by the client of `std/http` with its `Content-Length` and the `headers`.
+def send_upload(
+  ctx: BDD.Context,
+  fields: String,
+  filename: String,
+  content: String,
+  path: String,
+  headers: List[Header] = [],
+) -> BDD.Context
+  parts = fields.split("&").map do |pair|
+    at = pair.index_of("=").unwrap!
+    name = pair.slice(0, at)
+    value = pair.slice(at + 1, pair.length - at - 1)
+    "--#{UPLOAD_BOUNDARY}\r\nContent-Disposition: form-data; name=\"#{name}\"\r\n\r\n#{value}\r\n"
+  end
+
+  disposition = "Content-Disposition: form-data; name=\"photo\"; filename=\"#{filename}\""
+  file = "--#{UPLOAD_BOUNDARY}\r\n#{disposition}\r\nContent-Type: text/plain\r\n\r\n#{content}\r\n"
+  body = "#{parts.join("")}#{file}--#{UPLOAD_BOUNDARY}--\r\n"
+  content_type = Header(name: "content-type", value: "multipart/form-data; boundary=#{UPLOAD_BOUNDARY}")
+  return over_socket(ctx, "POST", path, body, headers.push(content_type))
+end
+
+def body_has_line(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  body = last_reply(ctx).body
+  return BDD.assert(ctx, body.split("\n").any? do |line| line == args[0] end, "the body is #{body.inspect}")
+end
+
+# The path line of the answer of `upload_server.agc`.
+def saved_path(ctx: BDD.Context) -> String
+  lines = last_reply(ctx).body.split("\n").select do |line| line.start_with?("path ") end
+  if lines.empty?
+    return ""
+  end
+
+  return lines[0].slice(5, lines[0].length - 5)
+end
+
+def saved_file_removed(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = saved_path(ctx)
+  return BDD.assert(ctx, path != "" and not File.stat(path).ok?, "the file #{path} is still there")
+end
+
+def saved_path_lacks(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = saved_path(ctx)
+  return BDD.assert(ctx, path != "" and not path.include?(args[0]), "the saved path is #{path}")
 end

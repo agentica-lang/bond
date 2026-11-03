@@ -1,7 +1,7 @@
 # Bond
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
-Routes, filters, JSON bodies, forms, cookies, static files, streaming and an in-process test helper (0.4.0), and, in the next release (0.5.0): signed sessions, a cross-site request check, HTML escaping, views, WebSockets.
+Routes, filters, JSON bodies, forms, cookies, static files, streaming and an in-process test helper (0.4.0), and, in the next release (0.5.0): signed sessions, a cross-site request check, HTML escaping, views, WebSockets, file uploads.
 
 The main branch and 0.5.0 need Agentica 0.22.0 or later; the [changelog](CHANGELOG.md) has the version each release needs.
 
@@ -37,8 +37,9 @@ end
 ## Development
 
 The tests are BDD first: the behavior is a Gherkin scenario in `specs/*.feature`, run by `agentica test`. The steps
-(`specs/steps.agc`) drive the app of `specs/fixtures/app.agc` through `Testing.request`; only `server.feature` and
-`websocket.feature` open a socket, on 127.0.0.1 and a free port. `test/` has the unit test of the route pattern matcher.
+(`specs/steps.agc`) drive the app of `specs/fixtures/app.agc` through `Testing.request`; only `server.feature`,
+`websocket.feature` and `uploads.feature` open a socket, on 127.0.0.1 and a free port. `test/` has the unit tests,
+such as those of the route pattern matcher and the multipart parser.
 
 ```sh
 agentica check   # every .agc file of the package

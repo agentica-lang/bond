@@ -27,7 +27,7 @@ code is right: fix this file in the same change.
 - Samples: every `agentica` block of `site/content/` is a whole program, run
   through `agentica check` by `tools/check-site-samples.sh` (`make
   site-samples`), and run when an `output` block follows it. The blocks take
-  no attributes. This replaces the site examples tests of Agentica.
+  no attributes.
 - Build: `make site` (Hugo, Dart Sass, the highlighter) and the Pages workflow
   as in Agentica, except that a pull request builds without `configure-pages`.
 

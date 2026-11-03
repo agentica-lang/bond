@@ -8,17 +8,17 @@ description: Read the query string and a form body, decoded with std/uri.
 
 `Bond.query(conn, "q")` is the first value of `q` in the query string, decoded with `std/uri`: `+` is a space and `%XX` is a byte. `conn.query` stays the raw text after `?`.
 
-`Bond.query_int(conn, "page")` reads a whole number, and `Bond.query_all(conn, "tag")` gives every value of a name that repeats, in order (an empty list when the name is not there). A piece with no equal sign, as in `?debug`, has the value `""`, and so has `?q=`.
+`Bond.query_int(conn, "page")` reads a whole number, and `Bond.query_all(conn, "tag")` gives every value of a name that repeats, in order (an empty list when the name is not there). A piece with no equal sign (`?debug`) and `?q=` have the value `""`.
 
 Each one is a `Result`, and a failure is an error that makes a 400, so `try` answers it. A name that is missing is `query parameter q is missing`, a number that is not one is `page must be an integer`, and a query string that does not decode is `the query string is not valid`.
 
 ## Read many fields at once
 
-Each call decodes the whole query string again, so a handler that reads several fields calls `Bond.query_params(conn)` once. It gives a `Map[String, List[String]]`: each name with its values in the order they were sent, the names in the order of their first appearance. `Bond.form_params(conn)` does the same for a form body.
+Each call decodes the whole query string again, so a handler that reads several fields calls `Bond.query_params(conn)` once: a `Map[String, List[String]]` with each name's values in the order sent, the names in the order of their first appearance. `Bond.form_params(conn)` does the same for a form body.
 
 ## Invalid is not missing
 
-A `%` that is not followed by two hex digits, or bytes that are not UTF-8, anywhere in the string, in a name or in a value you do not read, make all of it invalid. That is a 400, as in Rack. So `Bond.query(conn, "q").unwrap_or("")` also turns an invalid query string into the default, and does not tell it from a missing name. To tell them apart, call `query_params` first with `try`, and take the optional value from the map:
+A `%` that is not followed by two hex digits, or bytes that are not UTF-8, anywhere in the string (also in a name or value you do not read) make all of it invalid: a 400, as in Rack. So `Bond.query(conn, "q").unwrap_or("")` turns an invalid query string into the default, and does not tell it from a missing name. To tell them apart, call `query_params` first with `try`, and take the value from the map:
 
 ```agentica
 import Bond from "pkg/bond/bond"
@@ -93,7 +93,7 @@ end
 
 ## The path is not decoded
 
-The path of a request is not decoded yet: a `:name` param keeps its `%XX` text. Decode it in the handler with `URI.decode_uri_component` (a `+` stays a plus there, as it should in a path):
+The path of a request is not decoded: a `:name` param keeps its `%XX` text. Decode it in the handler with `URI.decode_uri_component` (a `+` stays a plus there, as it should in a path):
 
 ```agentica
 import URI from "std/uri"

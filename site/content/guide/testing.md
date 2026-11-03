@@ -25,6 +25,6 @@ end
 200 hello
 ```
 
-`Testing.request` builds an `HttpRequest` and passes it to `Bond.handle(app, request)`, which is the whole-response form of what `Bond.run` calls for each request that comes over the socket (`Bond.handle_stream`, which gives an `HTTP.StreamResponse`). Call `Bond.handle` yourself when you already have an `HttpRequest`: it gives the `HttpResponse`.
+`Testing.request` builds an `HttpRequest` and passes it to `Bond.handle(app, request)`, the whole-response form of what `Bond.run` calls for each request (`Bond.handle_stream` gives an `HTTP.StreamResponse`). Call `Bond.handle` yourself when you already have an `HttpRequest`.
 
 For a streamed body (see [Streaming](/guide/streaming/)), two optional arguments after the body bound the wait for the end of the stream: `max_pieces` (0, the default, is no limit) closes the channel after that many pieces, and `timeout_ms` (10 s by default) is the time for the whole body, so one gap between pieces may take all of it (`timeout_ms: 30_000` allows a 20 s gap). Either one closes the channel, so a producer that never ends stops, and a body cut by the time says so on stderr.

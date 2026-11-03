@@ -18,7 +18,8 @@ Needs Agentica 0.22.0 or later (EAG `escape` directive, `HTTP.serve` and `HTTP.b
 
 - `Bond.escape(text)` escapes `&`, `<`, `>`, `"` and `'` for HTML (it is `HTML.escape` of `std/html`). An EAG template of Agentica 0.22.0 can start with `<%@ escape &Bond.escape %>` to escape every `<%= %>`; `<%== %>` stays raw. The guide has a section on it.
 
-- `Bond.sessions(app, options)` keeps a session in a cookie signed with HMAC-SHA256: `Bond.session`, `Bond.get_session`, `Bond.set_session`, `Bond.delete_session` and `Bond.clear_session`, `Bond.SessionOptions` (`secret`, `old_secrets` to rotate it, `name`, `max_age`, `secure`, `same_site`, `path`, `domain`; always `HttpOnly`) and `Testing.session_cookie`. A changed, expired or unknown cookie is an empty session. `Conn` has two new fields, `session` and `session_changed`.
+- `Bond.sessions(app, options)` keeps a session in a cookie signed with HMAC-SHA256: `Bond.session`, `Bond.get_session`, `Bond.set_session`, `Bond.delete_session` and `Bond.clear_session`, `Bond.SessionOptions` (`secret`, `old_secrets` to rotate it, `name`, `max_age`, `secure`, `same_site`, `path`, `domain`; always `HttpOnly`) and `Testing.session_cookie`. A changed, expired or unknown cookie is an empty session.
+- **Breaking:** `Conn` has two new fields with no default, `session` and `session_changed`: code that builds a `Conn` by hand must set them.
 
 - `Bond.csrf(app, allowed_origins)` refuses with a 403 an unsafe request (not `GET`, `HEAD` or `OPTIONS`) that comes from another site, by `Sec-Fetch-Site` and `Origin`, with no token in the forms.
 

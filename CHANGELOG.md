@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `HTTP.body_refusal`: 413 over the limit, 431 for a chunk line that is too
   long, 400 for a bad chunk, all with `Connection: close`; a client that
   leaves gets no answer. CI now tests with Agentica 0.22.0.
+- CI now tests with Agentica 0.23.0. Bond still needs 0.22.0 or later.
 
 ## [0.4.0] - 2026-10-31
 

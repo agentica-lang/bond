@@ -6,7 +6,7 @@ description: Add Bond to a project, write a first app and run it.
 
 ## Install
 
-Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.22.0 or later. Bond is a package: you add it to the `agentica.toml` of your project as a dependency on its git repository.
+Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.22.0 or later. Bond is a package: add it to the `agentica.toml` of your project as a dependency on its git repository.
 
 Pin a release by its tag (the [changelog](https://github.com/agentica-lang/bond/blob/main/CHANGELOG.md) has the Agentica version each release needs):
 
@@ -27,7 +27,7 @@ Then import it from your program with `pkg/bond/bond`.
 
 An app starts with `Bond.app()`. Each `Bond.get`, `Bond.post` and so on takes the app, a path pattern and a handler, and gives the app back, so they chain with `|>`. A handler is a function that takes a `Conn` and gives `ok(conn)` with the answer in it.
 
-The app does not hold your state. A handler that needs a store gets it from a closure: write it as a block, as `show` does below. That is simpler than making the app generic over the state.
+The app does not hold your state. A handler that needs a store gets it from a closure: write it as a block, as `show` does below.
 
 ```agentica
 import Bond from "pkg/bond/bond"
@@ -58,11 +58,11 @@ end
 
 ## Run it
 
-`Bond.run` serves the app with the HTTP server of `std/http` and returns when the server closes. Save the program as `app.agc` and run it:
+Save the program as `app.agc` and run it (`Bond.run` returns when the server closes):
 
 ```sh
 agentica app.agc
 curl http://127.0.0.1:4567/names/1
 ```
 
-The full todo list program is [examples/todos.agc](https://github.com/agentica-lang/bond/blob/main/examples/todos.agc). It keeps its todos in an `ATS` table and takes the ids from `ATS.add(key, n)`, which is atomic. To try an app without a socket, see [Testing](/guide/testing/).
+The full todo list program is [examples/todos.agc](https://github.com/agentica-lang/bond/blob/main/examples/todos.agc). To try an app without a socket, see [Testing](/guide/testing/).

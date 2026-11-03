@@ -8,15 +8,15 @@ description: What a failure answers, and the not_found and on_error handlers.
 
 A handler or filter that gives `error(message)` makes a 500 with the body `Internal Server Error`. The message goes to stderr, never to the client. `Bond.bad_request(message)` is the error that makes a 400 with `message` as its body.
 
-A runtime error in a handler or filter (an index out of range, an `unwrap!` of an error) is a 500 too, and does not stop the program. The request runs in a task of its own, and the crash of the task is the error. The VM prints the stack trace on stderr, and Bond adds one line with the method and the path. The `after` filters do not run for a crash.
+A runtime error in a handler or filter (an index out of range, an `unwrap!` of an error) is a 500 too, and does not stop the program: the request runs in a task of its own. The VM prints the stack trace on stderr, and Bond adds a line with the method and the path. The `after` filters do not run for a crash.
 
 A response that the HTTP server of `std/http` would refuse is a plain 500, with a warning on stderr. That is a status outside 200 to 599, a `Content-Length` or `Transfer-Encoding` header, a header name that is not an HTTP token, and a value with a control character or a character beyond Latin-1. A 204 or 304 loses its body.
 
 ## Custom handlers
 
-The handlers are your code, so escape any value of the client that they put in HTML, `conn.path` included: see [HTML and escaping](/guide/escaping/). `Bond.not_found(app, handler)` answers a path with no route, in place of the plain `not found`. The handler is an ordinary `Bond.Handler`. It gets the `Conn` with the status 404, and the `after` filters run after it. It does not answer a 405, and not a 404 that a handler gives itself.
+The handlers are your code, so escape any value of the client that they put in HTML, `conn.path` included: see [HTML and escaping](/guide/escaping/). `Bond.not_found(app, handler)` answers a path with no route, in place of the plain `not found`. The handler is an ordinary `Bond.Handler`, called with the `Conn` with status 404, and the `after` filters run after it. It does not answer a 405, nor a 404 that a handler gives itself.
 
-`Bond.on_error(app, handler)` answers a failure in place of the plain 500. The handler is a `Bond.ErrorHandler`, a `Fn[Bond.Conn, String, Result[Bond.Conn]]`: it takes the `Conn` and the message, and gives a `Result[Bond.Conn]`. It gets the request `Conn` with the status 500 and nothing of the answer built so far, and the message of the failure. Bond has already written the message to stderr, and nothing sends it to the client unless the handler does: keep it out of the answer.
+`Bond.on_error(app, handler)` answers a failure in place of the plain 500. The handler is a `Bond.ErrorHandler`, a `Fn[Bond.Conn, String, Result[Bond.Conn]]`: it takes the `Conn` and the message of the failure, and gives a `Result[Bond.Conn]`. It gets the request `Conn` with status 500 and nothing of the answer built so far. Bond has already written the message to stderr, and nothing sends it to the client unless the handler does: keep it out of the answer.
 
 If the error handler gives an `error` or crashes, the answer is the plain 500. It is never called for a `bad_request`, nor for a response that the server would refuse. Both handlers are set once per app; a second call replaces the first.
 

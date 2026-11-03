@@ -6,7 +6,7 @@ description: Refuse a POST that a page of another site sent, with no token in th
 
 # Cross-site requests
 
-A page on `evil.test` can make a visitor's browser send a `POST` to your site, and the browser adds the cookies of your site to it. This is a cross-site request forgery. `Bond.csrf(app)` stops it with the headers that browsers add to a request to say where it comes from, so a form needs no token.
+A page on `evil.test` can make a visitor's browser send a `POST` to your site with the cookies of your site: a cross-site request forgery. `Bond.csrf(app)` stops it with the headers that browsers add to say where a request comes from, so a form needs no token.
 
 `Bond.csrf` adds a `before` filter. A request with a method other than `GET`, `HEAD` and `OPTIONS` (so `POST`, `PUT`, `PATCH` and `DELETE`) is judged by these rules, in order:
 
@@ -19,7 +19,7 @@ A request with two `Origin` headers, or two `Sec-Fetch-Site` headers, is refused
 
 A refused request is a halted `403` with the text `cross-origin request refused`; the `after` filters still run for it, as for any halted answer. A `GET` is never refused, so a `GET` that changes something is not protected: keep the changes in `POST` and the other unsafe methods.
 
-The scheme of the origin is not compared with the request, since the server may sit behind a proxy that ends TLS: an `http://` Origin for the same host and port as the request passes, even if the app is served over `https://`. The proxy must pass the `Host` header on, or the third rule refuses a browser that sends no `Sec-Fetch-Site`.
+The scheme of the origin is not compared, since the server may sit behind a proxy that ends TLS: an `http://` Origin for the same host and port passes, even if the app is served over `https://`. The proxy must pass the `Host` header on, or rule 3 refuses a browser that sends no `Sec-Fetch-Site`.
 
 ## Allowing another site
 

@@ -6,9 +6,9 @@ description: Keep a value of the client from becoming markup, with Bond.escape, 
 
 # HTML and escaping
 
-`Bond.html` sends the text as it is. If a value that a client sent is put in that text, the client writes part of your page: a name like `<script>...</script>` runs in the browser of everyone who sees the page (cross-site scripting, XSS). The fix is to escape the value.
+`Bond.html` sends the text as it is. If a value that a client sent is put in it, the client writes part of your page: a name like `<script>...</script>` runs in the browser of everyone who sees the page (cross-site scripting, XSS). Escape the value.
 
-`Bond.escape(text)` is `HTML.escape` of `std/html` under a short name. It replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`.
+`Bond.escape(text)` is `HTML.escape` of `std/html`: it replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`.
 
 ## The pattern
 
@@ -45,7 +45,7 @@ end
 
 ## Templates
 
-An EAG template (`<<~EAG` of Agentica 0.22.0, [its page](https://agentica-lang.github.io/agentica/library/text-and-data/eag/)) writes the page as text with tags, and its `<%= value %>` inserts the value as it is. A line `<%@ escape &Bond.escape %>` at the top gives the template an escaper: every `<%= %>` is then escaped, in the text and in a quoted attribute, so a handler cannot forget one. `<%== value %>` is the raw form, for markup that you wrote yourself: there is no `Bond.raw`. Never put a value of the client in a `<%== %>`. The file needs `import EAG from "std/eag"`.
+An EAG template (`<<~EAG`, [its page](https://agentica-lang.github.io/agentica/library/text-and-data/eag/)) writes the page as text with tags, and its `<%= value %>` inserts the value as it is. A first line `<%@ escape &Bond.escape %>` gives the template an escaper: every `<%= %>` is then escaped, in the text and in a quoted attribute, so a handler cannot forget one. `<%== value %>` is the raw form, for markup that you wrote yourself (there is no `Bond.raw`): never put a value of the client in it. The file needs `import EAG from "std/eag"`.
 
 ```agentica
 import EAG from "std/eag"
@@ -75,19 +75,19 @@ end
 
 ```
 
-The directive must be on the first line of the template. It does not make every value safe: the rules below (a URL, an event attribute, JSON in a `<script>`) hold in a template too. For partials and a layout, see [Views](/guide/views/).
+The directive does not make every value safe: the rules below (a URL, an event attribute, JSON in a `<script>`) hold in a template too. For partials and a layout, see [Views](/guide/views/).
 
 ## What comes from the client
 
-Treat as client text every value from the query, form, cookie and JSON readers (the maps and lists too, and every string in a struct from `Bond.json_body`), `Bond.param`, `Bond.request_header` and `conn.body`. `conn.path` is the raw path, not decoded and not checked, so escape it too (the `not_found` handler above does). So are values from your own database that a client wrote (a comment, a user name): escape at the output, not at the input.
+Treat as client text every value from the query, form, cookie and JSON readers (maps, lists and every string in a struct from `Bond.json_body` too), `Bond.param`, `Bond.request_header` and `conn.body`. `conn.path` is the raw path, not decoded or checked: escape it too. So are values from your own database that a client wrote (a comment, a user name): escape at the output, not at the input.
 
 ## What `Bond.escape` is for
 
-It is right for text between tags, and for a value inside a quoted attribute (`<input value="#{Bond.escape(value)}">`), since it escapes both kinds of quote. It is not enough in the places below.
+It is right for text between tags, and for a value inside a quoted attribute (`<input value="#{Bond.escape(value)}">`), since it escapes both quotes. It is not enough in the places below.
 
 - **An attribute without quotes, or the text of a `<style>`:** do not put a client value there.
-- **An event attribute such as `onclick`:** the HTML parser decodes `&#39;` back to `'` before the JavaScript runs, so an escaped value still ends the string in the script. Never interpolate a client value into an event handler: put it in a `data-` attribute and read it from a script.
-- **A URL in `href` or `src`, or in a redirect:** escaping does not stop `javascript:alert(1)`. A local URL starts with `/`, and its second character is not `/` or `\`, or `//evil.com` and `/\evil.com` go to another site. No control character may be in it either, since a browser drops a tab or a newline inside a URL. Otherwise accept only an `https://` address that your app allows. Still escape the value in the quoted attribute. `Bond.redirect` checks nothing, so apply the rule to a target that a client gave (`?next=...`) first, as the sample below does: see [Redirects](/guide/conn/#redirects).
+- **An event attribute such as `onclick`:** the HTML parser decodes `&#39;` back to `'` before the JavaScript runs, so an escaped value still ends the string in the script. Put the value in a `data-` attribute and read it from a script.
+- **A URL in `href`, `src` or a redirect:** escaping does not stop `javascript:alert(1)`. A local URL starts with `/`, its second character is not `/` or `\` (`//evil.com` and `/\evil.com` go to another site), and it has no control character (a browser drops a tab or newline inside a URL). Otherwise accept only an `https://` address that your app allows. Still escape the value in the quoted attribute. `Bond.redirect` checks nothing, so apply the rule to a target that a client gave (`?next=...`) first, as the sample below does: see [Redirects](/guide/conn/#redirects).
 - **JSON in a page:** `Bond.escape` is wrong inside a `<script>`, which does not decode entities. Encode the value with `JSON.encode(JSON.from(value))` and replace `<` with `\u003c`, so `</script>` cannot end the script. In a `data-x="..."` attribute, use `Bond.escape(JSON.encode(JSON.from(value)))`.
 
 ```agentica

@@ -154,4 +154,4 @@ javascript:alert(1) ["/"]
 
 ## What Bond writes itself
 
-Bond puts no value of the client into an answer of its own. The 404, 405 and 500 have fixed texts, and so has each 400 of `query`, `form` and `json_body`. They and the message of `Bond.bad_request` are `text/plain`. The handlers you give to `Bond.not_found` and `Bond.on_error` are your code: the rules of this page apply to them. `Bond.redirect` sends no body, and `Bond.static` serves files as they are: a `.html` file of the folder is as safe as you wrote it.
+Bond puts no value of the client into an answer of its own. The 404, 405 and 500 have fixed texts, and so has each 400 of `query`, `form` and `json_body` (the name in the text is the one in your code). They and the message of `Bond.bad_request` are `text/plain`, which a browser does not show as markup. The handlers you give to `Bond.not_found` and `Bond.on_error` are your code: the rules of this page apply to them. `Bond.redirect` sends no body, and `Bond.static` serves files as they are: a `.html` file of the folder is as safe as you wrote it.

@@ -16,7 +16,7 @@ A response that the HTTP server of `std/http` would refuse is a plain 500, with 
 
 The handlers are your code, so escape any value of the client that they put in HTML, `conn.path` included: see [HTML and escaping](/guide/escaping/). `Bond.not_found(app, handler)` answers a path with no route, in place of the plain `not found`. The handler is an ordinary `Bond.Handler`, called with the `Conn` with status 404, and the `after` filters run after it. It does not answer a 405, nor a 404 that a handler gives itself.
 
-`Bond.on_error(app, handler)` answers a failure in place of the plain 500. The handler is a `Bond.ErrorHandler`, a `Fn[Bond.Conn, String, Result[Bond.Conn]]`: it takes the `Conn` and the message of the failure. The `Conn` has the status 500 and nothing of the answer built so far. Bond has already written the message to stderr; keep it out of the answer unless you mean to send it.
+`Bond.on_error(app, handler)` answers a failure in place of the plain 500. The handler is a `Bond.ErrorHandler`, a `Fn[Bond.Conn, String, Result[Bond.Conn]]`: it takes the `Conn` and the message of the failure, and gives a `Result[Bond.Conn]`. It gets the request `Conn` with status 500 and nothing of the answer built so far. Bond has already written the message to stderr, and nothing sends it to the client unless the handler does: keep it out of the answer.
 
 If the error handler gives an `error` or crashes, the answer is the plain 500. It is never called for a `bad_request`, nor for a response that the server would refuse. Both handlers are set once per app; a second call replaces the first.
 

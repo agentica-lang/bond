@@ -29,7 +29,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.query(conn, name)` | the first value of `name` in the query string, decoded, as a `Result`; `Bond.query_int` is a whole number, `Bond.query_all` every value (`Result[List[String]]`), `Bond.query_params(conn)` the whole string decoded once (`Result[Map[String, List[String]]]`); see [Query and forms](/guide/query/) |
 | `Bond.form(conn, name)` | the first value of a field of a form body, as a `Result`; `Bond.form_int`, `Bond.form_all` and `Bond.form_params(conn)` are like the `query` ones |
 | `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; see [Cookies](/guide/cookies/) |
-| `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie`; `Bond.delete_cookie(conn, name)` deletes one |
+| `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` (`Path=/`, `HttpOnly`, `SameSite=Lax`) as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` with every attribute; `Bond.delete_cookie(conn, name)` deletes one; see [Cookies](/guide/cookies/) |
 | `Bond.send_file(conn, path, some(name))` | answers with a file read in pieces, with ranges; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
 | `Bond.static(app, prefix, root)` | serves the files of a folder under a path; an app function, not a `Conn` one; see [Static files](/guide/static/) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |

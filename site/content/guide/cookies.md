@@ -8,9 +8,9 @@ description: Read the cookies of a request and set or delete them in the answer,
 
 `Bond.cookies(conn)` reads the `Cookie` header into a `Map[String, String]`, with `std/cookie`. The first value of a name wins, and the values are as the client sent them: they are not decoded or unquoted. More than one `Cookie` header is read as one. A handler that needs several cookies reads the map once; `Bond.cookie(conn, "sid")` gives one value as a `Result`.
 
-A cookie that is not there is an `error`, but a plain one, like `Bond.param` and `Bond.request_header`: a first visit has no cookie, and that is not a mistake of the client. This is different from `Bond.query`, where a missing name is a 400. So `try Bond.cookie(conn, "sid")` on a first visit is a 500: use `unwrap_or` or `case` and answer it yourself, for example with a redirect to the login page.
+A cookie that is not there is a plain `error`, like `Bond.param` and `Bond.request_header` (a first visit has no cookie, which is no mistake of the client), unlike `Bond.query`, where a missing name is a 400. So `try Bond.cookie(conn, "sid")` on a first visit is a 500: use `unwrap_or` or `case` and answer it yourself, for example with a redirect to the login page.
 
-A value is as the client sent it, and `Bond.cookies` does not decode it. Encode a value with `URI.encode_www_form_component` (from `std/uri`) before you set it, and read it back with `URI.decode_www_form_component`.
+`Bond.cookie`, `Bond.cookies`, `Bond.set_cookie` and `std/cookie` never encode or decode a value: encode it with `URI.encode_www_form_component` (`std/uri`) before you set it, and read it back with `URI.decode_www_form_component`.
 
 ## Setting a cookie
 
@@ -23,9 +23,7 @@ A value is as the client sent it, and `Bond.cookies` does not decode it. Encode 
 
 `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` of `std/cookie` (`import Cookie from "std/cookie"`) with the attributes you give: `path`, `domain`, `max_age`, `expires`, `secure`, `http_only` and `same_site`. Bond adds none of its own there, so write `http_only: true` and `same_site: "Lax"` when you want them.
 
-Both give a `Result[Conn]`: use `try`. A name that is not a token, or a value with a space, a comma, a semicolon, a quote, a control or a non-ASCII character, is an `error` (a 500 when it is passed on), and no cookie is set. `std/cookie` never encodes or decodes, so a value that comes from a client must be encoded first, as above.
-
-`set_cookie` has no other arguments: `set_cookie_with` covers `Secure` and `Max-Age`. In production, one cookie of a year, over HTTPS, is:
+Both give a `Result[Conn]`: use `try`. A name that is not a token, or a value with a space, a comma, a semicolon, a quote, a control or a non-ASCII character, is an `error` (a 500 when it is passed on), and no cookie is set. In production, one cookie of a year, over HTTPS, is:
 
 ```agentica
 import Cookie from "std/cookie"

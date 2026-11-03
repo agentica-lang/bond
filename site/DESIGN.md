@@ -1,24 +1,21 @@
 # Bond docs site: design
 
-The Bond site uses the design of the Agentica docs site. The rules, tokens,
+The Bond site uses the design of the Agentica docs site: rules, tokens,
 components and accessibility notes are in
-[site/DESIGN.md of Agentica][agentica-design].
-The theme files in `site/layouts/` and `site/assets/` are copies of that site,
-and a change to the theme is ported from there. This file lists only what
-differs. If it and the code disagree, the code is right: fix this file in the
-same change.
+[site/DESIGN.md of Agentica][agentica-design]. The theme files in `site/layouts/`
+and `site/assets/` are copies of that site, and a change to the theme is ported
+from there. This file lists only what differs. If it and the code disagree, the
+code is right: fix this file in the same change.
 
 ## Differences
 
-- Title and voice: "Bond", the docs of a small web framework for Agentica.
-  `site/hugo.toml` has the title, the description and the base URL
-  (`https://agentica-lang.github.io/bond/`).
-- Icon: the favicon is a "B" cut out of an accent-colored rounded square. It
-  has the same light and dark mechanism as Agentica (the colors are `--accent`
-  of both themes), but its own shape. It is in `site/layouts/baseof.html`.
+- Title and voice: "Bond", the docs of a small web framework for Agentica
+  (title, description and base URL are in `site/hugo.toml`).
+- Icon: the favicon is a "B" cut out of an accent-colored rounded square, with
+  the same light and dark mechanism as Agentica (`--accent` of both themes) but
+  its own shape (`site/layouts/baseof.html`).
 - Trimmed features, which Bond does not need:
-  - no version in the header or footer, and no release links (Bond has no
-    release yet);
+  - no version in the header or footer, and no release links;
   - no tour and no language specification (no grammar mount);
   - no `llms.txt` or `llms-full.txt` output. Every page is still published as
     Markdown for the page actions, and search stays.

@@ -44,12 +44,12 @@ A session must keep taking messages from `incoming` until the `Close` message (o
 
 ## Open sockets and the options
 
-An open WebSocket holds one of the server's connections until it closes, and the server serves at most `max_connections` at once (128 by default, an option of [`Bond.start_with`](/guide/server/#options)). So quiet sockets must not stay for ever, or they starve the pages, the streams and the other WebSockets of the app. With no `options`, a route uses `Bond.WEBSOCKET_OPTIONS`:
+An open WebSocket holds one of the server's connections until it closes, and the server serves at most `max_connections` at once (128 by default, an option of [`Bond.start_with`](/guide/server/#options)), so quiet sockets would starve the pages, the streams and the other WebSockets. With no `options`, a route uses `Bond.WEBSOCKET_OPTIONS`:
 
-- `ping_ms: 30_000`: after 30 s with nothing to send, the server sends a ping. A browser answers every ping by itself, and the traffic keeps proxies and NATs, which often drop a connection idle for 60 s, from closing it.
+- `ping_ms: 30_000`: after 30 s with nothing to send, the server sends a ping, which a browser answers by itself; the traffic keeps proxies and NATs, which often drop a connection idle for 60 s, from closing it.
 - `idle_ms: 120_000`: a peer that sent nothing for 120 s, not even a pong, is dropped, and the handler gets `Close` with code 1006.
 
-The rest are the defaults of `HTTP.WebSocketOptions` of `std/http` (whose own `idle_ms` is no limit): `max_message_bytes` (1 MiB), `close_ms` and `protocols`. The last argument of `Bond.websocket` changes them; keep the bounds when you change one option: `Bond.websocket(app, "/live", &live, [], some(Bond.WEBSOCKET_OPTIONS.with(max_message_bytes: 65_536)))`. The argument is an `Optional`, so a bare `HTTP.WebSocketOptions(...)` is a type error, not a silent loss of the bounds. Raise `max_connections` for an app that keeps many sockets open.
+The rest are the defaults of `HTTP.WebSocketOptions` of `std/http` (whose own `idle_ms` is no limit): `max_message_bytes` (1 MiB), `close_ms` and `protocols`. The last argument of `Bond.websocket` is an `Optional` that changes them; keep the bounds when you change one option: `Bond.websocket(app, "/live", &live, [], some(Bond.WEBSOCKET_OPTIONS.with(max_message_bytes: 65_536)))` (a bare `HTTP.WebSocketOptions(...)` is a type error, not a silent loss of the bounds). Raise `max_connections` for an app that keeps many sockets open.
 
 ## What the route answers
 
@@ -63,11 +63,11 @@ The `after` filters run for the handshake too. An accepted handshake has status 
 
 ## The session
 
-The handler cannot change the session: do it in a normal request, before the page opens the socket. The headers of an accepted handshake are not sent, since the server answers the upgrade itself, so no response carries the cookie. The session is checked once, at the handshake: a WebSocket stays open after its visitor logs out. A long handler that must stop then checks again (a store of the sessions that ended, say), or relies on `idle_ms` for a socket that goes quiet.
+The handler cannot change the session, since the server answers the upgrade itself and sends no header of an accepted handshake: change it in a normal request, before the page opens the socket. The session is checked once, at the handshake, so a WebSocket stays open after its visitor logs out: a long handler that must stop then checks again (a store of the sessions that ended, say), or relies on `idle_ms` for a socket that goes quiet.
 
 ## The Origin check
 
-A browser lets any page open a WebSocket to any site, and sends the cookies of that site with the handshake. So a page on `evil.test` could talk to your app as its visitor. The browser says which page asks in `Origin`, and the route checks it:
+A browser lets any page open a WebSocket to any site, with the cookies of that site, so a page on `evil.test` could talk to your app as its visitor. The browser says which page asks in `Origin`, and the route checks it:
 
 - a handshake whose `Origin` names the host of the request (the part after `://` is the `Host` header) passes;
 - so does one whose `Origin` is one of `allowed_origins`, origins as a browser writes them, as in [`Bond.csrf`](/guide/csrf/): `Bond.websocket(app, "/live", &live, ["https://app.example.com"])`;

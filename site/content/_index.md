@@ -18,10 +18,10 @@ def main() -> Void
 end
 ```
 
-Bond 0.4.0 has the router, filters, custom `not_found` and `on_error` handlers, JSON request bodies, query strings and forms, cookies, signed cookie sessions, a cross-site request check, static files (any file, as bytes), files sent in pieces with ranges, streamed bodies (server-sent events), a guide to HTML escaping and one to views built on EAG templates, the helpers to answer, server options and `Testing.request`, which runs an app in process with no socket. The next release adds [WebSocket routes](/guide/websockets/) on the same port and [file uploads](/guide/uploads/).
+The guide describes the main branch. The release 0.4.0 lacks the sessions, the cross-site check, `Bond.escape` with the EAG directive, the views guide, [WebSockets](/guide/websockets/) and [file uploads](/guide/uploads/), which the next release adds.
 
 - [Getting started](/getting-started/) installs Bond and runs a first app.
 - The [guide](/guide/) has a page for each part.
 - The source and the changelog are [on GitHub](https://github.com/agentica-lang/bond).
 
-Bond needs Agentica 0.22.0 or later (tested with 0.22.0; the 0.4.0 release needs 0.19.0 or later), and is under the Apache License 2.0.
+Bond needs Agentica 0.22.0 or later (the changelog has the version each release needs), and is under the Apache License 2.0.

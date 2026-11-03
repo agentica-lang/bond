@@ -1,9 +1,9 @@
 # Bond
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
-Version 0.4.0 has the router, filters, custom handlers, JSON bodies, query strings and forms, cookies, signed cookie sessions, a cross-site request check, static files (any file, as bytes), files sent in pieces with ranges, streamed bodies (server-sent events), a guide to views built on EAG templates, and the helpers to answer.
+Routes, filters, JSON bodies, forms, cookies, static files, streaming and an in-process test helper (0.4.0), and, in the next release (0.5.0): signed sessions, a cross-site request check, HTML escaping, views, WebSockets, file uploads.
 
-The next release (0.5.0) adds WebSocket routes on the same port and file uploads, and needs Agentica 0.22.0 or later (it serves with `HTTP.serve`), 0.4.0 needs 0.19.0-beta.3 or later, 0.3.0 needs 0.19.0-beta.2 or later (bodies of bytes), 0.2.0 needs 0.19.0-beta.1 or later and 0.1.0 needs 0.16.0.
+The main branch and 0.5.0 need Agentica 0.22.0 or later; the [changelog](CHANGELOG.md) has the version each release needs.
 
 Documentation: https://agentica-lang.github.io/bond/
 

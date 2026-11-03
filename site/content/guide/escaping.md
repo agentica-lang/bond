@@ -6,13 +6,13 @@ description: Keep a value of the client from becoming markup, with Bond.escape, 
 
 # HTML and escaping
 
-`Bond.html` sends the text as it is. If a value that a client sent is put in that text, the client writes part of your page: a name like `<script>...</script>` runs in the browser of everyone who sees the page. That is cross-site scripting (XSS), and the fix is to escape the value.
+`Bond.html` sends the text as it is. If a value that a client sent is put in that text, the client writes part of your page: a name like `<script>...</script>` runs in the browser of everyone who sees the page (cross-site scripting, XSS). The fix is to escape the value.
 
-`Bond.escape(text)` is the function for this. It is `HTML.escape` of `std/html` under a short name, beside `Bond.html` in the module that a handler already imports. It replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`.
+`Bond.escape(text)` is `HTML.escape` of `std/html` under a short name. It replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`.
 
 ## The pattern
 
-Escape every value that you interpolate into HTML, at the place where you write it, and not before: a value that is escaped early is escaped twice or not at all by the next function that touches it.
+Escape every value that you interpolate into HTML, at the place where you write it, not before: a value escaped early is escaped twice or not at all by the next function that touches it.
 
 ```agentica
 import Bond from "pkg/bond/bond"
@@ -75,11 +75,11 @@ end
 
 ```
 
-Pages with partials and a layout are built from these templates: see [Views](/guide/views/). The directive must be on the first line of the template. It does not make every value safe: the rules of the sections below (a URL, an event attribute, JSON in a `<script>`) hold in a template too.
+The directive must be on the first line of the template. It does not make every value safe: the rules below (a URL, an event attribute, JSON in a `<script>`) hold in a template too. For partials and a layout, see [Views](/guide/views/).
 
 ## What comes from the client
 
-Treat every value that comes from the query, form, cookie and JSON readers as client text, the maps and lists too: `Bond.query`, `query_all` and `query_params`, `Bond.form` and its relatives, `Bond.cookie` and `Bond.cookies`, and every string in a struct from `Bond.json_body`. So are `Bond.param`, `Bond.request_header` and `conn.body`. `conn.path` is the raw path as the client sent it, not decoded and not checked, so escape it too (the `not_found` handler above does). Values from your own database count when a client wrote them (a comment, a user name): escape at the output, not at the input.
+Treat as client text every value from the query, form, cookie and JSON readers (the maps and lists too, and every string in a struct from `Bond.json_body`), `Bond.param`, `Bond.request_header` and `conn.body`. `conn.path` is the raw path, not decoded and not checked, so escape it too (the `not_found` handler above does). So are values from your own database that a client wrote (a comment, a user name): escape at the output, not at the input.
 
 ## What `Bond.escape` is for
 
@@ -87,8 +87,7 @@ It is right for text between tags, and for a value inside a quoted attribute (`<
 
 - **An attribute without quotes, or the text of a `<style>`:** do not put a client value there.
 - **An event attribute such as `onclick`:** the HTML parser decodes `&#39;` back to `'` before the JavaScript runs, so an escaped value still ends the string in the script. Never interpolate a client value into an event handler: put it in a `data-` attribute and read it from a script.
-- **A URL in `href` or `src`, or in a redirect:** escaping does not stop `javascript:alert(1)`. A local URL starts with `/`, and its second character is not `/` or `\`, or `//evil.com` and `/\evil.com` go to another site. No control character may be in it either, since a browser drops a tab or a newline inside a URL. Otherwise accept only an `https://` address that your app allows. Still escape the value in the quoted attribute.
-- **`Bond.redirect(conn, to)`:** it passes `//evil.com`, `/\evil.com` and `javascript:` through, so check a target that a client gave (`?next=...`) with the same rule first: see [Redirects](/guide/conn/#redirects).
+- **A URL in `href` or `src`, or in a redirect:** escaping does not stop `javascript:alert(1)`. A local URL starts with `/`, and its second character is not `/` or `\`, or `//evil.com` and `/\evil.com` go to another site. No control character may be in it either, since a browser drops a tab or a newline inside a URL. Otherwise accept only an `https://` address that your app allows. Still escape the value in the quoted attribute. `Bond.redirect` checks nothing, so apply the rule to a target that a client gave (`?next=...`) first, as the sample below does: see [Redirects](/guide/conn/#redirects).
 - **JSON in a page:** `Bond.escape` is wrong inside a `<script>`, which does not decode entities. Encode the value with `JSON.encode(JSON.from(value))` and replace `<` with `\u003c`, so `</script>` cannot end the script. In a `data-x="..."` attribute, use `Bond.escape(JSON.encode(JSON.from(value)))`.
 
 ```agentica
@@ -155,6 +154,4 @@ javascript:alert(1) ["/"]
 
 ## What Bond writes itself
 
-Bond puts no value of the client into an answer of its own. The 404, the 405 and the 500 have fixed texts, and so has each 400 of `query`, `form` and `json_body` (the name in the text is the one you wrote in the code). They are sent as `text/plain`, which a browser does not show as markup. The message you pass to `Bond.bad_request` is sent as `text/plain` too. The handlers that you give to `Bond.not_found` and `Bond.on_error` are your code, and the rules of this page apply to them: escape `conn.path` as above.
-
-`Bond.redirect` sends no body, and `Bond.static` serves files as they are: a `.html` file of the folder is as safe as you wrote it.
+Bond puts no value of the client into an answer of its own. The 404, 405 and 500 have fixed texts, and so has each 400 of `query`, `form` and `json_body` (the name in the text is the one in your code). They and the message of `Bond.bad_request` are `text/plain`, which a browser does not show as markup. The handlers you give to `Bond.not_found` and `Bond.on_error` are your code: the rules of this page apply to them. `Bond.redirect` sends no body, and `Bond.static` serves files as they are: a `.html` file of the folder is as safe as you wrote it.

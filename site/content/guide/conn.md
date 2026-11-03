@@ -13,16 +13,16 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | Function | Does |
 |---|---|
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
-| `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text; see [HTML and escaping](/guide/escaping/) |
-| `Bond.escape(text)` | the text for HTML: `&`, `<`, `>`, `"` and `'` become entities; for a value of a client that goes into `Bond.html` or an EAG template |
+| `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
+| `Bond.escape(text)` | escapes `&`, `<`, `>`, `"` and `'` for HTML; see [HTML and escaping](/guide/escaping/) |
 | `Bond.bytes(conn, status, body)` | answers `Bytes` as they are (an image, a download); sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
 | `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
-| `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec (`JSON.codec(Todo)`), written once with no `Json` in between; sets `Content-Type`; see [JSON bodies](/guide/json/) |
+| `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec (`JSON.codec(Todo)`); sets `Content-Type`; see [JSON bodies](/guide/json/) |
 | `Bond.status(conn, code)` | sets the status and nothing else |
-| `Bond.redirect(conn, location)` | answers a 302 with a `Location` header, no body and no `Content-Type`, and halts; a third argument gives 301, 303, 307 or 308, and any other code is a runtime error, so a 500 |
+| `Bond.redirect(conn, location)` | answers a 302 (or the status of a third argument) with `Location` and halts; see [Redirects](#redirects) |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
-| `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`: in the `charset` of the request (UTF-8 when it has none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 are read too), and a `charset` that `HTTP.text` cannot decode or a body that does not decode is a 400; `conn.body` has the bytes |
+| `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`, in the `charset` of the request (UTF-8 when it has none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 too); a `charset` or a body that does not decode is a 400 |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
 | `Bond.param(conn, name)` | the text of a `:name` segment, as a `Result[String]` |
 | `Bond.param_int(conn, name)` | the same, as a whole number; text that is not one is a 400 |
@@ -37,18 +37,14 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; see [Cookies](/guide/cookies/) |
 | `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` with `Path=/`, `HttpOnly` and `SameSite=Lax`, as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` with every attribute |
 | `Bond.delete_cookie(conn, name)` | adds a `Set-Cookie` that deletes the cookie (`Max-Age=0`) |
-| `Bond.send_file(conn, path, some(name))` | answers with a file read in pieces, with its length, its type, `Accept-Ranges` and `Range` support; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
-| `Bond.static(app, prefix, root)` | serves the files of a folder under a path (`GET` and `HEAD`, any file up to `max_bytes`); an app function, not a `Conn` one; see [Static files](/guide/static/) |
+| `Bond.send_file(conn, path, some(name))` | answers with a file read in pieces, with ranges; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
+| `Bond.static(app, prefix, root)` | serves the files of a folder under a path; an app function, not a `Conn` one; see [Static files](/guide/static/) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
 
-## HTML and escaping
-
-`Bond.html` sends the text as it is. Escape every value of a client with `Bond.escape` before it goes into the text: see [HTML and escaping](/guide/escaping/).
-
 ## Redirects
 
-`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308. It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. Any other status is a runtime error in the handler, so a 500. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. `Bond.redirect` does not check the target: `//evil.com`, `/\evil.com` and `javascript:` pass through. A redirect to an address that a client gave (`?next=...`) is an open redirect, so check it first. A local target starts with `/`, its second character is not `/` or `\`, and it has no control character; any other target must be an `https://` address that your app allows. The sample in [HTML and escaping](/guide/escaping/) has the check.
+`Bond.redirect` answers a 302, or the status you pass as the third argument: 301, 303, 307 or 308 (any other is a runtime error in the handler, so a 500). It sets `Location`, clears the body and the content type and halts, so a `before` filter can use it. `Location` must be ASCII: percent-encode anything else, or the answer is a 500. `Bond.redirect` does not check the target (`//evil.com`, `/\evil.com` and `javascript:` pass through), so a redirect to an address that a client gave (`?next=...`) is an open redirect unless you check it first: the rule and a sample are in [HTML and escaping](/guide/escaping/).
 
 ```agentica
 import HTTP from "std/http"
@@ -85,32 +81,4 @@ end
 301 /new
 <p>the new page</p>
 500
-```
-
-## Bad requests
-
-`Bond.bad_request(message)` gives an `error` that makes a 400 with `message` as its body. `Bond.param_int` uses it for text that is not a number.
-
-```agentica
-import Bond from "pkg/bond/bond"
-import Testing from "pkg/bond/testing"
-
-def create(conn: Bond.Conn) -> Result[Bond.Conn]
-  title = try Bond.body_text(conn)
-  if title.empty?
-    return Bond.bad_request("title is empty")
-  end
-
-  return ok(Bond.text(conn, 201, "created #{title}"))
-end
-
-def main() -> Void
-  app = Bond.app() |> Bond.post("/todos", &create)
-  empty = Testing.request(app, "POST", "/todos")
-  puts("#{empty.status} #{Testing.text(empty).unwrap!}")
-end
-```
-
-```output
-400 title is empty
 ```

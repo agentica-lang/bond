@@ -16,9 +16,7 @@ The answer carries the new session in a `Set-Cookie`, and only when a handler ch
 
 ## The options
 
-`Bond.app() |> Bond.sessions(Bond.SessionOptions(secret: secret))` is the whole setup.
-
-`secret` is the only one you must give. It needs at least 32 bytes, and Bond checks only the length, not that it is random: make it once with `SecureRandom.hex(32)` (64 hex digits from 32 random bytes), keep it in the environment or a file, and never put it in the source. The program stops at the call of `sessions` when an option is wrong (a short secret, an empty name, a `max_age` below 1, a `same_site` that is not `Strict`, `Lax` or `None`, or `None` without `secure`), as `Bond.static` does for a bad folder.
+`Bond.app() |> Bond.sessions(Bond.SessionOptions(secret: secret))` is the whole setup. `secret` is the only option you must give. It needs at least 32 bytes (Bond checks only the length, not that it is random): make it once with `SecureRandom.hex(32)`, keep it in the environment or a file, and never put it in the source. The program stops at the call of `sessions` when an option is wrong (a short secret, an empty name, a `max_age` below 1, a `same_site` that is not `Strict`, `Lax` or `None`, or `None` without `secure`).
 
 | Option | Default | |
 |---|---|---|
@@ -30,7 +28,7 @@ The answer carries the new session in a `Set-Cookie`, and only when a handler ch
 | `same_site` | `"Lax"` | `"Strict"`, `"Lax"` or `"None"` |
 | `path`, `domain` | `"/"`, `""` | those of the cookie |
 
-The cookie is always `HttpOnly`. In production use `name: "__Host-session"` with `secure: true`, the default `path` and no `domain`: a browser accepts a `__Host-` cookie only from a secure page for the exact host, so a sibling subdomain cannot plant a cookie of that name (it could plant one that is signed, with its own session, since the first cookie of a name wins). `Secure` is off by default for the reason that `Bond.set_cookie` has no `Secure`: a `Secure` cookie is dropped over plain HTTP, which would break a program in development.
+The cookie is always `HttpOnly`. In production use `name: "__Host-session"` with `secure: true`, the default `path` and no `domain`: a browser accepts a `__Host-` cookie only from a secure page for the exact host, so a sibling subdomain cannot plant a cookie of that name (it could otherwise plant a signed one with its own session, since the first cookie of a name wins). `Secure` is off by default because a `Secure` cookie is dropped over plain HTTP, which would break a program in development.
 
 The end date is inside the signed data, so a client that keeps an old cookie does not get a longer session. Every change writes a cookie that lasts `max_age` from that moment; a session that is only read is not extended.
 
@@ -44,7 +42,7 @@ Log in with a new session: call `clear_session` before you set the user, so noth
 
 ## Rotating the secret
 
-To change the secret without ending every session, put the new one in `secret` and the old one in `old_secrets`. Bond reads a cookie signed with any of them, and writes it again with `secret` on the first request that has it. That cookie gets a new `max_age` from that moment, so a session that is in use outlives the rotation and an old one that nobody uses ends as before. Remove the old secret after `max_age` seconds, when the last cookie that it signed has expired.
+Put the new secret in `secret` and the old one in `old_secrets`. Bond reads a cookie signed with any of them, and writes it again with `secret` (and a new `max_age`) on the first request that has it, so a session in use outlives the rotation. Remove the old secret after `max_age` seconds, when the last cookie that it signed has expired.
 
 ## Testing
 
@@ -108,4 +106,4 @@ hello nobody
 _bond_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT
 ```
 
-`sessions` adds a `before` and an `after` filter (see [Filters](../filters/)), so the order of the calls matters as it does for any filter: call it before the filters that read the session. Without it, `set_session` changes the `Conn` and nothing is sent.
+`sessions` adds a `before` and an `after` filter (see [Filters](../filters/)), so call it before the filters that read the session. Without it, `set_session` changes the `Conn` and nothing is sent.

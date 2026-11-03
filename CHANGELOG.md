@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-03
+
+Needs Agentica 0.22.0 or later (EAG `escape` directive, `HTTP.serve` and `HTTP.body_refusal`).
+
 ### Added
 
 - `Bond.uploads(app, options)` reads the `multipart/form-data` body of a POST, PUT or PATCH as it arrives: its text fields go to `Bond.form` and its files to a private temporary folder, given by `Bond.file` and `Bond.file_all` as `Bond.UploadedFile` (field, safe filename, content type, path, size) and removed after the answer. The body is read after the before filters, only for a request that found its route. A file over `max_file_bytes`, a text field over `max_field_bytes`, the text fields over `max_fields_bytes` or a body over `max_total_bytes` (`Bond.UploadOptions`) is a 413. The guide has a page on it.
@@ -106,7 +110,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.4.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/agentica-lang/bond/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/agentica-lang/bond/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/agentica-lang/bond/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/agentica-lang/bond/compare/0.1.0...0.2.0

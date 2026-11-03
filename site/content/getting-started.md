@@ -11,14 +11,14 @@ Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.
 Pin a release by its tag (the [changelog](https://github.com/agentica-lang/bond/blob/main/CHANGELOG.md) has the Agentica version each release needs):
 
 ```sh
-agentica add bond https://github.com/agentica-lang/bond --tag 0.4.0
+agentica add bond https://github.com/agentica-lang/bond --tag 0.5.0
 ```
 
 This writes the dependency in `agentica.toml` and `agentica.lock`, and puts the files of Bond in `deps/bond/`. For a manifest you edited by hand, run `agentica install`.
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.4.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.5.0" }
 ```
 
 Then import it from your program with `pkg/bond/bond`.

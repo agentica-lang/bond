@@ -7,6 +7,10 @@ import {Conn} from "conn"
 FORM_TYPE = "application/x-www-form-urlencoded"
 MULTIPART_TYPE = "multipart/form-data"
 
+# The 400 of `Bond.form` on a `multipart/form-data` body with no form: the app has no `Bond.uploads`, or a before
+# filter asks before the body is read.
+MULTIPART_NOT_READ = "a multipart/form-data body is read by Bond.uploads for the handler, after the before filters"
+
 ## Every name of the query string with its values, decoded (`+` is a space and `%XX` is a byte), in the order they
 ## were sent. It decodes the whole string once: a handler that reads many fields uses it, and one that reads one or
 ## two uses `query`. A `%` that is not followed by two hex digits, or bytes that are not UTF-8, anywhere in the
@@ -28,7 +32,7 @@ export def form_params(conn: Conn) -> Result[Map[String, List[String]]]
   end
 
   if Conns.media_type(conn) == MULTIPART_TYPE
-    return Conns.bad_request("a multipart/form-data body needs Bond.uploads")
+    return Conns.bad_request(MULTIPART_NOT_READ)
   end
 
   if Conns.media_type(conn) != FORM_TYPE

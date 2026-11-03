@@ -24,7 +24,8 @@ end
 
 ## The limits of `Bond.uploads`: the largest file (10 MiB), the largest text field (1 MiB), all the text fields
 ## together (2 MiB), and the largest `multipart/form-data` body (its fields, files and framing: 50 MiB, at most
-## 256 MiB). Each is 1 or more, and `max_file_bytes` is at most `max_total_bytes`; the body cap bounds the others too.
+## 256 MiB). Each is 1 or more, `max_file_bytes` is at most `max_total_bytes` and `max_field_bytes` at most
+## `max_fields_bytes`; the body cap bounds the text fields too.
 ## `dir` is the folder where each request that sends a file gets a private folder for its files, and it must exist;
 ## "" is the temporary folder of the system (`TMPDIR`, `TEMP` or `TMP`, else `/tmp`).
 export struct UploadOptions
@@ -151,29 +152,47 @@ end
 ## response the server would refuse is a plain 500 (`Conns.to_response`). The chain runs in a task of its own so
 ## that a runtime error ends the request and not the program; the after filters do not run for a crash. A streamed
 ## body is read into the response, as `Conns.to_response` says (`max_pieces` and `timeout_ms` bound it); the server
-## uses `handle_stream` instead. `receive` reads the `multipart/form-data` body of `Bond.uploads` into `Conn.form`,
-## after the before filters and once the route is found; a request halted before it, or with no route, is not read.
+## uses `handle_stream` instead.
 export def handle(
   app: App,
   request: HttpRequest,
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Testing.request and specs/steps.agc
-  receive: Optional[Receiver] = none,
 ) -> HttpResponse
-  return Conns.to_response(answer(app, request, receive), max_pieces, timeout_ms)
+  return Conns.to_response(answer(app, request, none), max_pieces, timeout_ms)
+end
+
+## Like `handle`, with the `Receiver` of `Bond.uploads` (for `Testing`; `bond.agc` does not export it): `receive` reads
+## the `multipart/form-data` body into `Conn.form`, after the before filters and once the route is found, so a request
+## halted before it, or with no route, is not read.
+export def handle_with(
+  app: App,
+  request: HttpRequest,
+  max_pieces: Int,
+  timeout_ms: Int,
+  receive: Receiver,
+) -> HttpResponse
+  return Conns.to_response(answer(app, request, some(receive)), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
 ## other body is one closed piece.
 export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
-  return Conns.to_stream_response(answer(app, request))
+  return Conns.to_stream_response(answer(app, request, none))
 end
 
 ## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
-## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`. `receive` is
-## as for `handle`.
-export def handle_answer(app: App, request: HttpRequest, receive: Optional[Receiver] = none) -> HTTP.Answer
-  conn = answer(app, request, receive)
+## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
+export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
+  return upgrade_or_stream(answer(app, request, none))
+end
+
+## Like `handle_answer`, with the `Receiver` of `Bond.uploads`, as for `handle_with`.
+export def handle_answer_with(app: App, request: HttpRequest, receive: Receiver) -> HTTP.Answer
+  return upgrade_or_stream(answer(app, request, some(receive)))
+end
+
+def upgrade_or_stream(conn: Conn) -> HTTP.Answer
   case Conns.accepted_upgrade(conn)
     some(upgrade) -> return HTTP.Answer.Upgrade(upgrade)
     none -> return HTTP.Answer.Stream(Conns.to_stream_response(conn))
@@ -181,7 +200,7 @@ export def handle_answer(app: App, request: HttpRequest, receive: Optional[Recei
 end
 
 # The `Conn` that answers the request, before it is turned into a response.
-def answer(app: App, request: HttpRequest, receive: Optional[Receiver] = none) -> Conn
+def answer(app: App, request: HttpRequest, receive: Optional[Receiver]) -> Conn
   conn = Conns.from_request(request)
   task = Task.spawn() do serve(app, conn, receive) end
   case Task.await(task)

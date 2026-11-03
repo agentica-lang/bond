@@ -8,10 +8,11 @@ import Apps from "app"
 import Conns from "conn"
 import Multipart from "multipart"
 import {App, UploadOptions} from "app"
-import {Conn, Form, Receiver, UploadedFile} from "conn"
+import {Conn, Form, UploadedFile} from "conn"
 
 MULTIPART_TYPE = "multipart/form-data"
 DEFAULT_TYPE = "application/octet-stream"
+BODY_METHODS = ["POST", "PUT", "PATCH"]
 
 # The most bytes the server takes in one body (`HttpServerOptions.max_body_bytes`).
 SERVER_MAX_BODY = 268_435_456
@@ -61,12 +62,17 @@ end
 ## that is not `multipart/form-data` as RFC 7578 frames it is a 400. The folder and every file in it are removed when
 ## the answer is ready (for a stream, before it is sent), so a handler that keeps a file moves it. Other requests keep
 ## the body limit of the server (`max_body_bytes` of `Bond.start_with`); the server takes a body up to
-## `max_total_bytes` for these. The program stops when a limit is below 1, when `max_file_bytes` is above
-## `max_total_bytes`, or when `max_total_bytes` is above 256 MiB.
+## `max_total_bytes` for these. Only a POST, PUT or PATCH is read this way: another method with that type keeps the
+## server's limit and its body stays in `conn.body`. The program stops when a limit is below 1, when `max_file_bytes`
+## is above `max_total_bytes`, when `max_field_bytes` is above `max_fields_bytes`, or when `max_total_bytes` is above
+## 256 MiB.
 export def uploads(app: App, options: UploadOptions = UploadOptions()) -> App
-  fields_ok = options.max_field_bytes >= 1 and options.max_fields_bytes >= 1
+  fields_ok = options.max_field_bytes >= 1 and options.max_field_bytes <= options.max_fields_bytes
   if options.max_file_bytes < 1 or options.max_file_bytes > options.max_total_bytes or not fields_ok
-    bad: Result[App] = error("bond: the upload limits must be 1 or more, and max_file_bytes at most max_total_bytes")
+    bad: Result[App] = error(
+      "bond: the upload limits must be 1 or more, max_file_bytes at most max_total_bytes and max_field_bytes at most " +
+      "max_fields_bytes",
+    )
     return bad.unwrap!
   end
 
@@ -97,8 +103,13 @@ export def file_all(conn: Conn, name: String) -> List[UploadedFile]
   end
 end
 
-## The upload options when they apply to the request: the app has uploads and the body is `multipart/form-data`.
+## The upload options when they apply to the request: the app has uploads, the method is one that sends a form body
+## (POST, PUT, PATCH; a DELETE or a GET with a body is no upload) and the body is `multipart/form-data`.
 export def applies(app: App, request: HttpRequest) -> Optional[UploadOptions]
+  if not BODY_METHODS.any? do |method| method == request.method end
+    return none
+  end
+
   types = HTTP.header_values(request.headers, "content-type")
   if types.size != 1 or types[0].split(";")[0].strip.downcase != MULTIPART_TYPE
     return none
@@ -125,8 +136,10 @@ end
 ## the request reaches its route, and the folder of the files is removed after.
 export def answer(app: App, options: UploadOptions, request: HttpRequest, body: HTTP.RequestBody) -> HTTP.Answer
   dir = folder(options)
-  read = receiving() do |conn| receive(options, dir, request, body) end
-  answered = Apps.handle_answer(app, request.with(body: "".bytes), some(read))
+  answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |conn|
+    receive(options, dir, request, body)
+  end
+
   remove(dir)
   return answered
 end
@@ -150,26 +163,24 @@ export def handle(
   done = Task.spawn() do arrived() end
   body = HTTP.RequestBody(pieces: pieces, done: done)
   dir = folder(options)
-  read = receiving() do |conn| receive(options, dir, request, body) end
-  response = Apps.handle(app, request.with(body: "".bytes), max_pieces, timeout_ms, some(read))
+  response = Apps.handle_with(app, request.with(body: "".bytes), max_pieces, timeout_ms) do |conn|
+    receive(options, dir, request, body)
+  end
+
   # The body may be left unread (a filter halted, no route); a test must not end with this task running.
   Task.await(done)
   remove(dir)
   return response
 end
 
-# `Apps.handle_answer` takes the receiver before its last argument, so a block cannot be written there: this gives
-# the block a name first.
-def receiving(read: Receiver) -> Receiver
-  return read
-end
-
 def arrived() -> Result[Void]
   return ok()
 end
 
-# Reads the body piece by piece through the parser. A refusal removes what was saved; a body cut by the server
-# (`done` is an error) is the server's refusal (413 over its limit, 431 or 400 for a bad chunk or a client that left).
+# Reads the body piece by piece through the parser. A refusal closes the file being written; the folder, with what
+# was saved, is removed after the answer by the caller (`answer`, `handle`), in one place for every outcome. A body cut
+# by the server (`done` is an error) is the server's refusal (413 over its limit, 431 or 400 for a bad chunk or a
+# client that left).
 def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTTP.RequestBody) -> Result[Form]
   content_type = HTTP.header_values(request.headers, "content-type")[0]
   boundary = Multipart.boundary(content_type)
@@ -194,7 +205,6 @@ def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTT
           ok(next) -> reading = next
           error(status) ->
             close_part(reading.part)
-            remove(dir)
             return error(status)
         end
 
@@ -205,7 +215,6 @@ def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTT
   done = Task.await(body.done)
   if not done.ok?
     close_part(reading.part)
-    remove(dir)
     case HTTP.body_refusal(done.message)
       HTTP.Answer.Whole(response) -> return error(response.status.to_s)
       _ -> return error(BAD)
@@ -216,7 +225,6 @@ def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTT
   ended = end_part(reading)
   if not finished.ok? or not ended.ok?
     close_part(reading.part)
-    remove(dir)
     return error(BAD)
   end
 

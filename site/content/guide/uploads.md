@@ -52,7 +52,7 @@ beach: me.png, image/png, 6 bytes
 
 ## When the body is read
 
-The before filters run first, then Bond finds the route. A filter that halts (`Bond.csrf`, a login check), a path with no route (404) and a method with no route (405) are answered without reading the body, so a refused request writes nothing to disk; the server closes the connection after such an answer. Only then does Bond read the body, put the form in the conn and run the handler, so a before filter sees no form yet (`Bond.form` there is a 400). A refusal of the body (a 413 or a 400) halts the conn, so the handler does not run, and the after filters see it like any other answer.
+The before filters run first, then Bond finds the route. A filter that halts (`Bond.csrf`, a login check), a path with no route (404) and a method with no route (405) are answered without reading the body, so a refused request writes nothing to disk; the server closes the connection after such an answer. Only then does Bond read the body, put the form in the conn and run the handler, so a before filter sees no form yet (`Bond.form` there is the same 400 as without `Bond.uploads`). Only a POST, PUT or PATCH is an upload: a GET or a DELETE with a `multipart/form-data` body keeps the server's body limit, and its body stays in `conn.body`. A refusal of the body (a 413 or a 400) halts the conn, so the handler does not run, and the after filters see it like any other answer.
 
 ## The client's filename is not a path
 
@@ -72,7 +72,7 @@ When the handler and the after filters are done, Bond removes the folder and eve
 - `max_total_bytes` (50 MiB by default, at most 256 MiB): a body over it, its fields, files and framing, is a 413;
 - `dir`: the folder for the files (see above); it must exist, or each file is a 500.
 
-Each cap is 1 or more, and `max_file_bytes` is at most `max_total_bytes`, or the program stops at `Bond.uploads`. More than 1000 parts is a 413 too. A 413 has `Connection: close`, the rest of the body is not read, the handler does not run and the files already saved are removed. A body that is not `multipart/form-data` as RFC 7578 frames it (no boundary, a part with no name, a cut body, headers of a part over 16 KiB, a text field that is not UTF-8) is a 400.
+Each cap is 1 or more, `max_file_bytes` is at most `max_total_bytes` and `max_field_bytes` at most `max_fields_bytes`, or the program stops at `Bond.uploads`. More than 1000 parts is a 413 too. A 413 has `Connection: close`, the rest of the body is not read, the handler does not run and the files already saved are removed. A body that is not `multipart/form-data` as RFC 7578 frames it (no boundary, a part with no name, a cut body, headers of a part over 16 KiB, a text field that is not UTF-8) is a 400.
 
 The server waits at most `request_timeout_ms` of [`Bond.start_with`](/guide/server/#options) (30 seconds by default) for each read of the body: a client that sends nothing for that long ends its upload. A slow link that keeps sending is not cut.
 
@@ -96,7 +96,7 @@ def main() -> Void
 end
 ```
 
-Without `Bond.uploads`, a `multipart/form-data` body is read whole into `conn.body` like any other, and `Bond.form` answers it with a 400 that says it needs `Bond.uploads`.
+Without `Bond.uploads`, a `multipart/form-data` body is read whole into `conn.body` like any other, and `Bond.form` answers it with a 400: `a multipart/form-data body is read by Bond.uploads for the handler, after the before filters`.
 
 ## Testing
 

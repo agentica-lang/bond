@@ -32,6 +32,10 @@ def refuse(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.halt(conn, 403, "refused"))
 end
 
+def body_size(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, "#{conn.body.size} #{Bond.file_all(conn, "photo").size}"))
+end
+
 def need_file(conn: Bond.Conn) -> Result[Bond.Conn]
   upload = try Bond.file(conn, "photo")
   return ok(Bond.text(conn, 200, upload.filename))
@@ -39,7 +43,7 @@ end
 
 def app_with(options: Bond.UploadOptions) -> Bond.App
   routes = Bond.app() |> Bond.uploads(options) |> Bond.post("/show", &show) |> Bond.post("/need", &need_file)
-  return routes |> Bond.post("/fail", &failing)
+  return routes |> Bond.post("/fail", &failing) |> Bond.get("/size", &body_size)
 end
 
 def app() -> Bond.App
@@ -127,14 +131,16 @@ def main() -> Void
       try Test.eq(after_big.unwrap_or(["?"]), [])
       Test.eq(after_failed.unwrap_or(["?"]), [])
     end,
-    Test.test("a body is not read when a before filter halts or the path has no route") do
+    Test.test("a body is not read when a before filter halts, the path has no route or the method is GET") do
       broken = [Header(name: "content-type", value: "multipart/form-data; boundary=bond-test-boundary")]
       junk = "--#{BOUNDARY} junk\r\n".bytes
       try Test.eq(Testing.request_bytes(app(), "POST", "/show", broken, junk).status, 400)
       try Test.eq(Testing.request_bytes(app(), "POST", "/nothing", broken, junk).status, 404)
       try Test.eq(Testing.request_bytes(app(), "GET", "/show", broken, junk).status, 405)
       guarded = app() |> Bond.before(&refuse)
-      Test.eq(Testing.request_bytes(guarded, "POST", "/show", broken, junk).status, 403)
+      try Test.eq(Testing.request_bytes(guarded, "POST", "/show", broken, junk).status, 403)
+      # A GET is no upload: its body stays in `conn.body`.
+      Test.eq(text(Testing.request_bytes(app(), "GET", "/size", broken, junk)), "#{junk.size} 0")
     end,
     Test.test("a missing file is a 400 for Bond.file, and an empty file input is no file") do
       try Test.eq(post("/need", [field("title", "t")]).status, 400)
@@ -158,7 +164,10 @@ def main() -> Void
       body = "#{field("title", "t")}--#{BOUNDARY}--".bytes
       response = Testing.request_bytes(plain, "POST", "/show", CONTENT_TYPE, body)
       try Test.eq(response.status, 400)
-      Test.eq(text(response), "a multipart/form-data body needs Bond.uploads")
+      Test.eq(
+        text(response),
+        "a multipart/form-data body is read by Bond.uploads for the handler, after the before filters",
+      )
     end,
   ])
 end

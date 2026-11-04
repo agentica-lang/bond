@@ -10,7 +10,7 @@ Needs Agentica 0.22.0 or later.
 
 ### Fixed
 
-- Bond checks clean on the coming Agentica 0.24.0 (on its master today), where unused imports and variables and dropped `Result`s are errors: the unused imports and block parameters are gone, and the best-effort cleanup calls of uploads discard their result with `_ =`. Nothing changes in behaviour.
+- Bond checks clean on the next Agentica release, where unused imports and variables and dropped `Result`s are errors: the unused imports are removed, the unused block parameters are renamed `_conn`, and the best-effort cleanup calls discard their result with `_ =`. Nothing changes in behaviour.
 
 ## [0.6.0] - 2026-11-04
 

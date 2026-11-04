@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-04
+
+Needs Agentica 0.22.0 or later (`HttpRequest.remote_addr`).
+
 ### Added
 
 - `Bond.assign(conn, key, value)` keeps a value of the request for the filters and the handler that come after (the person a sign-in filter loaded, so the handler does not load them again), and `Bond.assigned(conn, key, JSON.codec(Person))` reads it back as a `Result` of that type: an `error` when nothing was assigned under `key` or the value has another type; `Bond.assigned?(conn, key)` asks whether there is one. `Conn` has a new field `assigns: Map[String, Json]` with a default (`{}`), so code that builds a `Conn` by hand still compiles; this is not a breaking change. The guide has a section on it.
@@ -117,7 +121,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.5.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/agentica-lang/bond/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/agentica-lang/bond/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/agentica-lang/bond/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/agentica-lang/bond/compare/0.2.0...0.3.0

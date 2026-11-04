@@ -6,7 +6,7 @@ description: The Conn struct and the helpers that build an answer.
 
 # Conn and helpers
 
-`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) `body` (the `Bytes` that the client sent) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`.
+`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase), `body` (the `Bytes` that the client sent) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`.
 
 Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 200, "hello"))` and a helper can wrap another.
 
@@ -41,7 +41,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy.
 
-`Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); its last argument, `remote_addr`, chooses another (Agentica has no named arguments, so the ones before it are given too), such as `Testing.request(app, "GET", "/", [], "", 0, 10_000, "203.0.113.9")`.
+`Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); its last argument chooses another (see [Testing](/guide/testing/)).
 
 ## Redirects
 

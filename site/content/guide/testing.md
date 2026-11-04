@@ -27,6 +27,6 @@ end
 
 `Testing.request` builds an `HttpRequest` and passes it to `Bond.handle(app, request)`, the whole-response form of what `Bond.run` calls for each request (`Bond.handle_stream` gives an `HTTP.StreamResponse`). Call `Bond.handle` yourself when you already have an `HttpRequest`.
 
-The last optional argument, `remote_addr`, is the client address that the handler reads as `conn.remote_addr` (`Testing.LOOPBACK`, `"127.0.0.1"`, by default): `Testing.request(app, "GET", "/", [], "", 0, 10_000, "203.0.113.9")`. See [Client address](/guide/conn/#client-address).
+To act as another client, use `Testing.request_from(app, remote_addr, method, target, headers, body)`: the address comes first, and the headers and the body are optional. The handler reads it as `conn.remote_addr` (`Testing.LOOPBACK`, `"127.0.0.1"`, for `Testing.request`): `Testing.request_from(app, "203.0.113.9", "GET", "/")`. `request_from` keeps the stream bounds of `request` at their defaults. See [Client address](/guide/conn/#client-address).
 
 For a streamed body (see [Streaming](/guide/streaming/)), two optional arguments after the body bound the wait for the end of the stream: `max_pieces` (0, the default, is no limit) closes the channel after that many pieces, and `timeout_ms` (10 s by default) is the time for the whole body, so one gap between pieces may take all of it (a `timeout_ms` of `30_000` allows a 20 s gap). Either one closes the channel, so a producer that never ends stops, and a body cut by the time says so on stderr.

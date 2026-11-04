@@ -18,6 +18,8 @@ import {SessionOptions} from "src/session"
 ## The client address of a request that does not choose one: `Conn.remote_addr` of the requests of `request`.
 export LOOPBACK = "127.0.0.1"
 
+TIMEOUT_MS = 10_000 # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
+
 ## Sends the request to `app` and gives the response. `target` is the path with its query, as a client sends it
 ## (`/todos?done=1`); header names are lowercased, as the server does. `headers` default to none and `body` to an
 ## empty text; `request_bytes` takes the body as `Bytes`, for a request that is not text.
@@ -31,8 +33,8 @@ export LOOPBACK = "127.0.0.1"
 ## before filters): its files are saved, given to the handler and removed after the answer, and a body over a limit is
 ## the same 413.
 ##
-## `remote_addr` is the client address the handler sees in `conn.remote_addr` (`LOOPBACK` by default), as the server
-## fills it from the peer of the socket.
+## `remote_addr` is the client address the handler sees in `conn.remote_addr` (`LOOPBACK` by default); to choose one,
+## `request_from` is shorter.
 export def request(
   app: App,
   method: String,
@@ -40,10 +42,24 @@ export def request(
   headers: List[Header] = [],
   body: String = "",
   max_pieces: Int = 0,
-  timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
+  timeout_ms: Int = TIMEOUT_MS,
   remote_addr: String = LOOPBACK,
 ) -> HttpResponse
-  return request_bytes(app, method, target, headers, body.bytes, max_pieces, timeout_ms, remote_addr)
+  return send(app, method, target, headers, body.bytes, max_pieces, timeout_ms, remote_addr)
+end
+
+## Like `request`, as the client at `remote_addr` (what the handler reads in `conn.remote_addr`, as the server fills it
+## from the peer of the socket): `Testing.request_from(app, "203.0.113.9", "GET", "/")`. The address comes first and
+## the stream bounds keep their defaults; a test that needs other bounds uses `request`.
+export def request_from(
+  app: App,
+  remote_addr: String,
+  method: String,
+  target: String,
+  headers: List[Header] = [],
+  body: String = "",
+) -> HttpResponse
+  return send(app, method, target, headers, body.bytes, 0, TIMEOUT_MS, remote_addr)
 end
 
 ## The body of `response` as text: UTF-8 only, and a `charset` other than `utf-8` is an error, as `HTTP.text` has it.
@@ -60,8 +76,32 @@ export def request_bytes(
   headers: List[Header],
   body: Bytes,
   max_pieces: Int = 0,
-  timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
+  timeout_ms: Int = TIMEOUT_MS,
   remote_addr: String = LOOPBACK,
+) -> HttpResponse
+  return send(app, method, target, headers, body, max_pieces, timeout_ms, remote_addr)
+end
+
+## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would
+## sign it (`_bond_session=...`, for `options.name`): `[Header(name: "cookie", value: cookie)]` is a request of a
+## visitor who is logged in, with no round trip to a login route. The options are not checked as `sessions` checks
+## them (a short secret and a negative `max_age` are accepted, so a test can make an expired cookie). An `error` when
+## the session is over the size of a cookie.
+export def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
+  value = try Sessions.seal(options, data)
+  return ok("#{options.name}=#{value}")
+end
+
+# The core of every request: the filters and routes of `Apps.handle`, or the reading of `Uploads.handle`.
+def send(
+  app: App,
+  method: String,
+  target: String,
+  headers: List[Header],
+  body: Bytes,
+  max_pieces: Int,
+  timeout_ms: Int,
+  remote_addr: String,
 ) -> HttpResponse
   path = target
   case target.index_of("?")
@@ -82,14 +122,4 @@ export def request_bytes(
     some(options) -> return Uploads.handle(app, options, request, max_pieces, timeout_ms)
     none -> return Apps.handle(app, request, max_pieces, timeout_ms)
   end
-end
-
-## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would
-## sign it (`_bond_session=...`, for `options.name`): `[Header(name: "cookie", value: cookie)]` is a request of a
-## visitor who is logged in, with no round trip to a login route. The options are not checked as `sessions` checks
-## them (a short secret and a negative `max_age` are accepted, so a test can make an expired cookie). An `error` when
-## the session is over the size of a cookie.
-export def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
-  value = try Sessions.seal(options, data)
-  return ok("#{options.name}=#{value}")
 end

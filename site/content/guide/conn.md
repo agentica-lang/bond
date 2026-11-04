@@ -41,7 +41,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy.
 
-`Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); its last argument chooses another (see [Testing](/guide/testing/)).
+`Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); `Testing.request_from(app, "203.0.113.9", "GET", "/")` chooses another (see [Testing](/guide/testing/)).
 
 ## Redirects
 

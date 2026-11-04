@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- `Conn.remote_addr` is the IP address of the client (`HttpRequest.remote_addr` of Agentica 0.22.0 or later), with no port. Behind a proxy it is the proxy's address: Bond does not trust `X-Forwarded-For`. The field has a default (`""`), so code that builds a `Conn` by hand still compiles; this is not a breaking change. `Testing.request` and `Testing.request_bytes` take a `remote_addr` argument, `Testing.LOOPBACK` (`"127.0.0.1"`) by default. The guide has a section on it.
+- `Conn.remote_addr` is the IP address of the client (`HttpRequest.remote_addr` of Agentica 0.22.0 or later), with no port. Behind a proxy it is the proxy's address: Bond does not trust `X-Forwarded-For`. The field has a default (`""`), so code that builds a `Conn` by hand still compiles; this is not a breaking change. `Testing.request` and `Testing.request_bytes` take a `remote_addr` argument, `Testing.LOOPBACK` (`"127.0.0.1"`) by default, and `Testing.request_from(app, remote_addr, method, target, headers, body)` chooses the address first, without restating the stream bounds. The guide has a section on it.
 
 ## [0.5.0] - 2026-11-03
 

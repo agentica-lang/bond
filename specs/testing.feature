@@ -12,3 +12,10 @@ Feature: Testing.request
       hello none 3
 
       """
+
+  Scenario: The client address is a loopback address unless the request chooses another
+    Given the todo app
+    When I send "GET" to "/client"
+    Then the body is "127.0.0.1"
+    When I send "GET" to "/client" from the address "203.0.113.9"
+    Then the body is "203.0.113.9"

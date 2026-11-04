@@ -11,6 +11,12 @@ Feature: Server
       {"id": 1, "title": "buy milk"}
       """
 
+  Scenario: The client address of a request over a socket is the address of the peer
+    Given the server listens on a free port
+    When I get "/client" over the socket
+    Then the status is 200
+    And the body is "127.0.0.1"
+
   Scenario: A handler that crashes is a 500 over a socket and the server goes on
     Given the server listens on a free port
     When I get "/crash" over the socket

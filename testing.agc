@@ -15,6 +15,9 @@ import HTTP from "std/http"
 import {App} from "src/app"
 import {SessionOptions} from "src/session"
 
+## The client address of a request that does not choose one: `Conn.remote_addr` of the requests of `request`.
+export LOOPBACK = "127.0.0.1"
+
 ## Sends the request to `app` and gives the response. `target` is the path with its query, as a client sends it
 ## (`/todos?done=1`); header names are lowercased, as the server does. `headers` default to none and `body` to an
 ## empty text; `request_bytes` takes the body as `Bytes`, for a request that is not text.
@@ -27,6 +30,9 @@ import {SessionOptions} from "src/session"
 ## With `Bond.uploads`, a `multipart/form-data` body is read as the server reads it (in pieces of 64 KiB, after the
 ## before filters): its files are saved, given to the handler and removed after the answer, and a body over a limit is
 ## the same 413.
+##
+## `remote_addr` is the client address the handler sees in `conn.remote_addr` (`LOOPBACK` by default), as the server
+## fills it from the peer of the socket.
 export def request(
   app: App,
   method: String,
@@ -35,8 +41,9 @@ export def request(
   body: String = "",
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
+  remote_addr: String = LOOPBACK,
 ) -> HttpResponse
-  return request_bytes(app, method, target, headers, body.bytes, max_pieces, timeout_ms)
+  return request_bytes(app, method, target, headers, body.bytes, max_pieces, timeout_ms, remote_addr)
 end
 
 ## The body of `response` as text: UTF-8 only, and a `charset` other than `utf-8` is an error, as `HTTP.text` has it.
@@ -54,6 +61,7 @@ export def request_bytes(
   body: Bytes,
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
+  remote_addr: String = LOOPBACK,
 ) -> HttpResponse
   path = target
   case target.index_of("?")
@@ -62,7 +70,14 @@ export def request_bytes(
   end
 
   lowered = headers.map do |header| Header(name: header.name.downcase, value: header.value) end
-  request = HttpRequest(method: method, target: target, path: path, headers: lowered, body: body)
+  request = HttpRequest(
+    method: method,
+    target: target,
+    path: path,
+    headers: lowered,
+    body: body,
+    remote_addr: remote_addr,
+  )
   case Uploads.applies(app, request)
     some(options) -> return Uploads.handle(app, options, request, max_pieces, timeout_ms)
     none -> return Apps.handle(app, request, max_pieces, timeout_ms)

@@ -96,6 +96,7 @@ def handshake(
     path: conn.path,
     headers: conn.headers,
     body: conn.body,
+    remote_addr: conn.remote_addr,
   )
   session = sessioning() do |socket| run(conn, handler, socket) end
   decided = try HTTP.accept_websocket(request, session, options)

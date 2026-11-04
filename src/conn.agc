@@ -47,7 +47,10 @@ export type Receiver = Fn[Conn, Result[Form]]
 ## carry it (`session.agc`). `upgrade` is the WebSocket handshake that a route of `Bond.websocket` accepted
 ## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
 ## and is not halted (`accepted_upgrade`). `form` is the `multipart/form-data` body that `Bond.uploads` read (then
-## `body` is empty). A new `Conn` answers 200 with no body, has an empty session, no upgrade and no form.
+## `body` is empty). `remote_addr` is the IP address of the peer that opened the connection, with no port
+## (`"127.0.0.1"`, `"::1"`; `HttpRequest.remote_addr`), and `""` for a `Conn` built by hand. Behind a proxy or a load
+## balancer it is the address of the proxy: Bond does not read `X-Forwarded-For` or `Forwarded`, since any client can
+## send them. A new `Conn` answers 200 with no body, has an empty session, no upgrade and no form.
 export struct Conn
   method: String
   path: String
@@ -65,6 +68,7 @@ export struct Conn
   session_changed: Bool
   upgrade: Optional[HTTP.Upgrade] = none
   form: Optional[Form] = none
+  remote_addr: String = ""
 end
 
 ## A file of a `multipart/form-data` request, saved by `Bond.uploads`. `name` is the name of the form field. `filename`
@@ -109,6 +113,7 @@ export def from_request(request: HttpRequest) -> Conn
     halted: false,
     session: {},
     session_changed: false,
+    remote_addr: request.remote_addr,
   )
 end
 

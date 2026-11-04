@@ -39,6 +39,7 @@ struct Ask
   raw: List[Int] = [] # the body as bytes when it is not empty (then `body` is not used)
   max_pieces: Int = 0
   timeout_ms: Int = 10_000 # keep in sync with the defaults of Testing.request
+  remote_addr: String = "127.0.0.1" # keep in sync with Testing.LOOPBACK
 end
 
 # What a WebSocket of a step heard after its handshake: the text of the answer to its message ("" when none came) and
@@ -83,6 +84,9 @@ def main() -> Void
     end,
     BDD.step("I send {string} to {string} with the body {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: args[2]))
+    end,
+    BDD.step("I send {string} to {string} from the address {string}") do |ctx, args|
+      send(ctx, Ask(method: args[0], path: args[1], headers: [], body: "", remote_addr: args[2]))
     end,
     BDD.step("I post the bytes {string} to {string} as {string}", &post_bytes),
     BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
@@ -550,11 +554,11 @@ end
 # The request of a step: its text body, or its bytes when it has some.
 def ask_request(app: Bond.App, ask: Ask, max_pieces: Int, timeout_ms: Int) -> HttpResponse
   if ask.raw.empty?
-    return Testing.request(app, ask.method, ask.path, ask.headers, ask.body, max_pieces, timeout_ms)
+    return Testing.request(app, ask.method, ask.path, ask.headers, ask.body, max_pieces, timeout_ms, ask.remote_addr)
   end
 
   body = Bytes.from_list(ask.raw).unwrap!
-  return Testing.request_bytes(app, ask.method, ask.path, ask.headers, body, max_pieces, timeout_ms)
+  return Testing.request_bytes(app, ask.method, ask.path, ask.headers, body, max_pieces, timeout_ms, ask.remote_addr)
 end
 
 # "255 254 0" as the numbers it lists.

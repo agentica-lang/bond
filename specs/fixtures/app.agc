@@ -129,6 +129,7 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.after(&trace_c)
     |> Bond.after(&sign)
     |> Bond.get("/hello", &hello)
+    |> Bond.get("/client", &client_address)
     |> Bond.get("/greet", &greet)
     |> Bond.get("/template", &eag_page)
     |> Bond.get("/room", &room_view)
@@ -268,6 +269,10 @@ end
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.text(conn, 200, "hello"))
+end
+
+def client_address(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 200, conn.remote_addr))
 end
 
 # The pattern of the guide: a value of the client is escaped before it goes into HTML.

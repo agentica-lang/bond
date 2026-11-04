@@ -6,7 +6,7 @@ description: The Conn struct and the helpers that build an answer.
 
 # Conn and helpers
 
-`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) and `body` (the `Bytes` that the client sent). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`.
+`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase) `body` (the `Bytes` that the client sent) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`.
 
 Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 200, "hello"))` and a helper can wrap another.
 
@@ -34,6 +34,14 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.static(app, prefix, root)` | serves the files of a folder under a path; an app function, not a `Conn` one; see [Static files](/guide/static/) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
+
+## Client address
+
+`conn.remote_addr` is the IP address of the peer that opened the connection, with no port (`"127.0.0.1"`, `"::1"`), as the server of `std/http` fills `HttpRequest.remote_addr` (Agentica 0.22.0 or later). It is `""` in a `Conn` that you build by hand without it.
+
+Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy.
+
+`Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); its last argument, `remote_addr`, chooses another (Agentica has no named arguments, so the ones before it are given too), such as `Testing.request(app, "GET", "/", [], "", 0, 10_000, "203.0.113.9")`.
 
 ## Redirects
 

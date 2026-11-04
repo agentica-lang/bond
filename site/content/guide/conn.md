@@ -6,7 +6,7 @@ description: The Conn struct and the helpers that build an answer.
 
 # Conn and helpers
 
-`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase), `body` (the `Bytes` that the client sent) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`.
+`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase), `body` (the `Bytes` that the client sent) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`. `assigns` holds the values that a filter keeps for the handler (see [Assigns](#assigns)).
 
 Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 200, "hello"))` and a helper can wrap another.
 
@@ -33,6 +33,8 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.send_file(conn, path, some(name))` | answers with a file read in pieces, with ranges; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
 | `Bond.static(app, prefix, root)` | serves the files of a folder under a path; an app function, not a `Conn` one; see [Static files](/guide/static/) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
+| `Bond.assign(conn, key, value)` | keeps a value of the request for the filters and the handler that come after; see [Assigns](#assigns) |
+| `Bond.assigned(conn, key, codec)` | the value kept under `key`, as the type of the codec (`JSON.codec(Person)`), as a `Result`; `Bond.assigned?(conn, key)` asks whether there is one |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
 
 ## Client address
@@ -42,6 +44,49 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy.
 
 `Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); `Testing.request_from(app, "203.0.113.9", "GET", "/")` chooses another (see [Testing](/guide/testing/)).
+
+## Assigns
+
+A filter often looks something up that the handler needs too, such as the signed-in person. `Bond.assign(conn, key, value)` keeps a value in the `Conn` under a name, and `Bond.assigned(conn, key, codec)` reads it back as a `Result` of the type of the codec, so the handler does not look it up again. The values live as long as the request and are never sent to the client.
+
+`Conn` has no type parameter: a value is kept as the `Json` of `JSON.from(value)`, and the reader names its type with a codec, as in [JSON bodies](/guide/json/). A codec is made from a struct, so assign a struct (its fields may be lists, maps with `String` keys, `Optional`s, numbers and text) and wrap a bare number or list in one. A value whose type `JSON.encode` refuses (a `Fn`, `Bytes`, a `Task`, a user enum, or a struct holding one) is a `CHECK-NOT-ENCODABLE` error at the `Bond.assign` call. The value goes through JSON, so the reader decodes it as `JSON.decode` does.
+
+`Bond.assigned` is an `error` when nothing was assigned under the key and when the value does not decode as the codec's type. Both are mistakes of the program, not of the client, so a handler that uses `try` answers a 500. A handler that allows both cases asks with `Bond.assigned?` first.
+
+```agentica
+import Bond from "pkg/bond/bond"
+import Testing from "pkg/bond/testing"
+
+struct Person
+  id: Int
+  name: String
+end
+
+# The sign-in check: the only place that looks the person up.
+def sign_in(conn: Bond.Conn) -> Result[Bond.Conn]
+  case Bond.request_header(conn, "x-user")
+    ok(name) -> return ok(Bond.assign(conn, "person", Person(id: 7, name: name)))
+    error(_) -> return ok(Bond.halt(conn, 401, "sign in"))
+  end
+end
+
+def room(conn: Bond.Conn) -> Result[Bond.Conn]
+  person = try Bond.assigned(conn, "person", JSON.codec(Person))
+  return ok(Bond.text(conn, 200, "#{person.name} (#{person.id}) is in the room"))
+end
+
+def main() -> Void
+  app = Bond.app() |> Bond.before(&sign_in) |> Bond.get("/room", &room)
+  headers = [Header(name: "x-user", value: "ana")]
+  puts(Testing.text(Testing.request(app, "GET", "/room", headers)).unwrap!)
+  puts(Testing.request(app, "GET", "/room").status)
+end
+```
+
+```output
+ana (7) is in the room
+401
+```
 
 ## Redirects
 

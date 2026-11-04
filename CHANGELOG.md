@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-04
+
+Needs Agentica 0.22.0 or later, and checks clean on Agentica 0.24.0.
+
+### Fixed
+
+- Bond compiles with Agentica 0.24.0, which makes an unused import or variable and a dropped `Result` errors: two unused imports are gone, and the best-effort cleanup calls of uploads (closing and removing a temporary file) discard their result with `_ =`. Nothing changes in behaviour.
+
 ## [0.6.0] - 2026-11-04
 
 Needs Agentica 0.22.0 or later (`HttpRequest.remote_addr`).
@@ -122,6 +130,7 @@ First release. Needs Agentica 0.16.0 or later.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
 [unreleased]: https://github.com/agentica-lang/bond/compare/0.6.0...HEAD
+[0.6.1]: https://github.com/agentica-lang/bond/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/agentica-lang/bond/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/agentica-lang/bond/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/agentica-lang/bond/compare/0.3.0...0.4.0

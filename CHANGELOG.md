@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-04
+
+Needs Agentica 0.22.0 or later.
+
+### Fixed
+
+- Bond checks clean on the next Agentica release, where unused imports and variables and dropped `Result`s are errors: the unused imports are removed, the unused block parameters are renamed `_conn`, and the best-effort cleanup calls discard their result with `_ =`. Nothing changes in behaviour.
+
 ## [0.6.0] - 2026-11-04
 
 Needs Agentica 0.22.0 or later (`HttpRequest.remote_addr`).
@@ -121,7 +129,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.6.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.6.1...HEAD
+[0.6.1]: https://github.com/agentica-lang/bond/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/agentica-lang/bond/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/agentica-lang/bond/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/agentica-lang/bond/compare/0.3.0...0.4.0

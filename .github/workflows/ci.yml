@@ -33,6 +33,9 @@ jobs:
           agentica --version
           agentica check
 
+      - name: Format
+        run: make fmt-check
+
       # The features of specs/ (they listen on 127.0.0.1 only) and the unit tests of test/.
       - name: Test
         run: agentica test

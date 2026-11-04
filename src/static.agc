@@ -14,9 +14,8 @@ export MISS = "not a static file"
 
 # Names that Windows opens as a device, whatever the extension and the case.
 DEVICES = Set.new([
-  "CON", "PRN", "AUX", "NUL",
-  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+  "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+  "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ])
 
 ## The longest `max_age`, one year in seconds: the longest that a cache is told to keep a file (RFC 9111 section 1.2.2),

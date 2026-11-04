@@ -73,6 +73,7 @@ export def uploads(app: App, options: UploadOptions = UploadOptions()) -> App
       "bond: the upload limits must be 1 or more, max_file_bytes at most max_total_bytes and max_field_bytes at most " +
       "max_fields_bytes",
     )
+
     return bad.unwrap!
   end
 
@@ -198,6 +199,7 @@ def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTT
     fields_size: 0,
     total: 0,
   )
+
   while true
     case body.pieces.recv(PIECE_WAIT_MS)
       ok(piece) ->
@@ -306,6 +308,7 @@ def begin_part(reading: Reading, headers: List[Header]) -> Result[Reading]
     size: 0,
     text: [],
   )
+
   if found.filename.none?
     return ok(reading.with(part: some(part)))
   end
@@ -381,6 +384,7 @@ def end_part(reading: Reading) -> Result[Reading]
             path: part.path,
             size: part.size,
           )
+
           return ok(closed.with(files: closed.files.push(upload)))
       end
   end

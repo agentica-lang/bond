@@ -288,6 +288,7 @@ def send_two_origins(ctx: BDD.Context, args: List[String]) -> BDD.Context
     Header(name: "origin", value: args[3]),
     Header(name: "host", value: args[4]),
   ]
+
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
@@ -297,6 +298,7 @@ def send_two_fetch_sites(ctx: BDD.Context, args: List[String]) -> BDD.Context
     Header(name: "sec-fetch-site", value: args[3]),
     Header(name: "host", value: args[4]),
   ]
+
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
@@ -513,6 +515,7 @@ def serve_big(base: String, size: Int, request: Json) -> Result[Json]
     |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
     |> Bond.static("/files", base)
   )
+
   before = Task.pending_count()
   response = ask_request(app, ask, 0, 10_000)
   settle(before)
@@ -710,6 +713,7 @@ def handshake(path: String, port: Int, headers: List[Header]) -> String
     "Sec-WebSocket-Key: #{WEBSOCKET_KEY}",
     "Sec-WebSocket-Version: 13",
   ]
+
   lines = fields.concat(headers.map do |field| "#{field.name}: #{field.value}" end)
   return "GET #{path} HTTP/1.1\r\n#{lines.join("\r\n")}\r\n\r\n"
 end

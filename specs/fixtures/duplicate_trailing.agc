@@ -12,5 +12,6 @@ def main() -> Void
     |> Bond.get("/hello", &one)
     |> Bond.get("/hello/", &one)
   )
+
   puts("built #{app.before_filters.size}")
 end

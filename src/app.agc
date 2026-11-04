@@ -133,6 +133,7 @@ export def static(
     max_age: max_age,
     fingerprint: fingerprint,
   )
+
   return app.with(statics: app.statics.push(mount))
 end
 
@@ -344,6 +345,7 @@ def answer_error(app: App, conn: Conn, message: String) -> Conn
     response_length: none,
     upgrade: none,
   )
+
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> return answer.with(halted: true)

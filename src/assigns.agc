@@ -4,7 +4,7 @@
 ##
 ## A value is kept as the `Json` of `JSON.from(value)`, so the `Conn` does not need a type parameter, and a reader
 ## gets its type back with a codec (`JSON.codec(Person)`). A codec is made from a struct, so assign a struct (its
-## fields may be lists, maps with `String` keys, `Optionals`, numbers and text); wrap a bare number or list in one. The
+## fields may be lists, maps with `String` keys, `Optional`s, numbers and text); wrap a bare number or list in one. The
 ## reader decodes the `Json` as `JSON.decode` does. A value whose type `JSON.encode` refuses (a `Fn`, `Bytes`, a
 ## `Task`, a user enum, or a struct holding one) is a `CHECK-NOT-ENCODABLE` error at the `assign` call.
 

@@ -43,6 +43,7 @@ such as those of the route pattern matcher and the multipart parser.
 
 ```sh
 agentica check   # every .agc file of the package
+agentica fmt --check   # the same files; `agentica fmt` rewrites them (`make fmt-check`)
 agentica test
 ```
 

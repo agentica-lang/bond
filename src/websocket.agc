@@ -61,6 +61,7 @@ export def websocket(
     &idle,
     chosen,
   )
+
   if not probe.ok?
     bad: Result[App] = error("bond: the WebSocket options of #{pattern}: #{probe.message}")
     return bad.unwrap!
@@ -98,6 +99,7 @@ def handshake(
     body: conn.body,
     remote_addr: conn.remote_addr,
   )
+
   session = sessioning() do |socket| run(conn, handler, socket) end
   decided = try HTTP.accept_websocket(request, session, options)
   case decided

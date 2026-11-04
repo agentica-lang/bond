@@ -118,6 +118,7 @@ def send(
     body: body,
     remote_addr: remote_addr,
   )
+
   case Uploads.applies(app, request)
     some(options) -> return Uploads.handle(app, options, request, max_pieces, timeout_ms)
     none -> return Apps.handle(app, request, max_pieces, timeout_ms)

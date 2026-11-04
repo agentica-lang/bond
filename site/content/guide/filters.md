@@ -10,6 +10,8 @@ description: Code that runs before and after every route.
 
 A `before` filter that halts, or gives an error, skips the filters and the handler after it. The `after` filters still run, for a halted answer and for a 404 too. They do not run when a handler crashes.
 
+A filter passes a value to the handler with `Bond.assign` (see [Assigns](/guide/conn/#assigns)).
+
 `Bond.log_request` is a `before` filter that writes `METHOD /path` to stderr.
 
 ```agentica

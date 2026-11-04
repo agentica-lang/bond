@@ -14,6 +14,7 @@
 ## ```
 
 import Apps from "src/app"
+import Assigns from "src/assigns"
 import Conns from "src/conn"
 import Cookies from "src/cookies"
 import Csrf from "src/csrf"
@@ -62,6 +63,9 @@ export Conns.request_header
 export Conns.bad_request
 export Conns.param
 export Conns.param_int
+export Assigns.assign
+export Assigns.assigned
+export Assigns.assigned?
 export Cookies.cookies
 export Cookies.cookie
 export Cookies.set_cookie

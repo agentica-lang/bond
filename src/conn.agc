@@ -50,7 +50,8 @@ export type Receiver = Fn[Conn, Result[Form]]
 ## `body` is empty). `remote_addr` is the IP address of the peer that opened the connection, with no port
 ## (`"127.0.0.1"`, `"::1"`; `HttpRequest.remote_addr`), and `""` for a `Conn` built by hand. Behind a proxy or a load
 ## balancer it is the address of the proxy: Bond does not read `X-Forwarded-For` or `Forwarded`, since any client can
-## send them. A new `Conn` answers 200 with no body, has an empty session, no upgrade and no form.
+## send them. `assigns` holds the values that a filter gave for the handler (`assign` and `assigned`, `assigns.agc`), as
+## `Json`. A new `Conn` answers 200 with no body, has an empty session, no assigns, no upgrade and no form.
 export struct Conn
   method: String
   path: String
@@ -69,6 +70,7 @@ export struct Conn
   upgrade: Optional[HTTP.Upgrade] = none
   form: Optional[Form] = none
   remote_addr: String = ""
+  assigns: Map[String, Json] = {}
 end
 
 ## A file of a `multipart/form-data` request, saved by `Bond.uploads`. `name` is the name of the form field. `filename`

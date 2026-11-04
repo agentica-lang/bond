@@ -67,6 +67,7 @@ def main() -> Void
   BDD.run([
     BDD.step("the todo app", &keep_app),
     BDD.step("the todo app with custom handlers", &keep_custom_app),
+    BDD.step("the assigns app", &keep_assigns_app),
     BDD.step("the sessions app", &keep_sessions_app),
     BDD.step("the sessions app after the secret was rotated", &keep_rotated_sessions_app),
     BDD.step("the app with CSRF protection", &keep_csrf_app),
@@ -398,6 +399,11 @@ end
 def keep_allowing_csrf_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   producers: Fixture.Producers = Channel.new(PRODUCERS)
   return keep(ctx, Fixture.build_csrf(true), producers)
+end
+
+def keep_assigns_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  producers: Fixture.Producers = Channel.new(PRODUCERS)
+  return keep(ctx, Fixture.build_assigns(), producers)
 end
 
 def keep_sessions_app(ctx: BDD.Context, args: List[String]) -> BDD.Context

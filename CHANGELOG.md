@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `Bond.assign(conn, key, value)` keeps a value of the request for the filters and the handler that come after (the person a sign-in filter loaded, so the handler does not load them again), and `Bond.assigned(conn, key, JSON.codec(Person))` reads it back as a `Result` of that type: an `error` when nothing was assigned under `key` or the value has another type; `Bond.assigned?(conn, key)` asks whether there is one. `Conn` has a new field `assigns: Map[String, Json]` with a default (`{}`), so code that builds a `Conn` by hand still compiles; this is not a breaking change. The guide has a section on it.
+
 - `Conn.remote_addr` is the IP address of the client (`HttpRequest.remote_addr` of Agentica 0.22.0 or later), with no port. Behind a proxy it is the proxy's address: Bond does not trust `X-Forwarded-For`. The field has a default (`""`), so code that builds a `Conn` by hand still compiles; this is not a breaking change. `Testing.request` and `Testing.request_bytes` take a `remote_addr` argument, `Testing.LOOPBACK` (`"127.0.0.1"`) by default, and `Testing.request_from(app, remote_addr, method, target, headers, body)` chooses the address first, without restating the stream bounds. The guide has a section on it.
 
 ## [0.5.0] - 2026-11-03

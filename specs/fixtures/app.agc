@@ -12,6 +12,17 @@ TOKEN = "letmein"
 FIRST_SECRET = "first-secret-first-secret-first-secret"
 SECOND_SECRET = "second-secret-second-secret-second-sec"
 
+struct Person
+  id: Int
+  name: String
+  email: Optional[String] = none
+end
+
+# Needs a field that Person does not have, so the person that the filter assigned is not one of these.
+struct Team
+  members: List[String]
+end
+
 struct Todo
   id: Int
   title: String
@@ -102,6 +113,18 @@ export def build_sessions(rotated: Bool) -> Bond.App
     |> Bond.get("/visits", &visits)
     |> Bond.get("/peek", &me)
     |> Bond.get("/blob", &blob)
+  )
+end
+
+## A small app whose `before` filter assigns the person of the `x-user` header (a sign-in check that looked them up
+## once) and whose handlers read it back with `Bond.assigned`.
+export def build_assigns() -> Bond.App
+  return (
+    Bond.app()
+    |> Bond.before(&load_person)
+    |> Bond.get("/me", &who_is_signed_in)
+    |> Bond.get("/as-team", &as_team)
+    |> Bond.get("/nobody", &nobody)
   )
 end
 
@@ -733,4 +756,26 @@ end
 
 def transfer(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.text(conn, 200, "transferred"))
+end
+
+def load_person(conn: Bond.Conn) -> Result[Bond.Conn]
+  case Bond.request_header(conn, "x-user")
+    ok(name) -> return ok(Bond.assign(conn, "person", Person(id: 7, name: name, email: some("#{name}@example.com"))))
+    error(_) -> return ok(conn)
+  end
+end
+
+def who_is_signed_in(conn: Bond.Conn) -> Result[Bond.Conn]
+  person = try Bond.assigned(conn, "person", JSON.codec(Person))
+  return ok(Bond.text(conn, 200, "#{person.id} #{person.name} #{person.email.unwrap_or("-")}"))
+end
+
+def as_team(conn: Bond.Conn) -> Result[Bond.Conn]
+  refused = Bond.assigned(conn, "person", JSON.codec(Team)).ok? == false
+  return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "person")}"))
+end
+
+def nobody(conn: Bond.Conn) -> Result[Bond.Conn]
+  refused = Bond.assigned(conn, "nobody", JSON.codec(Person)).ok? == false
+  return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "nobody")}"))
 end

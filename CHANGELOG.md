@@ -6,11 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.6.1] - 2026-11-04
 
-Needs Agentica 0.22.0 or later, and checks clean on Agentica 0.24.0.
+Needs Agentica 0.22.0 or later.
 
 ### Fixed
 
-- Bond compiles with Agentica 0.24.0, which makes an unused import or variable and a dropped `Result` errors: two unused imports are gone, and the best-effort cleanup calls of uploads (closing and removing a temporary file) discard their result with `_ =`. Nothing changes in behaviour.
+- Bond checks clean on the coming Agentica 0.24.0 (on its master today), where unused imports and variables and dropped `Result`s are errors: the unused imports and block parameters are gone, and the best-effort cleanup calls of uploads discard their result with `_ =`. Nothing changes in behaviour.
 
 ## [0.6.0] - 2026-11-04
 

@@ -1,9 +1,9 @@
 # Bond
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra.
-Version 0.6.0 has the router, filters, JSON bodies, forms, cookies, signed sessions, a cross-site request check, static files with caching headers and ranges, streaming, WebSockets, file uploads, HTML escaping, views, the client address, per-request assigns and an in-process test helper.
+Version 0.6.1 has the router, filters, JSON bodies, forms, cookies, signed sessions, a cross-site request check, static files with caching headers and ranges, streaming, WebSockets, file uploads, HTML escaping, views, the client address, per-request assigns and an in-process test helper.
 
-Bond 0.6.0 needs Agentica 0.22.0 or later; the [changelog](CHANGELOG.md) has the version each release needs.
+Bond 0.6.1 needs Agentica 0.22.0 or later; the [changelog](CHANGELOG.md) has the version each release needs.
 
 Documentation: https://agentica-lang.github.io/bond/
 
@@ -13,10 +13,10 @@ In your `agentica.toml`:
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.6.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.6.1" }
 ```
 
-Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.6.0`. Both (and `agentica install` for a
+Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.6.1`. Both (and `agentica install` for a
 manifest you edited) write `agentica.lock` and `deps/bond/`.
 
 ## Example

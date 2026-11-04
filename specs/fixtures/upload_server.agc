@@ -27,7 +27,7 @@ def upload(conn: Bond.Conn) -> Result[Bond.Conn]
   for saved in Bond.file_all(conn, "photo")
     file = try File.open(saved.path)
     content = try File.read_bytes(file, 1_024)
-    File.close(file)
+    _ = File.close(file)
     text = String.from_bytes(content).unwrap_or("?")
     lines = lines.push("file #{saved.name} #{saved.filename} #{saved.content_type} #{saved.size} #{text}")
     lines = lines.push("path #{saved.path}")
@@ -40,7 +40,7 @@ end
 # after filter that counts in it removes it, since a scenario has no hook to clean up when the server stops. Being
 # made at the start, it is there for the first request even if Bond read a body before the filters.
 def make_dir(dir: String, conn: Bond.Conn) -> Result[Bond.Conn]
-  Dir.mkdir_private(dir)
+  _ = Dir.mkdir_private(dir)
   return ok(conn)
 end
 
@@ -51,7 +51,7 @@ def count_folders(dir: String, conn: Bond.Conn) -> Result[Bond.Conn]
     error(_) -> folders = 0
   end
 
-  Path.remove(dir)
+  _ = Path.remove(dir)
   return ok(Bond.header(conn, "x-upload-folders", folders.to_s))
 end
 

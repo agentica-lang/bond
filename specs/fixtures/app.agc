@@ -644,7 +644,7 @@ end
 
 # Hands the task of a producer to whoever waits for it. A full or unread channel drops it.
 def keep(producers: Producers, task: Task[Void]) -> Void
-  producers.send(task, 1)
+  _ = producers.send(task, 1)
 end
 
 # A task sends the events and closes the channel, as the guide says a producer must.

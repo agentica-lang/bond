@@ -5,7 +5,6 @@
 
 import C from "std/cookie"
 import Apps from "app"
-import Conns from "conn"
 import Cookies from "cookies"
 import {App} from "app"
 import {Conn} from "conn"

@@ -14,7 +14,7 @@ def show(conn: Bond.Conn) -> Result[Bond.Conn]
   for upload in Bond.file_all(conn, "photo")
     file = try File.open(upload.path)
     content = try File.read_bytes(file, 1_024)
-    File.close(file)
+    _ = File.close(file)
     lines = lines.push(
       "#{upload.filename} #{upload.content_type} #{upload.size} #{String.from_bytes(content).unwrap!}",
     )
@@ -138,7 +138,7 @@ def main() -> Void
       after_big = Dir.list(dir)
       failed = post_to(served, "/fail", [file_part("photo", "a.txt", "hi")]).status
       after_failed = Dir.list(dir)
-      Path.remove(dir)
+      _ = Path.remove(dir)
       try Test.eq([big, failed], [413, 500])
       try Test.eq(after_big.unwrap_or(["?"]), [])
       Test.eq(after_failed.unwrap_or(["?"]), [])

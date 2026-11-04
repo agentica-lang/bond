@@ -129,7 +129,7 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.6.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.6.1...HEAD
 [0.6.1]: https://github.com/agentica-lang/bond/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/agentica-lang/bond/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/agentica-lang/bond/compare/0.4.0...0.5.0

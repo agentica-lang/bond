@@ -57,6 +57,7 @@ def main() -> Void
     |> Bond.websocket("/chat/:room", &chat, ["https://app.example.com"])
     |> Bond.websocket("/quiet/:room", &chat, [], some(HTTP.WebSocketOptions(idle_ms: 1_000, ping_ms: 300)))
   )
+
   server = Bond.start(app, "127.0.0.1", 0).unwrap!
   puts("listening on #{Bond.local_port(server)}")
   IO.flush()

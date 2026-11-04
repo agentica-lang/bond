@@ -1,12 +1,16 @@
-# The check of the sources, the documentation site (Hugo) and the check of its samples.
+# The check and the format check of the sources, the documentation site (Hugo) and the check of its samples.
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
-.PHONY: check site site-serve site-sass site-samples
+.PHONY: check fmt-check site site-serve site-sass site-samples
 
 # `agentica check` with no path checks every .agc file of the package, its examples, specs and tests.
 check:
 	@agentica check
+
+# `agentica fmt --check` with no path lists the files that `agentica fmt` would change, and fails if there are any.
+fmt-check:
+	@agentica fmt --check
 
 site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
 

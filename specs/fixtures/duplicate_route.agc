@@ -13,5 +13,6 @@ def main() -> Void
     |> Bond.post("/users/:id", &one)
     |> Bond.get("/users/:id", &one)
   )
+
   puts("built #{app.before_filters.size}")
 end

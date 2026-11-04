@@ -63,10 +63,20 @@ def main() -> Void
 
   dir = Path.join([root, "bond-upload-spec-#{SecureRandom.hex(8)}"]).unwrap!
   Dir.mkdir_private(dir).unwrap!
-  routes = Bond.app() |> Bond.uploads(LIMITS.with(dir: dir)) |> Bond.get("/hello", &hello)
+  routes = (
+    Bond.app()
+    |> Bond.uploads(LIMITS.with(dir: dir))
+    |> Bond.get("/hello", &hello)
+  )
+
   made = routes |> Bond.before() do |conn| make_dir(dir, conn) end
   counted = made |> Bond.after() do |conn| count_folders(dir, conn) end
-  app = counted |> Bond.csrf() |> Bond.post("/upload", &upload)
+  app = (
+    counted
+    |> Bond.csrf()
+    |> Bond.post("/upload", &upload)
+  )
+
   server = Bond.start(app, "127.0.0.1", 0).unwrap!
   puts("listening on #{Bond.local_port(server)}")
   IO.flush()

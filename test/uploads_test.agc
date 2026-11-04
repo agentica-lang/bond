@@ -18,6 +18,7 @@ def show(conn: Bond.Conn) -> Result[Bond.Conn]
     lines = lines.push(
       "#{upload.filename} #{upload.content_type} #{upload.size} #{String.from_bytes(content).unwrap!}",
     )
+
     lines = lines.push("path #{upload.path}")
   end
 
@@ -42,8 +43,18 @@ def need_file(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def app_with(options: Bond.UploadOptions) -> Bond.App
-  routes = Bond.app() |> Bond.uploads(options) |> Bond.post("/show", &show) |> Bond.post("/need", &need_file)
-  return routes |> Bond.post("/fail", &failing) |> Bond.get("/size", &body_size)
+  routes = (
+    Bond.app()
+    |> Bond.uploads(options)
+    |> Bond.post("/show", &show)
+    |> Bond.post("/need", &need_file)
+  )
+
+  return (
+    routes
+    |> Bond.post("/fail", &failing)
+    |> Bond.get("/size", &body_size)
+  )
 end
 
 def app() -> Bond.App
@@ -102,6 +113,7 @@ def main() -> Void
         "/show",
         [field("title", "t"), field("tag", "a"), file_part("photo", "a.txt", List.repeat("x", 17).join(""))],
       )
+
       try Test.eq(big.status, 413)
       try Test.eq(HTTP.header_values(big.headers, "connection"), ["close"])
       try Test.eq(post("/show", [file_part("photo", "a.txt", "x"), field("title", "t")]).status, 200)

@@ -225,5 +225,6 @@ def save(options: SessionOptions, conn: Conn) -> Result[Conn]
     http_only: true,
     same_site: options.same_site,
   )
+
   return Cookies.set_cookie_with(conn, cookie)
 end

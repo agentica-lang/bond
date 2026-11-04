@@ -24,9 +24,6 @@ def events(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def main() -> Void
-  app = (
-    Bond.app()
-    |> Bond.get("/events", &events)
-  )
+  app = Bond.app() |> Bond.get("/events", &events)
   Bond.run(app, "127.0.0.1", PORT).unwrap!
 end

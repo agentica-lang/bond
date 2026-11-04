@@ -585,6 +585,7 @@ def login(conn: Bond.Conn) -> Result[Bond.Conn]
     secure: true,
     same_site: "None",
   )
+
   pref = Cookie.Cookie(name: "pref", value: "wide", expires: "Wed, 21 Oct 2015 07:28:00 GMT", http_only: true)
   with_theme = try Bond.set_cookie_with(with_sid, theme)
   with_pref = try Bond.set_cookie_with(with_theme, pref)

@@ -423,7 +423,7 @@ end
 def keep_links_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   base = "static_links_#{System.pid()}"
   probe = make_folder(base)
-  Path.remove(base)
+  _ = Path.remove(base)
   if not probe.ok?
     return BDD.skip(ctx, "the folder of links cannot be made here: #{probe.message}")
   end
@@ -436,7 +436,7 @@ def serve_links(base: String, request: Json) -> Result[Json]
   try make_folder(base)
   app = Bond.app() |> Bond.static("/files", "#{base}/root")
   response = ask_request(app, ask, 0, 10_000)
-  Path.remove(base)
+  _ = Path.remove(base)
   return ok(JSON.from(reply_of(response)))
 end
 
@@ -519,8 +519,8 @@ def serve_big(base: String, size: Int, request: Json) -> Result[Json]
   before = Task.pending_count()
   response = ask_request(app, ask, 0, 10_000)
   settle(before)
-  Path.remove("#{base}/big.bin")
-  Path.remove(base)
+  _ = Path.remove("#{base}/big.bin")
+  _ = Path.remove(base)
   return ok(JSON.from(reply_of(response)))
 end
 

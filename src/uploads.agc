@@ -137,7 +137,7 @@ end
 ## the request reaches its route, and the folder of the files is removed after.
 export def answer(app: App, options: UploadOptions, request: HttpRequest, body: HTTP.RequestBody) -> HTTP.Answer
   dir = folder(options)
-  answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |conn|
+  answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |_conn|
     receive(options, dir, request, body)
   end
 
@@ -164,12 +164,12 @@ export def handle(
   done = Task.spawn() do arrived() end
   body = HTTP.RequestBody(pieces: pieces, done: done)
   dir = folder(options)
-  response = Apps.handle_with(app, request.with(body: "".bytes), max_pieces, timeout_ms) do |conn|
+  response = Apps.handle_with(app, request.with(body: "".bytes), max_pieces, timeout_ms) do |_conn|
     receive(options, dir, request, body)
   end
 
   # The body may be left unread (a filter halted, no route); a test must not end with this task running.
-  Task.await(done)
+  _ = Task.await(done)
   remove(dir)
   return response
 end
@@ -370,10 +370,10 @@ def end_part(reading: Reading) -> Result[Reading]
           return ok(closed.with(fields: closed.fields.push(URI.Pair(name: part.name, value: value))))
 
         some(handle) ->
-          File.close(handle)
+          _ = File.close(handle)
           raw = part.filename.unwrap_or("")
           if raw == "" and part.size == 0
-            Path.remove(part.path)
+            _ = Path.remove(part.path)
             return ok(closed)
           end
 
@@ -394,7 +394,7 @@ def close_part(part: Optional[Part]) -> Void
   case part
     some(open) ->
       case open.handle
-        some(handle) -> File.close(handle)
+        some(handle) -> _ = File.close(handle)
         none -> nil
       end
 

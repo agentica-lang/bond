@@ -122,6 +122,7 @@ export def build_assigns() -> Bond.App
   return (
     Bond.app()
     |> Bond.before(&load_person)
+    |> Bond.before(&mark_person)
     |> Bond.get("/me", &who_is_signed_in)
     |> Bond.get("/as-team", &as_team)
     |> Bond.get("/nobody", &nobody)
@@ -765,17 +766,27 @@ def load_person(conn: Bond.Conn) -> Result[Bond.Conn]
   end
 end
 
+# A second filter sees what the first one assigned.
+def mark_person(conn: Bond.Conn) -> Result[Bond.Conn]
+  if not Bond.assigned?(conn, "person")
+    return ok(conn)
+  end
+
+  person = try Bond.assigned(conn, "person", JSON.codec(Person))
+  return ok(Bond.header(conn, "x-seen", person.name))
+end
+
 def who_is_signed_in(conn: Bond.Conn) -> Result[Bond.Conn]
   person = try Bond.assigned(conn, "person", JSON.codec(Person))
   return ok(Bond.text(conn, 200, "#{person.id} #{person.name} #{person.email.unwrap_or("-")}"))
 end
 
 def as_team(conn: Bond.Conn) -> Result[Bond.Conn]
-  refused = Bond.assigned(conn, "person", JSON.codec(Team)).ok? == false
+  refused = not Bond.assigned(conn, "person", JSON.codec(Team)).ok?
   return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "person")}"))
 end
 
 def nobody(conn: Bond.Conn) -> Result[Bond.Conn]
-  refused = Bond.assigned(conn, "nobody", JSON.codec(Person)).ok? == false
+  refused = not Bond.assigned(conn, "nobody", JSON.codec(Person)).ok?
   return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "nobody")}"))
 end

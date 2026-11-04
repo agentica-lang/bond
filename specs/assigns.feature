@@ -23,3 +23,9 @@ Feature: Assigns
     Given the assigns app
     When I send "GET" to "/me"
     Then the status is 500
+    And the body is "Internal Server Error"
+
+  Scenario: A filter after the one that assigned sees the value
+    Given the assigns app
+    When I send "GET" to "/me" with the header "x-user" set to "ana"
+    Then the header "x-seen" is "ana"

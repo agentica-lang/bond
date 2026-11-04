@@ -49,9 +49,9 @@ Behind a proxy or a load balancer, it is the address of the proxy, not of the vi
 
 A filter often looks something up that the handler needs too, such as the signed-in person. `Bond.assign(conn, key, value)` keeps a value in the `Conn` under a name, and `Bond.assigned(conn, key, codec)` reads it back as a `Result` of the type of the codec, so the handler does not look it up again. The values live as long as the request and are never sent to the client.
 
-`Conn` has no type parameter: a value is kept as the `Json` of `JSON.from(value)`, and the reader names its type with a codec, as in [JSON bodies](/guide/json/). Anything that `JSON.encode` takes can be assigned (a struct, a list, a map with `String` keys, an `Optional`, a number, text); a `Fn`, `Bytes` or `Task` is refused by the checker at the `Bond.assign` call. A value comes back as a copy of what was assigned, so the reader needs a type with the same fields. Keep the lookup result small: an id and a name, not a whole table row.
+`Conn` has no type parameter: a value is kept as the `Json` of `JSON.from(value)`, and the reader names its type with a codec, as in [JSON bodies](/guide/json/). A codec is made from a struct, so assign a struct (its fields may be lists, maps with `String` keys, `Optional`s, numbers and text) and wrap a bare number or list in one. A value whose type `JSON.encode` refuses (a `Fn`, `Bytes`, a `Task`, a user enum, or a struct holding one) is a `CHECK-NOT-ENCODABLE` error at the `Bond.assign` call. The value goes through JSON, so the reader decodes it as `JSON.decode` does.
 
-`Bond.assigned` is an `error` when nothing was assigned under the key and when the value is not of the type of the codec. Both are mistakes of the program, not of the client, so a handler that uses `try` answers a 500. A filter that may or may not find a person assigns only when it did, and a handler that allows both asks with `Bond.assigned?` first.
+`Bond.assigned` is an `error` when nothing was assigned under the key and when the value does not decode as the codec's type. Both are mistakes of the program, not of the client, so a handler that uses `try` answers a 500. A handler that allows both cases asks with `Bond.assigned?` first.
 
 ```agentica
 import Bond from "pkg/bond/bond"

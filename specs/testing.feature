@@ -19,3 +19,15 @@ Feature: Testing.request
     Then the body is "127.0.0.1"
     When I send "GET" to "/client" from the address "203.0.113.9"
     Then the body is "203.0.113.9"
+
+  Scenario: request_from chooses the client address, with the headers and the body optional
+    Given the Agentica program "fixtures/request_from.agc"
+    Then the program exits with code 0 within 5000 milliseconds
+    And stdout is:
+      """
+      203.0.113.9 none 0
+      ::1 bond 0
+      198.51.100.7 none 3
+      127.0.0.1 none 0
+
+      """

@@ -1,8 +1,10 @@
-# The check and the format check of the sources, the documentation site (Hugo) and the check of its samples.
+# Developing Bond needs Agentica 0.24.1 or later (`agentica test --jobs`); a project that uses Bond needs only 0.22.0.
+# The check, the format check, the tests of the sources, the documentation site (Hugo) and the check of its samples.
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
+JOBS ?= 4
 
-.PHONY: check fmt-check site site-serve site-sass site-samples
+.PHONY: check fmt-check test site site-serve site-sass site-samples
 
 # `agentica check` with no path checks every .agc file of the package, its examples, specs and tests.
 check:
@@ -11,6 +13,10 @@ check:
 # `agentica fmt --check` with no path lists the files that `agentica fmt` would change, and fails if there are any.
 fmt-check:
 	@agentica fmt --check
+
+# The features of specs/ and the unit tests of test/, up to JOBS files at once (each file has its own port and folders).
+test:
+	@agentica test --jobs $(JOBS)
 
 site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
 

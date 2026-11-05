@@ -44,9 +44,10 @@ such as those of the route pattern matcher and the multipart parser.
 ```sh
 agentica check   # every .agc file of the package
 agentica fmt --check   # the same files; `agentica fmt` rewrites them (`make fmt-check`)
-agentica test
+agentica test --jobs 4   # up to 4 files at once (`make test`, `JOBS=N` sets it)
 ```
 
+Developing Bond needs Agentica 0.24.1 or later (`agentica test --jobs`); using Bond still needs only 0.22.0.
 `agentica test --only TEXT` runs the scenarios whose name contains `TEXT`. CI pins the Agentica release in
 `.github/workflows/ci.yml` (`AGENTICA_VERSION`, with its sha256).
 

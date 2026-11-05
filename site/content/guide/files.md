@@ -1,22 +1,28 @@
 ---
 title: Sending files
 weight: 15
-description: Answer with a file of any size, read in pieces, with its length, a download name and byte ranges.
+description: Answer with a file of any size, with its length, validators for a 304, a download name and byte ranges.
 ---
 
 # Sending files
 
-`Bond.send_file(conn, path)` answers with the file at `path`, as a `Result[Bond.Conn]`: return it or `try` it. It sets the status itself: 200, or 206 and 416 for a range (below), whatever the status was. A [custom `not_found` handler](/guide/errors/) that sends a file therefore answers 200 (and a 206 for a `Range`): call `Bond.status(conn, 404)` after `send_file` for another status, and keep it for pages that no client asks by range. A task that the call starts reads the file in pieces of 64 KiB while the server sends them, so a file of any size costs a few pieces of memory. The server knows the size first, so the answer has `Content-Length` and the pieces go out with no chunks (the `length` of [`Bond.stream`](/guide/streaming/)).
+`Bond.send_file(conn, path)` answers with the file at `path`, as a `Result[Bond.Conn]`: return it or `try` it. It sets the status itself: 200, 304 for a request that already has the file (below), or 206 and 416 for a range, whatever the status was. A [custom `not_found` handler](/guide/errors/) that sends a file therefore answers 200 (and a 206 for a `Range`): call `Bond.status(conn, 404)` after `send_file` for another status, and keep it for pages that no client asks by range. A file of at most 64 KiB is read in one call and answered as a plain body, with no task and no channel. A bigger one is read in pieces of 64 KiB by a task that the call starts while the server sends them, so a file of any size costs a few pieces of memory. The server knows the size first, so the answer has `Content-Length` and the pieces go out with no chunks (the `length` of [`Bond.stream`](/guide/streaming/)). The last argument, `piece_bytes` (4 KiB to 16 MiB), changes that size and the size of the file that is read whole: `Bond.send_file(conn, path, none, none, false, 262_144)`. The bytes are the same for any size; a value out of range is an `error`.
 
 The answer has:
 
 - `Content-Type` from `std/mime` by the extension of the file, with `; charset=utf-8` added for a text type; an unknown extension is `application/octet-stream`.
 - `Content-Length` of the size of the file (added by the server), and `Accept-Ranges: bytes`.
 - `X-Content-Type-Options: nosniff`.
+- `ETag` (the size and the time of the last change in seconds, no read of the file) and `Last-Modified`.
+- `Cache-Control`: `no-cache` by default (a cache keeps the file but asks each time, a cheap 304), unless the route set a `Cache-Control` on the conn before, which is kept. The fourth argument, `max_age`, sets it: `some(0)` is `no-cache` and `some(600)` is `private, max-age=600` (0 to a year). It is `private` since a route that sends a file is often for one person (an avatar, a report); `public: true` (the fifth argument) makes it `public, max-age=600`, so a shared cache (a proxy, a CDN) keeps one copy for everyone, which is right only for a file that every person may see.
 
 A third argument, an `Optional[String]`, makes the file a download: `Bond.send_file(conn, "reports/q3.csv", some("q3 report.csv"))` adds `Content-Disposition: attachment; filename="q3 report.csv"`, and the browser saves it under that name. A name with a control character (CR, LF, NUL), a quote, a backslash or a character outside ASCII has a fallback `filename` (each such character is `_`) and the exact name as `filename*=UTF-8''...`, as RFC 6266 says.
 
 The `error` of `send_file` is a path that is not a plain file (missing, a folder) or a file that cannot be opened. It goes to the [`on_error` handler](/guide/errors/) like any failure of a handler. The path is yours, not the client's: do not build one from a request without the checks that [Static files](/guide/static/) makes. The file can still change after the answer started: a file that gets shorter is cut, and the client sees an incomplete body, never a short one that looks whole.
+
+## Conditional requests
+
+A `GET` or `HEAD` whose `If-None-Match` lists the `ETag` (or is `*`; a `W/` prefix is ignored) is a `304 Not Modified` with the `ETag`, `Last-Modified` and `Cache-Control`, and no body. When there is no `If-None-Match`, an `If-Modified-Since` that is not before the time of the change is a `304` too. A date that is not in the form `Sun, 06 Nov 1994 08:49:37 GMT` is ignored. The 304 is answered before the range, so a request with both gets the 304. The route runs first, so a check that a person may see the file stays in the route, and a 304 is never sent to someone it refused. An edit that keeps the size within the same second is not seen.
 
 ## Ranges
 
@@ -31,7 +37,7 @@ Bond answers one `Range: bytes=a-b`:
 | `bytes=SIZE-` or more, `bytes=-0` | `416` with `Content-Range: bytes */SIZE` and no body |
 | two ranges (`bytes=0-1,5-6`), a range that is not made of digits, one that ends before it starts, another unit | ignored: `200` with the whole file |
 
-`If-Range` is not read: `Bond.send_file` sets no `ETag` or `Last-Modified` to compare it with (`Bond.static` sets an `ETag`, but does not read it either), so the whole file is answered. `File` cannot seek, so the bytes before the start of a range are read and dropped: a range near the end of a big file reads the file up to it.
+`If-Range` is not read (the `ETag` is made from the size and the time in seconds, which is weaker than the strong validator that `If-Range` needs), so the whole file is answered. `File` cannot seek, so the bytes before the start of a range are read and dropped: a range near the end of a big file reads the file up to it.
 
 `HEAD` gets the same headers as `GET` (a 206 for a range) with the length and no body, and the file is not opened.
 

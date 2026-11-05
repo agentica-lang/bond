@@ -45,3 +45,6 @@ Feature: Errors
       | /location-non-ascii | 500    | Internal Server Error |
       | /location-newline   | 500    | Internal Server Error |
       | /header-bad-name    | 500    | Internal Server Error |
+      | /header-newline     | 500    | Internal Server Error |
+      | /header-wide        | 500    | Internal Server Error |
+      | /header-latin1      | 200    | ok                    |

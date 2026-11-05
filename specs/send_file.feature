@@ -1,8 +1,10 @@
 Feature: Sending a file
-  `Bond.send_file(conn, path)` answers with the file at `path`, read in pieces by a task, with the `Content-Length` of
-  its size and the type of `std/mime`. A name as the third argument makes it a download (`Content-Disposition:
+  `Bond.send_file(conn, path)` answers with the file at `path`, with the `Content-Length` of its size and the type of `std/mime`. A name as the third argument makes it a download (`Content-Disposition:
   attachment`). `Range: bytes=a-b` gets a 206 with `Content-Range`, a range that starts beyond the end gets a 416, and
-  the answer says `Accept-Ranges: bytes`. `Bond.static` answers through the same function. The routes of
+  the answer says `Accept-Ranges: bytes`. The answer has an `ETag` and a `Last-Modified`, and a `GET` or `HEAD` with a
+  matching `If-None-Match` or a late enough `If-Modified-Since` is a 304 with no body. A file of at most `piece_bytes`
+  (64 KiB by default) is read in one call, and a bigger one in pieces by a task; the bytes are the same.
+  `Bond.static` answers through the same function. The routes of
   `specs/fixtures/app.agc` send `hello.txt` ("hello from a file", 17 bytes), and a file of 150 000 bytes (three pieces
   of 64 KiB) is written for the scenarios of the big file.
 
@@ -178,3 +180,161 @@ Feature: Sending a file
     Then the status is 206
     And the header "content-range" is "bytes 149990-149999/150000"
     And the body bytes are the pattern from 149990
+
+  Scenario: A file has a validator, and a cache is told to ask each time
+    Given the todo app
+    When I send "GET" to "/download-plain"
+    Then the status is 200
+    And the header "etag" starts with "\""
+    And the header "last-modified" ends with " GMT"
+    And the header "cache-control" is "no-cache"
+
+  Scenario Outline: The Cache-Control comes from max_age, or from the route when it set one (<path>)
+    Given the todo app
+    When I send "GET" to "<path>"
+    Then the status is 200
+    And the header "cache-control" is "<cache>"
+
+    Examples:
+      | path                | cache               |
+      | /download-fresh     | no-cache            |
+      | /download-kept      | private, max-age=600 |
+      | /download-public    | public, max-age=600  |
+      | /download-own-cache | max-age=5           |
+
+  Scenario Outline: A max_age or a piece_bytes out of range is a 500 (<path>)
+    Given the todo app
+    When I send "GET" to "<path>"
+    Then the status is 500
+
+    Examples:
+      | path                |
+      | /download-age-low   |
+      | /download-piece-low |
+
+  Scenario Outline: A request that lists the validator, or a date that is not before the change, is a 304 (<headers>)
+    Given the todo app
+    When I send "GET" to "/download-plain"
+    And I send "GET" to "/download-plain" with the headers:
+      | <name> | <value> |
+    Then the status is 304
+    And the body bytes are ""
+    And the header "etag" starts with "\""
+    And the header "cache-control" is "no-cache"
+    And the header "content-type" is not set
+
+    Examples:
+      | headers        | name              | value                                  |
+      | the tag        | if-none-match     | {etag}                                 |
+      | a weak tag     | if-none-match     | W/{etag}                               |
+      | any tag        | if-none-match     | *                                      |
+      | the date       | if-modified-since | {last_modified}                        |
+      | a later date   | if-modified-since | Fri, 01 Jan 2100 00:00:00 GMT          |
+
+  Scenario Outline: Another validator, an earlier date or a date that is not a date gets the file (<name> <value>)
+    Given the todo app
+    When I send "GET" to "/download-plain"
+    And I send "GET" to "/download-plain" with the headers:
+      | <name> | <value> |
+    Then the status is 200
+    And the body is "hello from a file"
+
+    Examples:
+      | name              | value                         |
+      | if-none-match     | {other}                       |
+      | if-modified-since | Thu, 01 Jan 1970 00:00:00 GMT |
+      | if-modified-since | yesterday                     |
+      | if-modified-since | Sunday, 06-Nov-94 08:49:37 GMT |
+
+  Scenario: If-None-Match wins over If-Modified-Since
+    Given the todo app
+    When I send "GET" to "/download-plain"
+    And I send "GET" to "/download-plain" with the headers:
+      | if-none-match     | {other}         |
+      | if-modified-since | {last_modified} |
+    Then the status is 200
+
+  Scenario: A HEAD request with a validator is a 304, and without one it has the validators and the length
+    Given the todo app
+    When I send "HEAD" to "/download-plain"
+    Then the status is 200
+    And the header "etag" starts with "\""
+    And the header "last-modified" ends with " GMT"
+    And the header "content-length" is "17"
+    When I send "HEAD" to "/download-plain" with the headers:
+      | if-none-match | {etag} |
+    Then the status is 304
+
+  Scenario: A validator that matches is a 304 even when the request has a Range
+    Given the todo app
+    When I send "GET" to "/download-plain"
+    And I send "GET" to "/download-plain" with the headers:
+      | if-none-match | {etag} |
+      | range         | bytes=0-4 |
+    Then the status is 304
+    And the header "content-range" is not set
+
+  Scenario Outline: A file of several pieces and one read in one call have the same bytes (<path>)
+    Given the app with a file of 150000 bytes
+    When I send "GET" to "<path>"
+    Then the status is 200
+    And the header "content-length" is "150000"
+    And the body has 150000 bytes
+    And the body bytes are the pattern from 0
+
+    Examples:
+      | path                 |
+      | /big                 |
+      | /pieces              |
+      | /whole               |
+      | /files/big.bin       |
+      | /pieces-files/big.bin |
+      | /whole-files/big.bin |
+
+  Scenario Outline: A range across the edge of a piece, as the piece size sets it (<path>)
+    Given the app with a file of 150000 bytes
+    When I send "GET" to "<path>" with the header "range" set to "bytes=4090-4105"
+    Then the status is 206
+    And the header "content-range" is "bytes 4090-4105/150000"
+    And the body has 16 bytes
+    And the body bytes are the pattern from 4090
+
+    Examples:
+      | path                  |
+      | /pieces               |
+      | /whole                |
+      | /pieces-files/big.bin |
+      | /whole-files/big.bin  |
+
+  Scenario Outline: A range at the end of the file, as the piece size sets it (<path>)
+    Given the app with a file of 150000 bytes
+    When I send "GET" to "<path>" with the header "range" set to "bytes=-100"
+    Then the status is 206
+    And the header "content-range" is "bytes 149900-149999/150000"
+    And the body bytes are the pattern from 149900
+
+    Examples:
+      | path                  |
+      | /pieces               |
+      | /whole                |
+      | /pieces-files/big.bin |
+      | /whole-files/big.bin  |
+
+  Scenario: A piece_bytes out of range for a file is a 500
+    Given the app with a file of 150000 bytes
+    When I send "GET" to "/bad-piece"
+    Then the status is 500
+
+  Scenario: The file changes between requests, and the validators follow it
+    Given the app with a cache of 0 bytes over a folder that I edit
+    And the file "a.txt" holds "one" as of the time 1700000000
+    When I send "GET" to "/sent"
+    Then the status is 200
+    And the header "last-modified" is "Tue, 14 Nov 2023 22:13:20 GMT"
+    And the body is "one"
+    When the file "a.txt" holds "three" as of the time 1700000001
+    When I send "GET" to "/sent" with the headers:
+      | if-modified-since | Tue, 14 Nov 2023 22:13:20 GMT |
+    Then the status is 200
+    And the header "last-modified" is "Tue, 14 Nov 2023 22:13:21 GMT"
+    And the body is "three"

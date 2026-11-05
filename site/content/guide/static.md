@@ -16,11 +16,11 @@ Only `GET` and `HEAD` read a file. Any other method on a path under the prefix i
 - `X-Content-Type-Options: nosniff`, so a browser does not guess a script from a text file.
 - `Content-Length` (added by the server); a `HEAD` answer has the same headers and no body.
 - `Accept-Ranges: bytes` and ranges (206, 416), as for [`Bond.send_file`](/guide/files/), which sends every file.
-- `ETag` and `Cache-Control` (below). Bond sends no `Last-Modified` and reads no `If-Modified-Since` or `If-Range`.
+- `ETag`, `Last-Modified` and `Cache-Control` (below). Bond reads no `If-Range`.
 
 ## Caching
 
-Every file has an `ETag` made from its size and the time of its last change in seconds, so Bond does not read the file to make it. A `GET` or `HEAD` whose `If-None-Match` lists the tag (or is `*`; a `W/` prefix is ignored) is a `304 Not Modified` with the `ETag` and `Cache-Control`, no body, and the file is not opened. An edit that keeps the size within the same second is not seen, so give a file that changes often and fast another name (see fingerprints below). The `ETag` shows the size and the time of the last change to anyone who can request the file, as the `ETag` of nginx does.
+Every file has an `ETag` made from its size and the time of its last change in seconds, so Bond does not read the file to make it, and a `Last-Modified` with that time. A `GET` or `HEAD` whose `If-None-Match` lists the tag (or is `*`; a `W/` prefix is ignored) is a `304 Not Modified` with the `ETag`, `Last-Modified` and `Cache-Control`, no body, and the file is not opened. Without an `If-None-Match`, an `If-Modified-Since` that is not before the time of the change is a `304` too (`If-None-Match` wins when both are sent, as RFC 9110 says; a date that is not in the form `Sun, 06 Nov 1994 08:49:37 GMT` is ignored). An edit that keeps the size within the same second is not seen, so give a file that changes often and fast another name (see fingerprints below). The `ETag` shows the size and the time of the last change to anyone who can request the file, as the `ETag` of nginx does.
 
 `Cache-Control` is `no-cache` by default: a client may keep the file but asks each time, a cheap `304` when nothing changed. `Bond.static(app, "/assets", "public", 1_073_741_824, 300)` sets `max_age` (in seconds, 0 to a year): `public, max-age=300`. `public` lets a shared cache keep the file too, so a folder that only logged-in users may read keeps `max_age` at 0, or sets `Cache-Control: no-store` in an `after` filter.
 
@@ -89,8 +89,23 @@ There is a short time between this check and the read of the file. Do not let un
 
 ## Any file, and the size
 
-Bond sends the file with [`Bond.send_file`](/guide/files/), in pieces, so the memory does not grow with the size. The bytes go as they are: a text file is not checked to be UTF-8.
+A file of at most `piece_bytes` (64 KiB by default) is read in one call and answered whole. A bigger file is read in pieces of that size by a task while the server sends them, as [`Bond.send_file`](/guide/files/) does, so the memory does not grow with the size. `piece_bytes` is 4 KiB to 16 MiB: `Bond.static(app, "/assets", "public", 1_073_741_824, 0, false, 16_777_216, 262_144)` reads in pieces of 256 KiB, and a file of that size or less at once. The bytes go as they are, whatever the piece size: a text file is not checked to be UTF-8.
 
-A file over `max_bytes` is a 500; a file of exactly `max_bytes` is served. The default is 1 GiB; `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` of 0 or over 1 TiB, and a prefix that is not a path or has a `:param`, stop the program when the app is built. Bond has no compression: a large file that many clients ask for belongs on a web server or a CDN in front of Bond.
+A file over `max_bytes` is a 500; a file of exactly `max_bytes` is served. The default is 1 GiB; `Bond.static(app, "/assets", "public", 65_536)` sets a smaller limit. A `max_bytes` of 0 or over 1 TiB, a `piece_bytes` outside its range, and a prefix that is not a path or has a `:param`, stop the program when the app is built.
+
+## The cache of small files
+
+Each folder keeps the files of at most `piece_bytes` in memory, up to `cache_bytes` in all (16 MiB by default; the sixth argument; 0 turns the cache off). A hit costs one `stat` of the file and no read: the entry is used when the file still has the size and the time of change it had when it was read, and an edited file is read again. As with the `ETag`, an edit that keeps the size within the same second is not seen. The entry is looked up by the path as the client wrote it, and only a path that passed all the checks of [Which paths are a file](#which-paths-are-a-file) has one; a link that is changed to point at another file is noticed when the size or the time of the new target differs. A file that is gone is a 404 at once. With `fingerprint: true`, the entry of a fingerprinted name is not checked against the disk at all (no `stat`): that name is your promise that its content never changes, so a hit costs no call to the disk, and a deleted or overwritten file is served from memory until the program restarts.
+
+The budget counts the bytes of each entry and about 512 bytes more. A file that would take more than half of it is not kept. When an entry does not fit, the cache is emptied and starts again; the count is approximate when many requests miss at once, and errs towards emptying early. A folder that is built from a deploy and has more small files than the budget holds is better served by a bigger `cache_bytes`.
+
+## Compression
+
+Bond sends a text file gzipped to a client whose `Accept-Encoding` lists `gzip` (not `gzip;q=0`) and that asks for the whole file, with `Content-Encoding: gzip`, `Vary: Accept-Encoding` and its own `ETag` (the tag of the file with `-gz` at the end). It uses:
+
+- the `.gz` file next to the file (`app.css.gz` for `app.css`), when there is one that is not older than the file, for a file of any size. Make it in the build (`gzip -9 -k -n app.css`): it costs nothing at run time.
+- otherwise, for a small text file of 256 bytes to 1 MiB that the cache keeps, the bytes compressed once and kept in the cache with the file. A file that does not get smaller is sent as it is. With `cache_bytes: 0` there is no compression of this kind.
+
+Only a text type is compressed (the types of `std/mime` that are text, `image/svg+xml` too): an image, a font or a `.zip` is already compressed. A text file always has `Vary: Accept-Encoding`, so a shared cache keeps the two forms apart. A `Range` request gets the file as it is, since a part of the compressed bytes is not a part of the file. The `.gz` file is read when the entry is made (or on each request for a file that is not kept), so a file and its `.gz` that are changed together are seen together, and a cached entry notices a new `.gz` when the file itself changes.
 
 A 500 for a file goes to the [`on_error` handler](/guide/errors/) with the reason (`the static file app.css is over 10 bytes`), which is also written to stderr. The default handler answers the fixed text of every 500.

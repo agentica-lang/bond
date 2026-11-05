@@ -21,14 +21,49 @@ NO_BODY = "".bytes
 
 REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 
-# The characters besides letters and digits that the server accepts in a header name (RFC 9110 token).
-TOKEN_SYMBOLS = "!#$%&'*+-.^_`|~"
+# The characters that the server accepts in a header name (RFC 9110 token): letters, digits and these symbols.
+TOKEN_CHARS = Set.new("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&'*+-.^_`|~".split(""))
+
+# The characters that the server accepts in a header value: a tab, the printable ASCII and Latin-1 above it.
+VALUE_CHARS = Set.new(
+  List.concat([9], List.concat((32..126).to_a, (128..255).to_a)).map do |code| String.from_code(code) end,
+)
+
+# The lowercase names of the headers that Bond and its helpers write, and the values that they write as they are:
+# `refusal` does not check these again for each answer.
+SAFE_NAMES = Set.new([
+  "accept-ranges",
+  "cache-control",
+  "content-disposition",
+  "content-encoding",
+  "content-range",
+  "content-type",
+  "etag",
+  "last-modified",
+  "vary",
+  "x-content-type-options",
+])
+
+SAFE_VALUES = Set.new([
+  "bytes",
+  "no-cache",
+  "nosniff",
+  "Accept-Encoding",
+  "gzip",
+  "text/plain; charset=utf-8",
+  "text/html; charset=utf-8",
+  "text/css; charset=utf-8",
+  "text/javascript; charset=utf-8",
+  "application/json; charset=utf-8",
+  "application/octet-stream",
+  "image/png",
+  "image/jpeg",
+])
 
 # The status of an accepted WebSocket upgrade (Switching Protocols).
 export SWITCHING = 101
 
 ASCII_LIMIT = 127
-LATIN1_LIMIT = 255
 
 export type Handler = Fn[Conn, Result[Conn]]
 
@@ -42,7 +77,8 @@ export type Receiver = Fn[Conn, Result[Form]]
 ## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
 ## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed
 ## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. `response_length` is
-## the size of a streamed body when it is known (`stream` with a `length`, `send_file`). `session` is the session of the
+## the size of the body when it is known (`stream` with a `length`, `send_file`, which also sets it for a file that it
+## answers whole, so `Testing.request` shows the `Content-Length` the server will send). `session` is the session of the
 ## request that `Bond.sessions` loaded, and `session_changed` says that a handler changed it, so the answer has to
 ## carry it (`session.agc`). `upgrade` is the WebSocket handshake that a route of `Bond.websocket` accepted
 ## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
@@ -379,7 +415,7 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
       pieces = collect(conn, body, max_pieces, timeout_ms)
       return HttpResponse(status: conn.status, headers: sized_headers(conn), body: pieces)
 
-    none -> return HttpResponse(status: conn.status, headers: conn.response_headers, body: conn.response_body)
+    none -> return HttpResponse(status: conn.status, headers: sized_headers(conn), body: conn.response_body)
   end
 end
 
@@ -506,43 +542,46 @@ def refusal(conn: Conn) -> String
     none -> ""
   end
 
-  names = conn.response_headers.map do |header| header.name.downcase end
-  if names.any? do |name| name == "content-length" or name == "transfer-encoding" end
-    return "Content-Length and Transfer-Encoding are set by the server"
-  end
-
   for field in conn.response_headers
-    if not token?(field.name)
-      return "the header name #{field.name.inspect} is not a token"
-    end
-
-    if not field.value.split("").all? do |ch| value_char?(ch) end
-      return "the value of the header #{field.name} has a control or non-Latin-1 character"
-    end
-
-    if field.name.downcase == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
-      return "the Location header must be ASCII: percent-encode it"
+    problem = header_problem(field)
+    if not problem.empty?
+      return problem
     end
   end
 
   return ""
 end
 
+# Why the server would refuse the header, or "". The names and values that Bond writes itself are in `SAFE_NAMES` and
+# `SAFE_VALUES`, so a plain answer costs no check of each character; anything else is checked a character at a time
+# against a set. `SAFE_NAMES` has no name that has a rule of its own (`Content-Length`, `Transfer-Encoding`,
+# `Location`).
+def header_problem(field: Header) -> String
+  name = field.name
+  if not SAFE_NAMES.include?(name)
+    lower = name.downcase
+    if lower == "content-length" or lower == "transfer-encoding"
+      return "Content-Length and Transfer-Encoding are set by the server"
+    end
+
+    if not token?(name)
+      return "the header name #{name.inspect} is not a token"
+    end
+
+    if lower == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
+      return "the Location header must be ASCII: percent-encode it"
+    end
+  end
+
+  if not SAFE_VALUES.include?(field.value) and not field.value.split("").all? do |ch| VALUE_CHARS.include?(ch) end
+    return "the value of the header #{name} has a control or non-Latin-1 character"
+  end
+
+  return ""
+end
+
 def token?(name: String) -> Bool
-  return not name.empty? and name.split("").all? do |ch| token_char?(ch) end
-end
-
-def token_char?(ch: String) -> Bool
-  code = ch.code
-  digit = code >= 48 and code <= 57
-  upper = code >= 65 and code <= 90
-  lower = code >= 97 and code <= 122
-  return digit or upper or lower or TOKEN_SYMBOLS.index_of(ch).some?
-end
-
-def value_char?(ch: String) -> Bool
-  code = ch.code
-  return code == 9 or (code >= 32 and code != 127 and code <= LATIN1_LIMIT)
+  return not name.empty? and name.split("").all? do |ch| TOKEN_CHARS.include?(ch) end
 end
 
 # application/json or type/name+json, in any case, with or without parameters (`; charset=utf-8`).

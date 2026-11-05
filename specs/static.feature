@@ -1,6 +1,6 @@
 Feature: Static files
   `Bond.static(app, "/assets", "fixtures/public")` serves the files of a folder under a path. It answers `GET` and
-  `HEAD` with the bytes of the file: `Content-Type` from `std/mime`, with `; charset=utf-8` for a text type,
+  `HEAD` with the bytes of the file, with an `ETag` and a `Last-Modified` (a 304 for a request that has them): `Content-Type` from `std/mime`, with `; charset=utf-8` for a text type,
   `X-Content-Type-Options: nosniff`, and the `Content-Length` that the server adds. A path that is not a file of the
   folder is a 404, and so is every way out of the folder or into a hidden name. A file over `max_bytes` (1 GiB by
   default) is a 500. A route of the app wins over a file. The folder `specs/fixtures/public` has the files, and the app of
@@ -215,3 +215,167 @@ Feature: Static files
     Then the status is 206
     And the header "etag" starts with "\""
 
+
+  Scenario: A file has the time of its last change
+    When I send "GET" to "/assets/hello.txt"
+    Then the header "last-modified" ends with " GMT"
+
+  Scenario Outline: A request with a date that is not before the change is a 304, and one with an earlier date is not (<date>)
+    When I send "GET" to "/assets/hello.txt"
+    And I send "GET" to "/assets/hello.txt" with the headers:
+      | if-modified-since | <date> |
+    Then the status is <status>
+
+    Examples:
+      | date                          | status |
+      | Fri, 01 Jan 2100 00:00:00 GMT | 304    |
+      | Thu, 01 Jan 1970 00:00:00 GMT | 200    |
+
+  Scenario: If-None-Match wins over If-Modified-Since
+    When I send "GET" to "/assets/hello.txt"
+    And I send "GET" to "/assets/hello.txt" with the headers:
+      | if-none-match     | {other}                       |
+      | if-modified-since | Fri, 01 Jan 2100 00:00:00 GMT |
+    Then the status is 200
+
+  Scenario: A text file with a .gz file next to it is sent compressed to a client that takes gzip
+    When I send "GET" to "/assets/style.css" with the headers:
+      | accept-encoding | br, gzip;q=0.8 |
+    Then the status is 200
+    And the header "content-encoding" is "gzip"
+    And the header "vary" is "Accept-Encoding"
+    And the header "content-type" is "text/css; charset=utf-8"
+    And the header "etag" ends with "-gz\""
+    And the body gunzipped is "body { color: red }"
+
+  Scenario Outline: The file as it is, for a client that does not take gzip or asks for a part (<headers>)
+    When I send "GET" to "/assets/style.css" with the headers:
+      | <name> | <value> |
+    Then the status is <status>
+    And the header "content-encoding" is not set
+    And the header "vary" is "Accept-Encoding"
+    And the body is "<body>"
+
+    Examples:
+      | headers           | name            | value         | status | body                |
+      | no encoding       | x-other         | 1             | 200    | body { color: red } |
+      | gzip refused      | accept-encoding | gzip;q=0, br  | 200    | body { color: red } |
+      | another encoding  | accept-encoding | deflate, br   | 200    | body { color: red } |
+      | a range           | range           | bytes=0-3     | 206    | body                |
+
+  Scenario: A range of a file that takes gzip is a part of the file, not of the compressed bytes
+    When I send "GET" to "/assets/style.css" with the headers:
+      | accept-encoding | gzip      |
+      | range           | bytes=0-3 |
+    Then the status is 206
+    And the header "content-encoding" is not set
+    And the body is "body"
+
+  Scenario: The validator of the compressed file is not the one of the file, and it is a 304 for the same client
+    When I send "GET" to "/assets/style.css" with the headers:
+      | accept-encoding | gzip |
+    And I send "GET" to "/assets/style.css" with the headers:
+      | accept-encoding | gzip   |
+      | if-none-match   | {etag} |
+    Then the status is 304
+    And the header "vary" is "Accept-Encoding"
+    When I send "GET" to "/assets/style.css" with the headers:
+      | accept-encoding | identity |
+      | if-none-match   | {other}  |
+    Then the status is 200
+
+  Scenario: A small text file with no .gz file is compressed once and kept, when it is big enough to gain
+    When I send "GET" to "/assets/lorem.txt" with the headers:
+      | accept-encoding | gzip |
+    Then the status is 200
+    And the header "content-encoding" is "gzip"
+    And the body gunzipped is the file "specs/fixtures/public/lorem.txt"
+    When I send "GET" to "/assets/lorem.txt" with the headers:
+      | accept-encoding | gzip |
+    Then the header "content-encoding" is "gzip"
+    And the body gunzipped is the file "specs/fixtures/public/lorem.txt"
+
+  Scenario Outline: A file that is not text, or too small to gain, is never compressed (<path>)
+    When I send "GET" to "<path>" with the headers:
+      | accept-encoding | gzip |
+    Then the status is 200
+    And the header "content-encoding" is not set
+
+    Examples:
+      | path              |
+      | /assets/pixel.png |
+      | /assets/hello.txt |
+
+  Scenario: A folder with no cache reads the file each time
+    Given the app with a cache of 0 bytes over a folder that I edit
+    And the file "a.txt" holds "one" as of the time 1700000000
+    When I send "GET" to "/files/a.txt"
+    Then the body is "one"
+    When the file "a.txt" holds "two" as of the time 1700000000
+    And I send "GET" to "/files/a.txt"
+    Then the body is "two"
+
+  Scenario: A file in the cache is read again when its size or its time of change is not the same
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.txt" holds "one" as of the time 1700000000
+    When I send "GET" to "/files/a.txt"
+    Then the header "last-modified" is "Tue, 14 Nov 2023 22:13:20 GMT"
+    And the body is "one"
+    When the file "a.txt" holds "two" as of the time 1700000001
+    And I send "GET" to "/files/a.txt"
+    Then the header "last-modified" is "Tue, 14 Nov 2023 22:13:21 GMT"
+    And the body is "two"
+    When the file "a.txt" holds "three" as of the time 1700000001
+    And I send "GET" to "/files/a.txt"
+    Then the body is "three"
+
+  Scenario: A hit does not read the file again while its size and time are the same
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.txt" holds "one" as of the time 1700000000
+    When I send "GET" to "/files/a.txt"
+    Then the body is "one"
+    When the file "a.txt" holds "two" as of the time 1700000000
+    And I send "GET" to "/files/a.txt"
+    Then the body is "one"
+
+  Scenario: A file that is gone is a 404 and not the bytes that were kept
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.txt" holds "one" as of the time 1700000000
+    When I send "GET" to "/files/a.txt"
+    Then the status is 200
+    When the file "a.txt" is removed
+    And I send "GET" to "/files/a.txt"
+    Then the status is 404
+
+  Scenario: A fingerprinted file of a folder that trusts fingerprints is not checked against the disk
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "app.3f9a1c2b.css" holds "body {}" as of the time 1700000000
+    When I send "GET" to "/versioned/app.3f9a1c2b.css"
+    Then the header "cache-control" is "public, max-age=31536000, immutable"
+    And the body is "body {}"
+    When the file "app.3f9a1c2b.css" is removed
+    And I send "GET" to "/versioned/app.3f9a1c2b.css"
+    Then the status is 200
+    When I send "GET" to "/files/app.3f9a1c2b.css"
+    Then the status is 404
+
+  Scenario: A cache that is full is emptied, so it holds no more than its size
+    Given the app with a cache of 2000 bytes over a folder that I edit
+    And the file "a.txt" holds "aaa" as of the time 1700000000
+    And the file "b.txt" holds "bbb" as of the time 1700000000
+    And the file "c.txt" holds "ccc" as of the time 1700000000
+    And the file "d.txt" holds "ddd" as of the time 1700000000
+    When I send "GET" to "/files/a.txt"
+    And I send "GET" to "/files/b.txt"
+    And I send "GET" to "/files/c.txt"
+    And the file "a.txt" holds "AAA" as of the time 1700000000
+    And the file "b.txt" holds "BBB" as of the time 1700000000
+    And I send "GET" to "/files/b.txt"
+    Then the body is "bbb"
+    When I send "GET" to "/files/d.txt"
+    And I send "GET" to "/files/a.txt"
+    Then the body is "AAA"
+
+  Scenario: A piece_bytes below the minimum stops the program when the app is built
+    Given the Agentica program "fixtures/bad_piece_bytes.agc"
+    Then the program exits with code 1 within 5000 milliseconds

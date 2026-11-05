@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- CI tests with Agentica 0.24.1 and runs `agentica test --jobs` (`make test`). Bond still needs 0.22.0 or later; only developing Bond needs 0.24.1.
+
 ## [0.6.1] - 2026-11-04
 
 Needs Agentica 0.22.0 or later.

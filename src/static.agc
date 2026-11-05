@@ -1,7 +1,10 @@
-## Static files: a folder served under a path, sent by `Files.send` (read in pieces, typed with `std/mime`).
+## Static files: a folder served under a path, answered by `Files.respond` (typed with `std/mime`), with the small
+## files kept in memory.
 
+import MIME from "std/mime"
 import URI from "std/uri"
 import Conns from "conn"
+import Dates from "dates"
 import Files from "files"
 import Pattern from "pattern"
 import {Conn} from "conn"
@@ -18,10 +21,6 @@ DEVICES = Set.new([
   "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ])
 
-## The longest `max_age`, one year in seconds: the longest that a cache is told to keep a file (RFC 9111 section 1.2.2),
-## and what a fingerprinted file gets when `fingerprint` is on.
-export MAX_AGE_SECONDS = 31_536_000
-
 DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 LETTERS = Set.new(["a", "b", "c", "d", "e", "f"])
 
@@ -29,15 +28,82 @@ LETTERS = Set.new(["a", "b", "c", "d", "e", "f"])
 FINGERPRINT_MIN = 8
 FINGERPRINT_MAX = 64
 
+# What a cached entry weighs besides its bytes: the key, the headers, the tables.
+ENTRY_OVERHEAD = 512
+
+# The keys of `Mount.used`: the byte count, the last id of an entry, and the prefix of the claim on an entry that is
+# dropped (the task that makes the claim 1 drops it and gives its bytes back, so two tasks never do it twice).
+USED = "bytes"
+IDS = "ids"
+GONE = "gone"
+
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
 ## served. `max_age` is the seconds that a cache may keep a file (0 is "ask each time"). With `fingerprint`, a name that
-## has a fingerprint is kept for a year, whatever `max_age` is.
+## has a fingerprint is kept for a year, whatever `max_age` is. A file of at most `piece_bytes` is read in one call,
+## and kept in `entries` while `cache_bytes` (0: not at all) allows it, with `used` counting the bytes.
 export struct Mount
   prefix: String
   root: String
   max_bytes: Int
-  max_age: Int = 0
-  fingerprint: Bool = false
+  max_age: Int
+  fingerprint: Bool
+  cache_bytes: Int
+  piece_bytes: Int
+  entries: ATS[String, Entry]
+  used: ATS[String, Int]
+end
+
+## A small file in memory: the path that `stat` checks (the folder joined with the names of the request), the `size`
+## and `modified` seconds it had when it was read, its `rep` and `body`, and the same for the `.gz` file next to it when
+## there was a fresh one (`zipped` and `zipped_body`). `twin` is what `stat` said of the `.gz` path when the entry was
+## made ("" for no file, else its size and time), so a `.gz` that is rewritten, removed or added later is seen. A `trusted` entry (a fingerprinted name of a mount with
+## `fingerprint`, which the app promises never changes) is not checked against the disk at all.
+export struct Entry
+  id: Int
+  path: String
+  size: Int
+  modified: Int
+  rep: Files.Rep
+  body: Bytes
+  zipped: Optional[Files.Rep]
+  zipped_body: Bytes
+  twin: String
+  trusted: Bool
+  cost: Int
+end
+
+# The file that the request names: the folder joined with the names (what `stat` follows, as the cache checks it), the
+# real path that was checked and read, that path below the folder (with `/`), and its `stat`.
+struct Located
+  joined: String
+  file: String
+  relative: String
+  info: FileInfo
+end
+
+## The mount of the folder `root` (a real path) under `prefix`, with an empty cache of `cache_bytes`.
+export def make_mount(
+  prefix: String,
+  root: String,
+  max_bytes: Int,
+  max_age: Int,
+  fingerprint: Bool,
+  cache_bytes: Int,
+  piece_bytes: Int,
+) -> Mount
+  entries: ATS[String, Entry] = ATS.new()
+  used: ATS[String, Int] = ATS.new()
+  return Mount(
+    prefix: prefix,
+    root: root,
+    max_bytes: max_bytes,
+    max_age: max_age,
+    fingerprint: fingerprint,
+    cache_bytes: cache_bytes,
+    piece_bytes: piece_bytes,
+    entries: entries,
+    used: used,
+  )
 end
 
 ## The real path of the folder of a mount, when it is a folder. It is read once, when the app is built.
@@ -88,10 +154,19 @@ def answer(mount: Mount, parts: List[String], conn: Conn) -> Result[Conn]
     return ok(Conns.halt(Conns.header(conn, "allow", "GET, HEAD"), 405, "method not allowed"))
   end
 
+  # The path as the client wrote it is looked up, and only a path that is the real name of its file is ever stored (see
+  # `send_found`), so a hit skips `decode` and `locate`: it costs the `stat` of the file, and for a text file and
+  # a client
+  # that takes gzip the `stat` of its `.gz` path too.
+  case cached(mount, parts.join("/"), conn)
+    some(entry) -> return reply(conn, entry)
+    none -> nil
+  end
+
   names = try decode(parts)
-  file = try locate(mount, names)
-  name = names.last
-  return send(mount, file, name, conn)
+  found = try locate(mount, names)
+  # Not `names`, which are decoded: `%62ig.css` is another spelling of `big.css`, and only the real name is a key.
+  return send_found(mount, found, names.last, found.relative == parts.join("/"), conn)
 end
 
 # Each segment is decoded, and then refused when it could leave the folder or name something that is not a plain file
@@ -133,9 +208,20 @@ end
 # The real path of the file, with the links followed, when it is a plain file inside the real folder and no name of
 # its path below the folder starts with a dot: so a link to `.env` or into `.git/` is a miss like the dot file itself.
 # A link that leads out of the folder is a miss. The file can still change between this check and the read.
-def locate(mount: Mount, names: List[String]) -> Result[String]
+def locate(mount: Mount, names: List[String]) -> Result[Located]
   joined = try miss(Path.join(List.concat([mount.root], names)))
   file = try miss(Path.real(joined))
+  relative = try inside(mount, file)
+  info = File.stat(file)
+  if not info.ok? or info.unwrap!.kind != "file"
+    return error(MISS)
+  end
+
+  return ok(Located(joined: joined, file: file, relative: relative, info: info.unwrap!))
+end
+
+# The real path of a file below the real folder, with `/`, when it is inside it and no name of it starts with a dot.
+def inside(mount: Mount, file: String) -> Result[String]
   start = with_separator(mount.root)
   if not file.start_with?(start)
     return error(MISS)
@@ -146,12 +232,7 @@ def locate(mount: Mount, names: List[String]) -> Result[String]
     return error(MISS)
   end
 
-  info = File.stat(file)
-  if not info.ok? or info.unwrap!.kind != "file"
-    return error(MISS)
-  end
-
-  return ok(file)
+  return ok(below_root)
 end
 
 def with_separator(root: String) -> String
@@ -166,58 +247,309 @@ def with_separator(root: String) -> String
   return "#{root}/"
 end
 
-# The reasons are for stderr and the error handler, in words: the text of a failed read is the VM's, not ours. The size
-# is checked here and the file is sent by `Files.send`, which reads it in pieces, so a big file costs no memory.
-def send(mount: Mount, file: String, name: String, conn: Conn) -> Result[Conn]
-  info = File.stat(file)
-  if not info.ok?
-    return error("the static file #{name} cannot be read")
-  end
-
-  size = info.unwrap!.size_bytes
+# The reasons are for stderr and the error handler, in words: the text of a failed read is the VM's, not ours. The
+# size is checked here with the `stat` of `locate`. A file of at most one piece (`piece_bytes`) that fits the cache is
+# read whole by a `GET` and kept; any other is answered by `Files.respond`, which reads a small one whole and a big
+# one in pieces, so a big file costs no memory. An entry is stored only under the real name of its file (not `%62ig`,
+# `Big` on a folder that ignores the case, or a link), so one file has one entry, and no spelling of a name makes more.
+def send_found(mount: Mount, found: Located, name: String, canonical: Bool, conn: Conn) -> Result[Conn]
+  size = found.info.size_bytes
   if size > mount.max_bytes
     return error("the static file #{name} is over #{mount.max_bytes} bytes")
   end
 
-  etag = etag_of(info.unwrap!)
-  cache = cache_control(mount, name)
-  if matches?(conn, etag)
-    return ok(
-      Conns.header(
-        Conns.header(conn.with(status: 304, response_body: "".bytes), "etag", etag),
-        "cache-control",
-        cache,
-      ),
-    )
-  end
-
-  sent = Files.send(conn, file, name)
-  if not sent.ok?
-    return error("the static file #{name} cannot be read")
-  end
-
-  return ok(Conns.header(Conns.header(sent.unwrap!, "etag", etag), "cache-control", cache))
-end
-
-# A strong validator from what `stat` gives, with no read of the file: the size and the time of the last change in
-# seconds. An edit that keeps the size and happens in the same second as the last one is not seen.
-def etag_of(info: FileInfo) -> String
-  return "\"#{info.size_bytes.to_s}-#{info.modified_seconds.to_s}\""
-end
-
-# Whether `If-None-Match` lists the tag (or is `*`). The comparison is the weak one that this header uses (RFC 9110
-# section 13.1.2): a leading `W/` is dropped from the tag of the request. A tag with a comma inside is not told apart,
-# which the tags of Bond never have.
-def matches?(conn: Conn, etag: String) -> Bool
-  header = Conns.request_header(conn, "if-none-match").unwrap_or("")
-  return header.split(",").any? do |item|
-    tag = item.strip
-    if tag.start_with?("W/")
-      tag = tag.slice(2, tag.length - 2)
+  text = MIME.text?(MIME.mime_type(name))
+  described = Files.describe(name, none, found.info, cache_control(mount, name))
+  plain = described.with(vary: text, piece_bytes: mount.piece_bytes)
+  gzip = text and accepts_gzip?(conn) and not Files.ranged?(conn)
+  if size <= mount.piece_bytes and size + ENTRY_OVERHEAD <= mount.cache_bytes / 2 and conn.method == "GET"
+    near: Optional[Located] = none
+    if text
+      near = sibling(mount, found)
     end
 
-    tag == "*" or tag == etag
+    if keeps?(mount, size, near)
+      trusted = mount.fingerprint and fingerprinted?(name)
+      entry = try load(mount, found, plain, near, trusted)
+      if canonical
+        remember(mount, found.relative, entry)
+      end
+
+      return reply(conn, entry)
+    end
+
+    return send_uncached(mount, found, plain, near, gzip, conn)
   end
+
+  far: Optional[Located] = none
+  if gzip
+    far = sibling(mount, found)
+  end
+
+  return send_uncached(mount, found, plain, far, gzip, conn)
+end
+
+# Whether the entry of a file of `size` bytes with this `.gz` file fits the cache. A `.gz` file that does not (over
+# `piece_bytes`, or taking the entry over half of the budget) is not loaded into memory: the file is not kept, and a
+# `.gz` is sent from the disk by `send_uncached`.
+def keeps?(mount: Mount, size: Int, twin: Optional[Located]) -> Bool
+  case twin
+    some(found) ->
+      packed = found.info.size_bytes
+      return packed <= mount.piece_bytes and size + packed + ENTRY_OVERHEAD <= mount.cache_bytes / 2
+
+    none -> return true
+  end
+end
+
+def send_uncached(
+  mount: Mount,
+  found: Located,
+  plain: Files.Rep,
+  twin: Optional[Located],
+  gzip: Bool,
+  conn: Conn,
+) -> Result[Conn]
+  if gzip
+    case twin
+      some(zipped) ->
+        # A `.gz` file that changes after the check is not an error: the file as it is answers.
+        served = Files.respond(conn, zipped_of(plain, zipped.info), zipped.file, none)
+        if served.ok?
+          return served
+        end
+
+      none -> nil
+    end
+  end
+
+  sent = Files.respond(conn, plain, found.file, none)
+  if not sent.ok?
+    return error("the static file #{found.relative} cannot be read")
+  end
+
+  return sent
+end
+
+# The entry of a small file: its bytes, and the `.gz` file next to it when there is one (`keeps?` says it fits),
+# read at
+# the same time. A `.gz` file that cannot be read is left out.
+def load(mount: Mount, found: Located, plain: Files.Rep, twin: Optional[Located], trusted: Bool) -> Result[Entry]
+  read = Files.read_whole(found.file, plain.size)
+  if not read.ok?
+    return error("the static file #{found.relative} cannot be read")
+  end
+
+  bytes = read.unwrap!
+  zipped: Optional[Files.Rep] = none
+  packed = "".bytes
+  stamp = ""
+  if plain.vary
+    stamp = twin_stamp(found.joined)
+  end
+
+  case twin
+    some(zip) ->
+      zip_read = Files.read_whole(zip.file, zip.info.size_bytes)
+      if zip_read.ok?
+        zipped = some(zipped_of(plain, zip.info))
+        packed = zip_read.unwrap!
+      end
+
+    none -> nil
+  end
+
+  return ok(
+    Entry(
+      id: mount.used.add(IDS, 1),
+      path: found.joined,
+      size: plain.size,
+      modified: plain.modified,
+      rep: plain,
+      body: bytes,
+      zipped: zipped,
+      zipped_body: packed,
+      twin: stamp,
+      trusted: trusted,
+      cost: bytes.size + packed.size + ENTRY_OVERHEAD,
+    ),
+  )
+end
+
+# What `stat` says of the `.gz` path of a file, as the cache compares it: "" when there is no file, else its size and
+# time of change. The path is the one that the request joined, with links followed, whatever `sibling` makes of it.
+def twin_stamp(joined: String) -> String
+  info = File.stat("#{joined}.gz")
+  if not info.ok? or info.unwrap!.kind != "file"
+    return ""
+  end
+
+  return "#{info.unwrap!.size_bytes}-#{info.unwrap!.modified_seconds}"
+end
+
+# The `.gz` file next to the file, when it is a plain file with bytes in it, not older than the file, and inside the
+# folder by the same rules as the file (a link to a file outside, or to a hidden one, is not served): a build that
+# compresses its files leaves it, and one that was left behind an edit of the file is not served.
+def sibling(mount: Mount, found: Located) -> Optional[Located]
+  real = Path.real("#{found.file}.gz")
+  if not real.ok?
+    return none
+  end
+
+  relative = inside(mount, real.unwrap!)
+  if not relative.ok?
+    return none
+  end
+
+  twin = File.stat(real.unwrap!)
+  if not twin.ok? or twin.unwrap!.kind != "file" or twin.unwrap!.size_bytes == 0
+    return none
+  end
+
+  if twin.unwrap!.size_bytes > mount.max_bytes
+    return none
+  end
+
+  if twin.unwrap!.modified_seconds < found.info.modified_seconds
+    return none
+  end
+
+  return some(
+    Located(joined: "#{found.joined}.gz", file: real.unwrap!, relative: relative.unwrap!, info: twin.unwrap!),
+  )
+end
+
+# The `Rep` of the `.gz` file whose `stat` is `twin` as the answer for the file that `plain` describes: its own size,
+# time and tag, since the bytes differ.
+def zipped_of(plain: Files.Rep, twin: FileInfo) -> Files.Rep
+  tag = "\"#{twin.size_bytes}-#{twin.modified_seconds}-gz\""
+  return plain.with(
+    etag: tag,
+    modified: twin.modified_seconds,
+    last_modified: Dates.format(twin.modified_seconds),
+    size: twin.size_bytes,
+    encoding: "gzip",
+  )
+end
+
+# The answer for an entry: the `.gz` bytes for a client that takes gzip and asks for the whole file (a part of a
+# compressed file is not a part of the file), else the bytes as they are.
+def reply(conn: Conn, entry: Entry) -> Result[Conn]
+  case entry.zipped
+    some(rep) ->
+      if accepts_gzip?(conn) and not Files.ranged?(conn)
+        return Files.respond(conn, rep, entry.path, some(entry.zipped_body))
+      end
+
+    none -> nil
+  end
+
+  return Files.respond(conn, entry.rep, entry.path, some(entry.body))
+end
+
+# Whether `Accept-Encoding` lists gzip with a quality above 0 (`gzip;q=0` refuses it).
+def accepts_gzip?(conn: Conn) -> Bool
+  header = Conns.request_header(conn, "accept-encoding").unwrap_or("")
+  return header.split(",").any? do |item| gzip_item?(item) end
+end
+
+def gzip_item?(item: String) -> Bool
+  parts = item.split(";").map do |part| part.strip.downcase end
+  if parts[0] != "gzip" and parts[0] != "x-gzip"
+    return false
+  end
+
+  return not parts.drop(1).any? do |param| zero_quality?(param) end
+end
+
+def zero_quality?(param: String) -> Bool
+  if not param.start_with?("q=")
+    return false
+  end
+
+  value = param.slice(2, param.length - 2)
+  return not value.empty? and value.split("").all? do |ch| ch == "0" or ch == "." end
+end
+
+# The entry of the key when the file is the one it was made from: a `stat` with the same size and time of change (none
+# for a trusted entry). For a text file and a client that takes gzip (`conn`) its `.gz` path must also be as it was: a
+# `.gz` that was rewritten, that came after the entry (a deploy that copies the file first) or that went away makes the
+# entry stale. An edit that keeps both size and time (inside one second) is not seen, as with the `ETag`. A stale entry
+# is dropped and the request goes the long way, which makes a new one.
+def cached(mount: Mount, key: String, conn: Conn) -> Optional[Entry]
+  if mount.cache_bytes == 0
+    return none
+  end
+
+  found = mount.entries.get(key)
+  if not found.ok?
+    return none
+  end
+
+  entry = found.unwrap!
+  if entry.trusted or (unchanged?(entry) and twin_unchanged?(entry, conn))
+    return some(entry)
+  end
+
+  drop(mount, key, entry)
+  return none
+end
+
+# Whether the `.gz` path is as the entry saw it, asked only when the answer could be the `.gz` file: a text file, and a
+# client that takes gzip and asks for the whole file.
+def twin_unchanged?(entry: Entry, conn: Conn) -> Bool
+  if not entry.rep.vary or not accepts_gzip?(conn) or Files.ranged?(conn)
+    return true
+  end
+
+  return twin_stamp(entry.path) == entry.twin
+end
+
+# Removes the entry and gives its bytes back, once: of the tasks that find it stale at the same time, only the
+# one whose
+# claim is the first does it.
+def drop(mount: Mount, key: String, entry: Entry) -> Void
+  if mount.used.add("#{GONE}#{entry.id}", 1) == 1
+    mount.entries.delete(key)
+    _ = mount.used.add(USED, 0 - entry.cost)
+  end
+end
+
+def unchanged?(entry: Entry) -> Bool
+  info = File.stat(entry.path)
+  if not info.ok? or info.unwrap!.kind != "file"
+    return false
+  end
+
+  return info.unwrap!.size_bytes == entry.size and info.unwrap!.modified_seconds == entry.modified
+end
+
+# Keeps the entry unless it is over half the budget. When the bytes would pass the budget the cache is emptied first:
+# no order of eviction to keep, and a file that is asked for again is read again once. The count is approximate under
+# concurrent misses (a replaced entry is counted twice until the next emptying, and a task that empties may lose the
+# count of another), which errs towards emptying early, and the memory stays within the budget plus the entries that
+# were added at that moment.
+def remember(mount: Mount, key: String, entry: Entry) -> Void
+  if entry.cost > mount.cache_bytes / 2
+    return
+  end
+
+  total = mount.used.add(USED, entry.cost)
+  if total > mount.cache_bytes
+    for stale in mount.entries.keys
+      mount.entries.delete(stale)
+    end
+
+    for claim in mount.used.keys
+      if claim.start_with?(GONE)
+        mount.used.delete(claim)
+      end
+    end
+
+    mount.used.put(USED, entry.cost)
+  end
+
+  mount.entries.put(key, entry)
 end
 
 # With `fingerprint` on, the app says that a name with a fingerprint never changes its content, so it is cached for as
@@ -225,7 +557,7 @@ end
 # each time, which is a cheap 304 now.
 def cache_control(mount: Mount, name: String) -> String
   if mount.fingerprint and fingerprinted?(name)
-    return "public, max-age=#{MAX_AGE_SECONDS}, immutable"
+    return "public, max-age=#{Files.MAX_AGE_SECONDS}, immutable"
   end
 
   if mount.max_age == 0

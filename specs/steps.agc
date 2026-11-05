@@ -73,6 +73,15 @@ def main() -> Void
     BDD.step("the app with CSRF protection", &keep_csrf_app),
     BDD.step("the app with CSRF protection that allows https://admin.example.net", &keep_allowing_csrf_app),
     BDD.step("the app with a file of {int} bytes", &keep_big_app),
+    BDD.step("the app with a cache of {int} bytes over a folder that I edit", &keep_edit_app),
+    BDD.step("the file {string} holds {string} as of the time {int}", &write_file_at),
+    BDD.step("the file {string} holds the gzip of {string} as of the time {int}", &write_gzip_at),
+    BDD.step("the outside file holds {string}", &write_outside),
+    BDD.step("the file {string} is a link to the outside file", &link_to_outside),
+    BDD.step("the file {string} is removed", &remove_file),
+    BDD.step("I send {string} to {string} with the headers:", &send_with_table),
+    BDD.step("the body gunzipped is {string}", &gunzipped_is),
+    BDD.step("the body gunzipped is the file {string}", &gunzipped_is_file),
     BDD.step("the app with a folder of links", &keep_links_app),
     BDD.step("I send {string} to {string}") do |ctx, args|
       send(ctx, Ask(method: args[0], path: args[1], headers: [], body: ""))
@@ -272,6 +281,23 @@ def send_as_browser(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
+# The headers of the table, one `| name | value |` row each. `{etag}` and `{last_modified}` in a value are the headers
+# of the last answer, and `{other}` is a tag that no file has.
+def send_with_table(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  last = Reply(status: 0, headers: {}, fields: [], body: "", bytes: "")
+  if BDD.get(ctx, REPLY).ok?
+    last = last_reply(ctx)
+  end
+
+  headers = BDD.table(ctx).map do |row| Header(name: row[0], value: filled(row[1], last)) end
+  return send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
+end
+
+def filled(value: String, last: Reply) -> String
+  tagged = value.replace("{etag}", last.headers.get("etag", ""))
+  return tagged.replace("{last_modified}", last.headers.get("last-modified", "")).replace("{other}", "\"0-0\"")
+end
+
 # `{etag}` in the value is the `ETag` of the last answer, and `{other}` is a tag that no file has.
 def send_if_none_match(ctx: BDD.Context, args: List[String]) -> BDD.Context
   etag = last_reply(ctx).headers.get("etag", "")
@@ -381,6 +407,24 @@ def body_size_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
   reply = last_reply(ctx)
   count = numbers(reply.bytes).size
   return BDD.assert(ctx, count == args[0].to_i!, "the body has #{count} bytes")
+end
+
+def gunzipped_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  text = gunzipped(last_reply(ctx))
+  return BDD.assert(ctx, text == args[0], "the body gunzipped is #{text}")
+end
+
+def gunzipped_is_file(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  text = gunzipped(last_reply(ctx))
+  expected = File.read_text(args[0]).unwrap_or("")
+  return BDD.assert(ctx, not expected.empty? and text == expected, "the body gunzipped is #{text}")
+end
+
+# The text of a gzip body, or "" when the body is not gzip.
+def gunzipped(reply: Reply) -> String
+  data = Bytes.from_list(reply.bytes.split(" ").select do |word| not word.empty? end.map do |word| word.to_i! end)
+  packed = Zlib.gunzip(data.unwrap_or("".bytes))
+  return String.from_bytes(packed.unwrap_or("".bytes)).unwrap_or("")
 end
 
 def keep_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -513,7 +557,12 @@ def serve_big(base: String, size: Int, request: Json) -> Result[Json]
     Bond.app()
     |> Bond.get("/big") do |conn| Bond.send_file(conn, "#{base}/big.bin") end
     |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
+    |> Bond.get("/pieces") do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 4_096) end
+    |> Bond.get("/whole") do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 1_048_576) end
+    |> Bond.get("/bad-piece") do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 16_777_217) end
     |> Bond.static("/files", base)
+    |> Bond.static("/pieces-files", base, 1_073_741_824, 0, false, 0, 4_096)
+    |> Bond.static("/whole-files", base, 1_073_741_824, 0, false, 1_048_576, 1_048_576)
   )
 
   before = Task.pending_count()
@@ -522,6 +571,114 @@ def serve_big(base: String, size: Int, request: Json) -> Result[Json]
   _ = Path.remove("#{base}/big.bin")
   _ = Path.remove(base)
   return ok(JSON.from(reply_of(response)))
+end
+
+# A folder that a scenario edits between requests, served at `/files` with a cache of the given size, and its `a.txt`
+# sent at `/sent`. The app lives for the whole scenario, so its cache does too; the folder is removed when it ends.
+def keep_edit_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  base = edit_folder()
+  made = Dir.mkdir(base)
+  if not made.ok?
+    return BDD.skip(ctx, "the folder of the edits cannot be made here: #{made.message}")
+  end
+
+  app = (
+    Bond.app()
+    |> Bond.get("/sent") do |conn| Bond.send_file(conn, "#{base}/a.txt") end
+    |> Bond.static("/files", base, 1_073_741_824, 0, false, args[0].to_i!)
+    |> Bond.static("/versioned", base, 1_073_741_824, 0, true, args[0].to_i!)
+  )
+
+  kept = BDD.keep(ctx, APP) do |request| serve_edited(app, request) end
+  return BDD.after(kept) do |_| remove_folder(base) end
+end
+
+def edit_folder() -> String
+  return "edit_files_#{System.pid()}"
+end
+
+def serve_edited(app: Bond.App, request: Json) -> Result[Json]
+  ask = try JSON.decode(request, Ask)
+  before = Task.pending_count()
+  response = ask_request(app, ask, 0, 10_000)
+  settle(before)
+  return ok(JSON.from(reply_of(response)))
+end
+
+def remove_folder(base: String) -> Result[Void]
+  names = try Dir.list(base)
+  for name in names
+    _ = Path.remove("#{base}/#{name}")
+  end
+
+  _ = Path.remove(base)
+  _ = Path.remove(outside_file())
+  return ok()
+end
+
+# Writes the file and sets its time of change to `seconds` after the epoch, so a scenario knows the `Last-Modified`.
+def write_file_at(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = "#{edit_folder()}/#{args[0]}"
+  written = File.write_text(path, args[1])
+  if not written.ok?
+    return BDD.skip(ctx, "the file cannot be written here: #{written.message}")
+  end
+
+  set = set_time(path, args[2].to_i!)
+  if not set.ok?
+    return BDD.skip(ctx, "the time of a file cannot be set here: #{set.message}")
+  end
+
+  return ctx
+end
+
+# The gzip of the text, as a build that compresses its files would leave it next to the file.
+def write_gzip_at(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = "#{edit_folder()}/#{args[0]}"
+  packed = Zlib.gzip(args[1].bytes).unwrap!
+  written = File.open(path, "write", SOCKET_MS).unwrap!
+  _ = File.write_bytes(written, packed, SOCKET_MS)
+  _ = File.close(written, SOCKET_MS)
+  set = set_time(path, args[2].to_i!)
+  if not set.ok?
+    return BDD.skip(ctx, "the time of a file cannot be set here: #{set.message}")
+  end
+
+  return ctx
+end
+
+# A file next to the folder, not in it: what a link of the folder must not reach.
+def outside_file() -> String
+  return "#{edit_folder()}_outside.txt"
+end
+
+def write_outside(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  written = File.write_text(outside_file(), args[0])
+  return BDD.assert(ctx, written.ok?, "the outside file is not written")
+end
+
+def link_to_outside(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  linked = link(Path.resolve(outside_file()).unwrap!, "#{edit_folder()}/#{args[0]}")
+  if not linked.ok?
+    return BDD.skip(ctx, "a link cannot be made here: #{linked.message}")
+  end
+
+  return ctx
+end
+
+def remove_file(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  removed = Path.remove("#{edit_folder()}/#{args[0]}")
+  return BDD.assert(ctx, removed.ok?, "the file is not removed")
+end
+
+def set_time(path: String, seconds: Int) -> Result[Void]
+  process = try Process.spawn("touch", ["-d", "@#{seconds}", path])
+  code = try Process.wait(process, SOCKET_MS)
+  if code != 0
+    return error("touch exited with #{code}")
+  end
+
+  return ok()
 end
 
 def pattern(size: Int) -> Bytes

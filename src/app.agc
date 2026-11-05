@@ -2,6 +2,7 @@
 
 import HTTP from "std/http"
 import Conns from "conn"
+import Files from "files"
 import Pattern from "pattern"
 import Router from "router"
 import Statics from "static"
@@ -86,17 +87,30 @@ end
 ## dot file, a way out of the folder such as `..` or `%2e%2e`, a link that leads out) is answered as a path with no
 ## route, so the `not_found` handler applies. Any file is served, as the bytes it holds, with the type of its
 ## extension; a file over `max_bytes` (1 GiB, the default) is a failure (a 500 through the error handler).
-## The program stops when `prefix` is not a path or has a `:param`, when `max_bytes` is out of range, or when `root`
-## is not a folder now: it is checked when the app is built, and its real path is kept.
+## The program stops when `prefix` is not a path or has a `:param`, when `max_bytes`, `max_age`, `cache_bytes` or
+## `piece_bytes` is out of range, or when `root` is not a folder now: it is checked when the app is built, and its real
+## path is kept.
 ##
-## Every file has an `ETag` (its size and its time of change, no read of the file) and a `Cache-Control`, and a `GET`
-## or `HEAD` whose `If-None-Match` lists the tag is a 304 with no body. The `Cache-Control` is `no-cache` (a cache asks
-## each time, a cheap 304) or, with `max_age` seconds (0 to a year), `public, max-age=<max_age>`; `public` lets a shared
-## cache keep the file, so a folder behind a login keeps `max_age` at 0 or sets `no-store` in an `after` filter. With
-## `fingerprint: true`, a name with a fingerprint (`app.3f9a1c2b.css`: 8 to 64 hex digits, with a letter and a digit,
-## between the name and the extension) is `public, max-age=31536000, immutable`: only for a folder where a build puts a
-## hash of the content in the name, since a browser never asks again for such a file. The program stops when `max_age`
-## is out of range.
+## Every file has an `ETag` (its size and its time of change, no read of the file), a `Last-Modified` and a
+## `Cache-Control`. A `GET` or `HEAD` whose `If-None-Match` lists the tag, or that has no `If-None-Match` and an
+## `If-Modified-Since` that is not before the change, is a 304 with no body. The `Cache-Control` is `no-cache` (a cache
+## asks each time, a cheap 304) or, with `max_age` seconds (0 to a year), `public, max-age=<max_age>`; `public` lets a
+## shared cache keep the file, so a folder behind a login keeps `max_age` at 0 or sets `no-store` in an `after` filter.
+## With `fingerprint: true`, a name with a fingerprint (`app.3f9a1c2b.css`: 8 to 64 hex digits, with a letter and a
+## digit, between the name and the extension) is `public, max-age=31536000, immutable`: only for a folder where a build
+## puts a hash of the content in the name, since a browser never asks again for such a file.
+##
+## A file of at most `piece_bytes` (4 KiB to 16 MiB, 64 KiB by default) is read in one call and answered as a plain
+## body; a bigger one is read in pieces of that size by a task, so the memory does not grow with the size. The small
+## files are also kept in memory, up to `cache_bytes` in all (16 MiB by default, 0 for none): a hit costs one `stat`
+## of the file (two for a text file and a client that takes gzip, the second for the `.gz` path), which checks that the
+## file still has the size and the time of change it had when it was read and that the `.gz` file is as it was, so an
+## edited file is read again. An edit that keeps both in the same second is not seen, as with the `ETag`. When the cache
+## is full it is emptied.
+## Bond does not compress: a request for a text file that takes gzip (`Accept-Encoding`) and asks for the whole
+## file gets the `.gz` file next to it (`app.css.gz`) when there is one that is inside the folder by the same rules as
+## the file and is not older than it, with `Content-Encoding: gzip` and `Vary: Accept-Encoding`. A `Range` request gets
+## the file as it is.
 export def static(
   app: App,
   prefix: String,
@@ -104,6 +118,8 @@ export def static(
   max_bytes: Int = 1_073_741_824,
   max_age: Int = 0,
   fingerprint: Bool = false,
+  cache_bytes: Int = 16_777_216,
+  piece_bytes: Int = 65_536,
 ) -> App
   if not Pattern.valid?(prefix) or Pattern.segments(prefix).any? do |part| part.start_with?(":") end
     bad: Result[App] = error("bond: the static prefix #{prefix} must start with / and have no :param")
@@ -115,8 +131,21 @@ export def static(
     return bad.unwrap!
   end
 
-  if max_age < 0 or max_age > Statics.MAX_AGE_SECONDS
-    bad: Result[App] = error("bond: max_age of a static folder must be 0 to #{Statics.MAX_AGE_SECONDS}")
+  if max_age < 0 or max_age > Files.MAX_AGE_SECONDS
+    bad: Result[App] = error("bond: max_age of a static folder must be 0 to #{Files.MAX_AGE_SECONDS}")
+    return bad.unwrap!
+  end
+
+  if cache_bytes < 0 or cache_bytes > Statics.MAX_FILE_BYTES
+    bad: Result[App] = error("bond: cache_bytes of a static folder must be 0 to #{Statics.MAX_FILE_BYTES}")
+    return bad.unwrap!
+  end
+
+  if piece_bytes < Files.MIN_PIECE_BYTES or piece_bytes > Files.MAX_PIECE_BYTES
+    bad: Result[App] = error(
+      "bond: piece_bytes of a static folder must be #{Files.MIN_PIECE_BYTES} to #{Files.MAX_PIECE_BYTES}",
+    )
+
     return bad.unwrap!
   end
 
@@ -126,14 +155,7 @@ export def static(
     return bad.unwrap!
   end
 
-  mount = Statics.Mount(
-    prefix: prefix,
-    root: real.unwrap!,
-    max_bytes: max_bytes,
-    max_age: max_age,
-    fingerprint: fingerprint,
-  )
-
+  mount = Statics.make_mount(prefix, real.unwrap!, max_bytes, max_age, fingerprint, cache_bytes, piece_bytes)
   return app.with(statics: app.statics.push(mount))
 end
 

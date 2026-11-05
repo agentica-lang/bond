@@ -196,6 +196,15 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/download-plain") do |conn| Bond.send_file(conn, "#{public}/hello.txt") end
     |> Bond.get("/download-png") do |conn| Bond.send_file(conn, "#{public}/pixel.png") end
     |> Bond.get("/download-empty") do |conn| Bond.send_file(conn, "#{public}/empty.txt") end
+    |> Bond.get("/download-fresh") do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(0)) end
+    |> Bond.get("/download-kept") do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(600)) end
+    |> Bond.get("/download-public") do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(600), true) end
+    |> Bond.get("/download-age-low") do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(-1)) end
+    |> Bond.get("/download-piece-low") do |conn|
+      Bond.send_file(conn, "#{public}/hello.txt", none, none, false, 100)
+    end
+    |> Bond.get("/download-replaced") do |conn| replaced_file(public, conn) end
+    |> Bond.get("/download-own-cache") do |conn| own_cache_file(public, conn) end
     |> Bond.get("/download-missing") do |conn| Bond.send_file(conn, "#{public}/missing.txt") end
     |> Bond.get("/download-folder") do |conn| Bond.send_file(conn, "#{public}/sub") end
     |> Bond.static("/assets", public)
@@ -222,6 +231,9 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/location-non-ascii", &location_non_ascii)
     |> Bond.get("/location-newline", &location_newline)
     |> Bond.get("/header-bad-name", &header_bad_name)
+    |> Bond.get("/header-newline", &header_newline)
+    |> Bond.get("/header-wide", &header_wide)
+    |> Bond.get("/header-latin1", &header_latin1)
     |> Bond.get("/events") do |conn| events(producers, conn) end
     |> Bond.get("/events-304") do |conn| events_not_modified(producers, conn) end
     |> Bond.get("/events-bad-header") do |conn| events_bad_header(producers, conn) end
@@ -289,6 +301,17 @@ end
 def not_found_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
   sent = try Bond.send_file(conn, "#{public}/hello.txt")
   return ok(Bond.status(sent, 404))
+end
+
+# A filter that changes the body of a file answer: the length that `send_file` noted is no longer the size of the body.
+def replaced_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
+  sent = try Bond.send_file(conn, "#{public}/hello.txt")
+  return ok(sent.with(response_body: "short".bytes))
+end
+
+# A route that sets its own `Cache-Control` before `send_file`, which keeps it.
+def own_cache_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
+  return Bond.send_file(Bond.header(conn, "cache-control", "max-age=5"), "#{public}/hello.txt")
 end
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -485,6 +508,19 @@ end
 
 def header_bad_name(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.header(conn, "x bad", "1"))
+end
+
+def header_newline(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.header(conn, "x-note", "a\r\nx-evil: 1"))
+end
+
+def header_wide(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.header(conn, "x-note", "日本"))
+end
+
+# Latin-1 text is a legal value, and so is a tab.
+def header_latin1(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.header(Bond.text(conn, 200, "ok"), "x-note", "café\tbar"))
 end
 
 # A path that ends in -bad makes the handler fail, to see the error handler answer it.

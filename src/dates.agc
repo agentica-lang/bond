@@ -55,8 +55,8 @@ export def format(seconds: Int) -> String
 end
 
 ## The Unix seconds of a date in one of the three forms that a recipient reads (RFC 9110 section 5.6.7): the one
-## `format` writes (`Sun, 06 Nov 1994 08:49:37 GMT`), the old `Sunday, 06-Nov-94 08:49:37 GMT` (a year of two digits is
-## 1970 to 1999 from 70, and 2000 to 2069 below it) and `Sun Nov  6 08:49:37 1994`. Any other text is `none`, and a
+## `format` writes (`Sun, 06 Nov 1994 08:49:37 GMT`), the old `Sunday, 06-Nov-94 08:49:37 GMT` (a year of two digits
+## that is more than 50 years ahead is read as the last past year with those digits) and `Sun Nov  6 08:49:37 1994`. Any other text is `none`, and a
 ## header with one is ignored. The name of the weekday is not checked.
 export def parse(text: String) -> Optional[Int]
   parts = text.strip.replace("  ", " ").split(" ")
@@ -78,6 +78,17 @@ export def parse(text: String) -> Optional[Int]
   return none
 end
 
+### The year of the digits `year` (0 to 99) of the old form, by RFC 9110 section 5.6.7: the one of this century, unless
+## that is more than 50 years after `current_year`, and then the one of the century before.
+export def full_year(year: Int, current_year: Int) -> Int
+  candidate = (current_year / 100) * 100 + year
+  if candidate > current_year + 50
+    return candidate - 100
+  end
+
+  return candidate
+end
+
 # The seconds of the date made of the text of its parts, or `none` when one is not what it must be.
 def assemble(day_text: String, month_text: String, year_text: String, clock_text: String) -> Optional[Int]
   clock = clock_text.split(":")
@@ -95,7 +106,7 @@ def assemble(day_text: String, month_text: String, year_text: String, clock_text
   year = numbers[1]
   hour = numbers[2]
   if year_text.length == 2
-    year = year + two_digit_century(year)
+    year = full_year(year, this_year())
   end
 
   if year_text.length != 2 and year_text.length != 4
@@ -110,13 +121,8 @@ def assemble(day_text: String, month_text: String, year_text: String, clock_text
   return some(days * SECONDS_PER_DAY + hour * 3600 + numbers[3] * 60 + numbers[4])
 end
 
-# What to add to a year of two digits: 1900 from 70, 2000 below it.
-def two_digit_century(year: Int) -> Int
-  if year >= 70
-    return 1900
-  end
-
-  return 2000
+def this_year() -> Int
+  return format(Time.now_ms() / 1000).split(" ")[3].to_i!
 end
 
 # The civil date as days since 1970-01-01 (the proleptic Gregorian calendar).

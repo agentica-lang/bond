@@ -102,10 +102,12 @@ end
 ##
 ## A file of at most `piece_bytes` (4 KiB to 16 MiB, 64 KiB by default) is read in one call and answered as a plain
 ## body; a bigger one is read in pieces of that size by a task, so the memory does not grow with the size. The small
-## files are also kept in memory, up to `cache_bytes` in all (16 MiB by default, 0 for none): a hit costs one `stat`,
-## which checks that the file still has the size and the time of change it had when it was read, so an edited file is
-## read again. An edit that keeps both in the same second is not seen, as with the `ETag`. When the cache is full it is
-## emptied. Bond does not compress: a request for a text file that takes gzip (`Accept-Encoding`) and asks for the whole
+## files are also kept in memory, up to `cache_bytes` in all (16 MiB by default, 0 for none): a hit costs one `stat`
+## of the file (two for a text file and a client that takes gzip, the second for the `.gz` path), which checks that the
+## file still has the size and the time of change it had when it was read and that the `.gz` file is as it was, so an
+## edited file is read again. An edit that keeps both in the same second is not seen, as with the `ETag`. When the cache
+## is full it is emptied.
+## Bond does not compress: a request for a text file that takes gzip (`Accept-Encoding`) and asks for the whole
 ## file gets the `.gz` file next to it (`app.css.gz`) when there is one that is inside the folder by the same rules as
 ## the file and is not older than it, with `Content-Encoding: gzip` and `Vary: Accept-Encoding`. A `Range` request gets
 ## the file as it is.

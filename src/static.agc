@@ -31,8 +31,11 @@ FINGERPRINT_MAX = 64
 # What a cached entry weighs besides its bytes: the key, the headers, the tables.
 ENTRY_OVERHEAD = 512
 
-# The key of the byte count in `Mount.used`.
+# The keys of `Mount.used`: the byte count, the last id of an entry, and the prefix of the claim on an entry that is
+# dropped (the task that makes the claim 1 drops it and gives its bytes back, so two tasks never do it twice).
 USED = "bytes"
+IDS = "ids"
+GONE = "gone"
 
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
 ## served. `max_age` is the seconds that a cache may keep a file (0 is "ask each time"). With `fingerprint`, a name that
@@ -52,9 +55,11 @@ end
 
 ## A small file in memory: the path that `stat` checks (the folder joined with the names of the request), the `size`
 ## and `modified` seconds it had when it was read, its `rep` and `body`, and the same for the `.gz` file next to it when
-## there was a fresh one (`zipped` and `zipped_body`). A `trusted` entry (a fingerprinted name of a mount with
+## there was a fresh one (`zipped` and `zipped_body`). `twin` is what `stat` said of the `.gz` path when the entry was
+## made ("" for no file, else its size and time), so a `.gz` that is rewritten, removed or added later is seen. A `trusted` entry (a fingerprinted name of a mount with
 ## `fingerprint`, which the app promises never changes) is not checked against the disk at all.
 export struct Entry
+  id: Int
   path: String
   size: Int
   modified: Int
@@ -62,6 +67,7 @@ export struct Entry
   body: Bytes
   zipped: Optional[Files.Rep]
   zipped_body: Bytes
+  twin: String
   trusted: Bool
   cost: Int
 end
@@ -149,8 +155,10 @@ def answer(mount: Mount, parts: List[String], conn: Conn) -> Result[Conn]
   end
 
   # The path as the client wrote it is looked up, and only a path that is the real name of its file is ever stored (see
-  # `send_found`), so a hit skips `decode` and `locate`, and the `stat` of the entry is the only call to the disk.
-  case cached(mount, parts.join("/"))
+  # `send_found`), so a hit skips `decode` and `locate`: it costs the `stat` of the file, and for a text file and
+  # a client
+  # that takes gzip the `stat` of its `.gz` path too.
+  case cached(mount, parts.join("/"), conn)
     some(entry) -> return reply(conn, entry)
     none -> nil
   end
@@ -253,25 +261,60 @@ def send_found(mount: Mount, found: Located, name: String, canonical: Bool, conn
   text = MIME.text?(MIME.mime_type(name))
   described = Files.describe(name, none, found.info, cache_control(mount, name))
   plain = described.with(vary: text, piece_bytes: mount.piece_bytes)
+  gzip = text and accepts_gzip?(conn) and not Files.ranged?(conn)
   if size <= mount.piece_bytes and size + ENTRY_OVERHEAD <= mount.cache_bytes / 2 and conn.method == "GET"
-    trusted = mount.fingerprint and fingerprinted?(name)
-    entry = try load(mount, found, plain, trusted)
-    if canonical
-      remember(mount, found.relative, entry)
+    near: Optional[Located] = none
+    if text
+      near = sibling(mount, found)
     end
 
-    return reply(conn, entry)
+    if keeps?(mount, size, near)
+      trusted = mount.fingerprint and fingerprinted?(name)
+      entry = try load(mount, found, plain, near, trusted)
+      if canonical
+        remember(mount, found.relative, entry)
+      end
+
+      return reply(conn, entry)
+    end
+
+    return send_uncached(mount, found, plain, near, gzip, conn)
   end
 
-  return send_uncached(mount, found, plain, conn)
+  far: Optional[Located] = none
+  if gzip
+    far = sibling(mount, found)
+  end
+
+  return send_uncached(mount, found, plain, far, gzip, conn)
 end
 
-def send_uncached(mount: Mount, found: Located, plain: Files.Rep, conn: Conn) -> Result[Conn]
-  if plain.vary and accepts_gzip?(conn) and not Files.ranged?(conn)
-    case sibling(mount, found)
-      some(twin) ->
+# Whether the entry of a file of `size` bytes with this `.gz` file fits the cache. A `.gz` file that does not (over
+# `piece_bytes`, or taking the entry over half of the budget) is not loaded into memory: the file is not kept, and a
+# `.gz` is sent from the disk by `send_uncached`.
+def keeps?(mount: Mount, size: Int, twin: Optional[Located]) -> Bool
+  case twin
+    some(found) ->
+      packed = found.info.size_bytes
+      return packed <= mount.piece_bytes and size + packed + ENTRY_OVERHEAD <= mount.cache_bytes / 2
+
+    none -> return true
+  end
+end
+
+def send_uncached(
+  mount: Mount,
+  found: Located,
+  plain: Files.Rep,
+  twin: Optional[Located],
+  gzip: Bool,
+  conn: Conn,
+) -> Result[Conn]
+  if gzip
+    case twin
+      some(zipped) ->
         # A `.gz` file that changes after the check is not an error: the file as it is answers.
-        served = Files.respond(conn, zipped_of(plain, twin.info), twin.file, none)
+        served = Files.respond(conn, zipped_of(plain, zipped.info), zipped.file, none)
         if served.ok?
           return served
         end
@@ -288,9 +331,10 @@ def send_uncached(mount: Mount, found: Located, plain: Files.Rep, conn: Conn) ->
   return sent
 end
 
-# The entry of a small file: its bytes, and the `.gz` file next to it when its type is text and there is a fresh one
-# that is small enough, read at the same time. A `.gz` file that cannot be read is left out.
-def load(mount: Mount, found: Located, plain: Files.Rep, trusted: Bool) -> Result[Entry]
+# The entry of a small file: its bytes, and the `.gz` file next to it when there is one (`keeps?` says it fits),
+# read at
+# the same time. A `.gz` file that cannot be read is left out.
+def load(mount: Mount, found: Located, plain: Files.Rep, twin: Optional[Located], trusted: Bool) -> Result[Entry]
   read = Files.read_whole(found.file, plain.size)
   if not read.ok?
     return error("the static file #{found.relative} cannot be read")
@@ -299,21 +343,25 @@ def load(mount: Mount, found: Located, plain: Files.Rep, trusted: Bool) -> Resul
   bytes = read.unwrap!
   zipped: Optional[Files.Rep] = none
   packed = "".bytes
+  stamp = ""
   if plain.vary
-    case sibling(mount, found)
-      some(twin) ->
-        twin_read = Files.read_whole(twin.file, twin.info.size_bytes)
-        if twin.info.size_bytes <= mount.piece_bytes and twin_read.ok?
-          zipped = some(zipped_of(plain, twin.info))
-          packed = twin_read.unwrap!
-        end
+    stamp = twin_stamp(found.joined)
+  end
 
-      none -> nil
-    end
+  case twin
+    some(zip) ->
+      zip_read = Files.read_whole(zip.file, zip.info.size_bytes)
+      if zip_read.ok?
+        zipped = some(zipped_of(plain, zip.info))
+        packed = zip_read.unwrap!
+      end
+
+    none -> nil
   end
 
   return ok(
     Entry(
+      id: mount.used.add(IDS, 1),
       path: found.joined,
       size: plain.size,
       modified: plain.modified,
@@ -321,10 +369,22 @@ def load(mount: Mount, found: Located, plain: Files.Rep, trusted: Bool) -> Resul
       body: bytes,
       zipped: zipped,
       zipped_body: packed,
+      twin: stamp,
       trusted: trusted,
       cost: bytes.size + packed.size + ENTRY_OVERHEAD,
     ),
   )
+end
+
+# What `stat` says of the `.gz` path of a file, as the cache compares it: "" when there is no file, else its size and
+# time of change. The path is the one that the request joined, with links followed, whatever `sibling` makes of it.
+def twin_stamp(joined: String) -> String
+  info = File.stat("#{joined}.gz")
+  if not info.ok? or info.unwrap!.kind != "file"
+    return ""
+  end
+
+  return "#{info.unwrap!.size_bytes}-#{info.unwrap!.modified_seconds}"
 end
 
 # The `.gz` file next to the file, when it is a plain file with bytes in it, not older than the file, and inside the
@@ -343,6 +403,10 @@ def sibling(mount: Mount, found: Located) -> Optional[Located]
 
   twin = File.stat(real.unwrap!)
   if not twin.ok? or twin.unwrap!.kind != "file" or twin.unwrap!.size_bytes == 0
+    return none
+  end
+
+  if twin.unwrap!.size_bytes > mount.max_bytes
     return none
   end
 
@@ -408,10 +472,11 @@ def zero_quality?(param: String) -> Bool
 end
 
 # The entry of the key when the file is the one it was made from: a `stat` with the same size and time of change (none
-# for a trusted entry). An edit that keeps both (inside one second) is not seen, as with the `ETag`; a file that
-# is gone
-# or changed is dropped, its bytes leave the count, and the request goes the long way.
-def cached(mount: Mount, key: String) -> Optional[Entry]
+# for a trusted entry). For a text file and a client that takes gzip (`conn`) its `.gz` path must also be as it was: a
+# `.gz` that was rewritten, that came after the entry (a deploy that copies the file first) or that went away makes the
+# entry stale. An edit that keeps both size and time (inside one second) is not seen, as with the `ETag`. A stale entry
+# is dropped and the request goes the long way, which makes a new one.
+def cached(mount: Mount, key: String, conn: Conn) -> Optional[Entry]
   if mount.cache_bytes == 0
     return none
   end
@@ -422,13 +487,32 @@ def cached(mount: Mount, key: String) -> Optional[Entry]
   end
 
   entry = found.unwrap!
-  if entry.trusted or unchanged?(entry)
+  if entry.trusted or (unchanged?(entry) and twin_unchanged?(entry, conn))
     return some(entry)
   end
 
-  mount.entries.delete(key)
-  _ = mount.used.add(USED, 0 - entry.cost)
+  drop(mount, key, entry)
   return none
+end
+
+# Whether the `.gz` path is as the entry saw it, asked only when the answer could be the `.gz` file: a text file, and a
+# client that takes gzip and asks for the whole file.
+def twin_unchanged?(entry: Entry, conn: Conn) -> Bool
+  if not entry.rep.vary or not accepts_gzip?(conn) or Files.ranged?(conn)
+    return true
+  end
+
+  return twin_stamp(entry.path) == entry.twin
+end
+
+# Removes the entry and gives its bytes back, once: of the tasks that find it stale at the same time, only the
+# one whose
+# claim is the first does it.
+def drop(mount: Mount, key: String, entry: Entry) -> Void
+  if mount.used.add("#{GONE}#{entry.id}", 1) == 1
+    mount.entries.delete(key)
+    _ = mount.used.add(USED, 0 - entry.cost)
+  end
 end
 
 def unchanged?(entry: Entry) -> Bool
@@ -454,6 +538,12 @@ def remember(mount: Mount, key: String, entry: Entry) -> Void
   if total > mount.cache_bytes
     for stale in mount.entries.keys
       mount.entries.delete(stale)
+    end
+
+    for claim in mount.used.keys
+      if claim.start_with?(GONE)
+        mount.used.delete(claim)
+      end
     end
 
     mount.used.put(USED, entry.cost)

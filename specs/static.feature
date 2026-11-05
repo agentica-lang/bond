@@ -366,6 +366,57 @@ Feature: Static files
       | 0      |
       | 100000 |
 
+  Scenario: A cached file follows its .gz file when it is rewritten
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "one" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the body gunzipped is "one"
+    When the file "a.css.gz" holds the gzip of "two" as of the time 1700000001
+    And I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the header "content-encoding" is "gzip"
+    And the body gunzipped is "two"
+
+  Scenario: A cached file picks up a .gz file that comes after it
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the header "content-encoding" is not set
+    And the body is "body { color: red }"
+    When the file "a.css.gz" holds the gzip of "late" as of the time 1700000000
+    And I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the header "content-encoding" is "gzip"
+    And the body gunzipped is "late"
+
+  Scenario: A cached file stops sending a .gz file that is removed
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "one" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the body gunzipped is "one"
+    When the file "a.css.gz" is removed
+    And I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the header "content-encoding" is not set
+    And the body is "body { color: red }"
+
+  Scenario: A .gz file that does not fit the cache is sent from the disk, and the file is not kept
+    Given the app with a cache of 1100 bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "body { color: red }" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the header "content-encoding" is "gzip"
+    And the body gunzipped is "body { color: red }"
+    When the file "a.css" holds "BODY { COLOR: RED }" as of the time 1700000000
+    And I send "GET" to "/files/a.css"
+    Then the body is "BODY { COLOR: RED }"
+
   Scenario: Spellings of a name add nothing to the cache, so they cannot push out the entries of other files
     Given the app with a cache of 2000 bytes over a folder that I edit
     And the file "a.txt" holds "aaa" as of the time 1700000000

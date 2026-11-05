@@ -238,8 +238,11 @@ Feature: Static files
       | if-modified-since | Fri, 01 Jan 2100 00:00:00 GMT |
     Then the status is 200
 
-  Scenario: A text file with a .gz file next to it is sent compressed to a client that takes gzip
-    When I send "GET" to "/assets/style.css" with the headers:
+  Scenario Outline: A .gz file that is not older than the file is sent to a client that takes gzip (cache <cache>, gzip at <time>)
+    Given the app with a cache of <cache> bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "body { color: red }" as of the time <time>
+    When I send "GET" to "/files/a.css" with the headers:
       | accept-encoding | br, gzip;q=0.8 |
     Then the status is 200
     And the header "content-encoding" is "gzip"
@@ -248,8 +251,34 @@ Feature: Static files
     And the header "etag" ends with "-gz\""
     And the body gunzipped is "body { color: red }"
 
-  Scenario Outline: The file as it is, for a client that does not take gzip or asks for a part (<headers>)
-    When I send "GET" to "/assets/style.css" with the headers:
+    Examples:
+      | cache  | time       |
+      | 0      | 1700000000 |
+      | 0      | 1700000001 |
+      | 100000 | 1700000000 |
+      | 100000 | 1700000001 |
+
+  Scenario Outline: A .gz file older than the file is not sent (cache <cache>)
+    Given the app with a cache of <cache> bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "body { color: blue }" as of the time 1699999999
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the status is 200
+    And the header "content-encoding" is not set
+    And the header "vary" is "Accept-Encoding"
+    And the body is "body { color: red }"
+
+    Examples:
+      | cache  |
+      | 0      |
+      | 100000 |
+
+  Scenario Outline: The file as it is, for a client that does not take gzip or asks for a part (<headers>, cache <cache>)
+    Given the app with a cache of <cache> bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "body { color: red }" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
       | <name> | <value> |
     Then the status is <status>
     And the header "content-encoding" is not set
@@ -257,54 +286,99 @@ Feature: Static files
     And the body is "<body>"
 
     Examples:
-      | headers           | name            | value         | status | body                |
-      | no encoding       | x-other         | 1             | 200    | body { color: red } |
-      | gzip refused      | accept-encoding | gzip;q=0, br  | 200    | body { color: red } |
-      | another encoding  | accept-encoding | deflate, br   | 200    | body { color: red } |
-      | a range           | range           | bytes=0-3     | 206    | body                |
+      | headers          | cache  | name            | value        | status | body                |
+      | no encoding      | 0      | x-other         | 1            | 200    | body { color: red } |
+      | gzip refused     | 0      | accept-encoding | gzip;q=0, br | 200    | body { color: red } |
+      | another encoding | 100000 | accept-encoding | deflate, br  | 200    | body { color: red } |
+      | a range          | 0      | range           | bytes=0-3    | 206    | body                |
+      | a range          | 100000 | range           | bytes=0-3    | 206    | body                |
 
   Scenario: A range of a file that takes gzip is a part of the file, not of the compressed bytes
-    When I send "GET" to "/assets/style.css" with the headers:
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "body { color: red }" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
       | accept-encoding | gzip      |
       | range           | bytes=0-3 |
     Then the status is 206
     And the header "content-encoding" is not set
     And the body is "body"
 
-  Scenario: The validator of the compressed file is not the one of the file, and it is a 304 for the same client
-    When I send "GET" to "/assets/style.css" with the headers:
+  Scenario: The tag of the compressed file is not the one of the file, and it is a 304 for the same client
+    Given the app with a cache of 100000 bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the file "a.css.gz" holds the gzip of "body { color: red }" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
       | accept-encoding | gzip |
-    And I send "GET" to "/assets/style.css" with the headers:
+    And I send "GET" to "/files/a.css" with the headers:
       | accept-encoding | gzip   |
       | if-none-match   | {etag} |
     Then the status is 304
     And the header "vary" is "Accept-Encoding"
-    When I send "GET" to "/assets/style.css" with the headers:
+    When I send "GET" to "/files/a.css" with the headers:
       | accept-encoding | identity |
-      | if-none-match   | {other}  |
+      | if-none-match   | {etag}   |
     Then the status is 200
+    And the body is "body { color: red }"
 
-  Scenario: A small text file with no .gz file is compressed once and kept, when it is big enough to gain
-    When I send "GET" to "/assets/lorem.txt" with the headers:
-      | accept-encoding | gzip |
-    Then the status is 200
-    And the header "content-encoding" is "gzip"
-    And the body gunzipped is the file "specs/fixtures/public/lorem.txt"
-    When I send "GET" to "/assets/lorem.txt" with the headers:
-      | accept-encoding | gzip |
-    Then the header "content-encoding" is "gzip"
-    And the body gunzipped is the file "specs/fixtures/public/lorem.txt"
-
-  Scenario Outline: A file that is not text, or too small to gain, is never compressed (<path>)
-    When I send "GET" to "<path>" with the headers:
+  Scenario Outline: A file that is not text is never sent compressed, whatever is next to it (<name>, cache <cache>)
+    Given the app with a cache of <cache> bytes over a folder that I edit
+    And the file "<name>" holds "abc" as of the time 1700000000
+    And the file "<name>.gz" holds the gzip of "abc" as of the time 1700000000
+    When I send "GET" to "/files/<name>" with the headers:
       | accept-encoding | gzip |
     Then the status is 200
     And the header "content-encoding" is not set
+    And the body is "abc"
 
     Examples:
-      | path              |
-      | /assets/pixel.png |
-      | /assets/hello.txt |
+      | name  | cache  |
+      | a.png | 0      |
+      | a.png | 100000 |
+
+  Scenario Outline: A .gz file that is a link to a file outside the folder is not sent (cache <cache>)
+    Given the app with a cache of <cache> bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    And the outside file holds "secret"
+    And the file "a.css.gz" is a link to the outside file
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the status is 200
+    And the header "content-encoding" is not set
+    And the body is "body { color: red }"
+
+    Examples:
+      | cache  |
+      | 0      |
+      | 100000 |
+
+  Scenario Outline: A text file with no .gz file has no compression to offer (cache <cache>)
+    Given the app with a cache of <cache> bytes over a folder that I edit
+    And the file "a.css" holds "body { color: red }" as of the time 1700000000
+    When I send "GET" to "/files/a.css" with the headers:
+      | accept-encoding | gzip |
+    Then the status is 200
+    And the header "content-encoding" is not set
+    And the header "vary" is "Accept-Encoding"
+
+    Examples:
+      | cache  |
+      | 0      |
+      | 100000 |
+
+  Scenario: Spellings of a name add nothing to the cache, so they cannot push out the entries of other files
+    Given the app with a cache of 2000 bytes over a folder that I edit
+    And the file "a.txt" holds "aaa" as of the time 1700000000
+    And the file "b.txt" holds "bbb" as of the time 1700000000
+    When I send "GET" to "/files/b.txt"
+    And I send "GET" to "/files/%61.txt"
+    And I send "GET" to "/files/a%2Etxt"
+    And I send "GET" to "/files/%61%2Etxt"
+    And I send "GET" to "/files/a.tx%74"
+    Then the body is "aaa"
+    When the file "b.txt" holds "BBB" as of the time 1700000000
+    And I send "GET" to "/files/b.txt"
+    Then the body is "bbb"
 
   Scenario: A folder with no cache reads the file each time
     Given the app with a cache of 0 bytes over a folder that I edit

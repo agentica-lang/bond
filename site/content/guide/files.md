@@ -22,7 +22,7 @@ The `error` of `send_file` is a path that is not a plain file (missing, a folder
 
 ## Conditional requests
 
-A `GET` or `HEAD` whose `If-None-Match` lists the `ETag` (or is `*`; a `W/` prefix is ignored) is a `304 Not Modified` with the `ETag`, `Last-Modified` and `Cache-Control`, and no body. When there is no `If-None-Match`, an `If-Modified-Since` that is not before the time of the change is a `304` too. A date that is not in the form `Sun, 06 Nov 1994 08:49:37 GMT` is ignored. The 304 is answered before the range, so a request with both gets the 304. The route runs first, so a check that a person may see the file stays in the route, and a 304 is never sent to someone it refused. An edit that keeps the size within the same second is not seen.
+A `GET` or `HEAD` whose `If-None-Match` lists the `ETag` (or is `*`; a `W/` prefix is ignored) is a `304 Not Modified` with the `ETag`, `Last-Modified` and `Cache-Control`, and no body. When there is no `If-None-Match`, an `If-Modified-Since` that is not before the time of the change is a `304` too. The date is read in any of the three forms of RFC 9110 (`Sun, 06 Nov 1994 08:49:37 GMT`, `Sunday, 06-Nov-94 08:49:37 GMT` and `Sun Nov  6 08:49:37 1994`); any other text is ignored. The 304 is answered before the range, so a request with both gets the 304. The route runs first, so a check that a person may see the file stays in the route, and a 304 is never sent to someone it refused. An edit that keeps the size within the same second is not seen.
 
 ## Ranges
 

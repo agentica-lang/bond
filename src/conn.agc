@@ -415,7 +415,7 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
       pieces = collect(conn, body, max_pieces, timeout_ms)
       return HttpResponse(status: conn.status, headers: sized_headers(conn), body: pieces)
 
-    none -> return HttpResponse(status: conn.status, headers: sized_headers(conn), body: conn.response_body)
+    none -> return HttpResponse(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
   end
 end
 
@@ -467,6 +467,21 @@ end
 def sized_headers(conn: Conn) -> List[Header]
   case conn.response_length
     some(length) -> return conn.response_headers.push(Header(name: "content-length", value: length.to_s))
+    none -> return conn.response_headers
+  end
+end
+
+# The headers of an answer with a whole body, for a test: the `Content-Length` that `send_file` noted, when it still is
+# the size of the body (a filter that replaced the body makes it stale, and the server counts the body anyway).
+def whole_headers(conn: Conn) -> List[Header]
+  case conn.response_length
+    some(length) ->
+      if length == conn.response_body.size
+        return sized_headers(conn)
+      end
+
+      return conn.response_headers
+
     none -> return conn.response_headers
   end
 end

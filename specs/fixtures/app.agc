@@ -203,6 +203,7 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/download-piece-low") do |conn|
       Bond.send_file(conn, "#{public}/hello.txt", none, none, false, 100)
     end
+    |> Bond.get("/download-replaced") do |conn| replaced_file(public, conn) end
     |> Bond.get("/download-own-cache") do |conn| own_cache_file(public, conn) end
     |> Bond.get("/download-missing") do |conn| Bond.send_file(conn, "#{public}/missing.txt") end
     |> Bond.get("/download-folder") do |conn| Bond.send_file(conn, "#{public}/sub") end
@@ -300,6 +301,12 @@ end
 def not_found_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
   sent = try Bond.send_file(conn, "#{public}/hello.txt")
   return ok(Bond.status(sent, 404))
+end
+
+# A filter that changes the body of a file answer: the length that `send_file` noted is no longer the size of the body.
+def replaced_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
+  sent = try Bond.send_file(conn, "#{public}/hello.txt")
+  return ok(sent.with(response_body: "short".bytes))
 end
 
 # A route that sets its own `Cache-Control` before `send_file`, which keeps it.

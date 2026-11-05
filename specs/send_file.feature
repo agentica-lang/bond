@@ -202,6 +202,12 @@ Feature: Sending a file
       | /download-public    | public, max-age=600  |
       | /download-own-cache | max-age=5           |
 
+  Scenario: A body that a filter replaced does not keep the length of the file
+    Given the todo app
+    When I send "GET" to "/download-replaced"
+    Then the body is "short"
+    And the header "content-length" is not set
+
   Scenario Outline: A max_age or a piece_bytes out of range is a 500 (<path>)
     Given the todo app
     When I send "GET" to "<path>"

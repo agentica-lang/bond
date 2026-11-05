@@ -75,6 +75,9 @@ def main() -> Void
     BDD.step("the app with a file of {int} bytes", &keep_big_app),
     BDD.step("the app with a cache of {int} bytes over a folder that I edit", &keep_edit_app),
     BDD.step("the file {string} holds {string} as of the time {int}", &write_file_at),
+    BDD.step("the file {string} holds the gzip of {string} as of the time {int}", &write_gzip_at),
+    BDD.step("the outside file holds {string}", &write_outside),
+    BDD.step("the file {string} is a link to the outside file", &link_to_outside),
     BDD.step("the file {string} is removed", &remove_file),
     BDD.step("I send {string} to {string} with the headers:", &send_with_table),
     BDD.step("the body gunzipped is {string}", &gunzipped_is),
@@ -609,6 +612,7 @@ def remove_folder(base: String) -> Result[Void]
   end
 
   _ = Path.remove(base)
+  _ = Path.remove(outside_file())
   return ok()
 end
 
@@ -623,6 +627,40 @@ def write_file_at(ctx: BDD.Context, args: List[String]) -> BDD.Context
   set = set_time(path, args[2].to_i!)
   if not set.ok?
     return BDD.skip(ctx, "the time of a file cannot be set here: #{set.message}")
+  end
+
+  return ctx
+end
+
+# The gzip of the text, as a build that compresses its files would leave it next to the file.
+def write_gzip_at(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = "#{edit_folder()}/#{args[0]}"
+  packed = Zlib.gzip(args[1].bytes).unwrap!
+  written = File.open(path, "write", SOCKET_MS).unwrap!
+  _ = File.write_bytes(written, packed, SOCKET_MS)
+  _ = File.close(written, SOCKET_MS)
+  set = set_time(path, args[2].to_i!)
+  if not set.ok?
+    return BDD.skip(ctx, "the time of a file cannot be set here: #{set.message}")
+  end
+
+  return ctx
+end
+
+# A file next to the folder, not in it: what a link of the folder must not reach.
+def outside_file() -> String
+  return "#{edit_folder()}_outside.txt"
+end
+
+def write_outside(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  written = File.write_text(outside_file(), args[0])
+  return BDD.assert(ctx, written.ok?, "the outside file is not written")
+end
+
+def link_to_outside(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  linked = link(Path.resolve(outside_file()).unwrap!, "#{edit_folder()}/#{args[0]}")
+  if not linked.ok?
+    return BDD.skip(ctx, "a link cannot be made here: #{linked.message}")
   end
 
   return ctx

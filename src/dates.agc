@@ -22,9 +22,6 @@ MONTH_NUMBERS = {
   "Dec": 12,
 }
 
-# The length of `Sun, 06 Nov 1994 08:49:37 GMT`.
-DATE_LENGTH = 29
-
 # The days from 0000-03-01 to 1970-01-01, the shift of the civil calendar algorithms below.
 EPOCH_SHIFT = 719_468
 
@@ -57,35 +54,69 @@ export def format(seconds: Int) -> String
   return "#{WEEKDAYS[days % 7]}, #{two(day)} #{MONTHS[month - 1]} #{year} #{clock} GMT"
 end
 
-## The Unix seconds of a date in the form `format` writes, the only form that a server must send (RFC 9110 section
-## 5.6.7). The older forms and a date that is not that text are `none`, and a header with one is ignored.
+## The Unix seconds of a date in one of the three forms that a recipient reads (RFC 9110 section 5.6.7): the one
+## `format` writes (`Sun, 06 Nov 1994 08:49:37 GMT`), the old `Sunday, 06-Nov-94 08:49:37 GMT` (a year of two digits is
+## 1970 to 1999 from 70, and 2000 to 2069 below it) and `Sun Nov  6 08:49:37 1994`. Any other text is `none`, and a
+## header with one is ignored. The name of the weekday is not checked.
 export def parse(text: String) -> Optional[Int]
-  value = text.strip
-  parts = value.split(" ")
-  if value.length != DATE_LENGTH or parts.size != 6 or parts[5] != "GMT" or not parts[0].end_with?(",")
+  parts = text.strip.replace("  ", " ").split(" ")
+  if parts.size == 6 and parts[5] == "GMT" and parts[0].end_with?(",")
+    return assemble(parts[1], parts[2], parts[3], parts[4])
+  end
+
+  if parts.size == 4 and parts[3] == "GMT" and parts[0].end_with?(",")
+    pieces = parts[1].split("-")
+    if pieces.size == 3
+      return assemble(pieces[0], pieces[1], pieces[2], parts[2])
+    end
+  end
+
+  if parts.size == 5 and not parts[0].end_with?(",")
+    return assemble(parts[2], parts[1], parts[4], parts[3])
+  end
+
+  return none
+end
+
+# The seconds of the date made of the text of its parts, or `none` when one is not what it must be.
+def assemble(day_text: String, month_text: String, year_text: String, clock_text: String) -> Optional[Int]
+  clock = clock_text.split(":")
+  month = MONTH_NUMBERS.get(month_text, 0)
+  if clock.size != 3 or month == 0
     return none
   end
 
-  clock = parts[4].split(":")
-  if clock.size != 3
-    return none
-  end
-
-  month = MONTH_NUMBERS.get(parts[2], 0)
-  numbers = [parts[1], parts[3], clock[0], clock[1], clock[2]].map do |part| number(part) end
-  if month == 0 or numbers.any? do |n| n < 0 end
+  numbers = [day_text, year_text, clock[0], clock[1], clock[2]].map do |part| number(part) end
+  if numbers.any? do |n| n < 0 end
     return none
   end
 
   day = numbers[0]
   year = numbers[1]
   hour = numbers[2]
+  if year_text.length == 2
+    year = year + two_digit_century(year)
+  end
+
+  if year_text.length != 2 and year_text.length != 4
+    return none
+  end
+
   if day < 1 or day > 31 or hour > 23 or numbers[3] > 59 or numbers[4] > 60
     return none
   end
 
   days = days_since_epoch(year, month, day)
   return some(days * SECONDS_PER_DAY + hour * 3600 + numbers[3] * 60 + numbers[4])
+end
+
+# What to add to a year of two digits: 1900 from 70, 2000 below it.
+def two_digit_century(year: Int) -> Int
+  if year >= 70
+    return 1900
+  end
+
+  return 2000
 end
 
 # The civil date as days since 1970-01-01 (the proleptic Gregorian calendar).

@@ -16,9 +16,16 @@ def main() -> Void
 
       Test.eq(Dates.parse("  Sun, 06 Nov 1994 08:49:37 GMT "), some(784_111_777))
     end,
-    Test.test("a text that is not that form is not a date") do
+    Test.test("the old forms are read too, and name the same time") do
+      try Test.eq(Dates.parse("Sunday, 06-Nov-94 08:49:37 GMT"), some(784_111_777))
+      try Test.eq(Dates.parse("Sun Nov  6 08:49:37 1994"), some(784_111_777))
+      try Test.eq(Dates.parse("Sun Nov 16 08:49:37 1994"), some(784_111_777 + 10 * 86_400))
+      try Test.eq(Dates.parse("Tuesday, 14-Nov-23 22:13:20 GMT"), some(1_700_000_000))
+      Test.eq(Dates.parse("Sunday, 06-Nov-94 08:49:37 UTC"), none)
+    end,
+    Test.test("a text that is none of the forms is not a date") do
       for text in [
-        "", "yesterday", "Sunday, 06-Nov-94 08:49:37 GMT", "Sun Nov  6 08:49:37 1994", "Sun, 06 Nov 1994 08:49:37 UTC",
+        "", "yesterday", "Sun Nov  6 08:49:37 94 x", "Sun, 06 Nov 94x 08:49:37 GMT", "Sun, 06 Nov 1994 08:49:37 UTC",
         "Sun, 06 Xyz 1994 08:49:37 GMT", "Sun, 06 Nov 1994 25:49:37 GMT", "Sun, 0a Nov 1994 08:49:37 GMT",
       ]
         try Test.eq(Dates.parse(text), none)

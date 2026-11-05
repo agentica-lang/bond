@@ -105,10 +105,10 @@ end
 ## files are also kept in memory, up to `cache_bytes` in all (16 MiB by default, 0 for none): a hit costs one `stat`,
 ## which checks that the file still has the size and the time of change it had when it was read, so an edited file is
 ## read again. An edit that keeps both in the same second is not seen, as with the `ETag`. When the cache is full it is
-## emptied. A request for a text file that takes gzip (`Accept-Encoding`) and asks for the whole file gets the file
-## compressed, with `Content-Encoding: gzip` and `Vary: Accept-Encoding`: the `.gz` file next to it (`app.css.gz`)
-## when it exists and is not older than the file, and for a small file otherwise the bytes compressed once and kept in
-## the cache (not with `cache_bytes: 0`). A `Range` request gets the file as it is.
+## emptied. Bond does not compress: a request for a text file that takes gzip (`Accept-Encoding`) and asks for the whole
+## file gets the `.gz` file next to it (`app.css.gz`) when there is one that is inside the folder by the same rules as
+## the file and is not older than it, with `Content-Encoding: gzip` and `Vary: Accept-Encoding`. A `Range` request gets
+## the file as it is.
 export def static(
   app: App,
   prefix: String,

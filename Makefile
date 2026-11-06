@@ -1,10 +1,11 @@
 # Developing Bond needs Agentica 0.24.1 or later (`agentica test --jobs`); a project that uses Bond needs only 0.22.0.
-# The check, the format check, the tests of the sources, the documentation site (Hugo) and the check of its samples.
+# The check, the format check, the tests of the sources, the documentation site (Hugo), the check of its samples and
+# the site of every release (site-versions).
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
 JOBS ?= 4
 
-.PHONY: check fmt-check test site site-serve site-sass site-samples
+.PHONY: check fmt-check test site site-serve site-sass site-samples site-versions site-versions-test
 
 # `agentica check` with no path checks every .agc file of the package, its examples, specs and tests.
 check:
@@ -40,3 +41,15 @@ site-serve: site-sass
 # Runs `agentica check` on every agentica block of site/content (needs agentica on PATH).
 site-samples:
 	tools/check-site-samples.sh
+
+# One site per release plus dev, as pages.yml deploys it (tools/site_versions.py); serve the output with
+# `python3 -m http.server PORT -d build/site-versions/public`. SITE_BASE_URL is where the root is served and must
+# match that port.
+SITE_BASE_URL ?= http://localhost:8000/
+
+site-versions:
+	python3 -I tools/site_versions.py build --base-url $(SITE_BASE_URL)
+
+# The assembly of site-versions on a small git repository (the standard library only; CI runs it).
+site-versions-test:
+	python3 -I tools/test_site_versions.py

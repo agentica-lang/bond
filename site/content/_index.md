@@ -20,6 +20,4 @@ end
 
 - [Getting started](/getting-started/) installs Bond and runs a first app.
 - The [guide](/guide/) has a page for each part.
-- The source and the changelog are [on GitHub](https://github.com/agentica-lang/bond).
-
-Bond needs Agentica 0.22.0 or later (the changelog has the version each release needs), and is under the Apache License 2.0.
+- The source and the changelog are [on GitHub](https://github.com/agentica-lang/bond), under the Apache License 2.0.

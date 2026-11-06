@@ -8,7 +8,7 @@ description: Pages from EAG templates, with partials and a layout, as plain func
 
 A view is a function that returns a `String`. A page is a view, a partial is a view that a page calls, and a layout is a view that takes the HTML of the page. There is no view API in Bond: the pieces are an [EAG template](/guide/escaping/#templates), `Bond.escape` and `Bond.html`, and the rest is calling functions.
 
-Every view starts with `<%@ escape &Bond.escape %>`, so each `<%= %>` is escaped. A view is an ordinary function, so the checker types its arguments and every tag: a mistyped field in a template is an error before the program runs.
+Every view starts with `<%@ escape &Bond.escape %>`, so each `<%= %>` is escaped. The checker types the arguments and every tag: a mistyped field in a template is an error before the program runs.
 
 ```agentica
 import EAG from "std/eag"
@@ -73,19 +73,13 @@ end
 
 ```
 
-## Partials
+## Partials and the layout
 
-A partial is a function like `message` above. A page puts its result in with `<%== %>`, and a loop is a `for` in a tag (`<% for m in messages %>`). A partial sees only what the page passes it.
-
-## The layout
-
-The handler renders the page first and gives it to the layout: `layout(name, room(name, messages))`.
+A partial is a function like `message` above. A page puts its result in with `<%== %>`, and a loop is a `for` in a tag (`<% for m in messages %>`). A partial sees only what the page passes it. The handler renders the page first and gives it to the layout: `layout(name, room(name, messages))`.
 
 ## `<%==` takes only your own HTML
 
-The result of a view is already escaped, so a layout or a page inserts it with `<%==` (with `<%=` it would be escaped twice). Never put a value of a client in a `<%==`.
-
-Nothing checks this, since a `String` is a `String`: `layout(title, name)` type-checks but is wrong (`name` came from the client and is inserted raw), while `layout(title, room(name, messages))` is right, because `room` escapes `name` first.
+The result of a view is already escaped, so a layout or a page inserts it with `<%==` (with `<%=` it would be escaped twice). Never put a value of a client in a `<%==`. Nothing checks this, since a `String` is a `String`: `layout(title, name)` type-checks but is wrong (`name` came from the client and is inserted raw), while `layout(title, room(name, messages))` is right, because `room` escapes `name` first.
 
 A view without `<%@ escape &Bond.escape %>` on its first line escapes nothing, and the checker does not warn. Test each view with a value like `<script>`, as `specs/views.feature` does for the page of the sample.
 

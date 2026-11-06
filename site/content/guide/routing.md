@@ -21,7 +21,7 @@ A trailing or a double slash does not matter: `/posts/` and `//posts` are `/post
 - A literal segment wins over a `:param` at the same place, whatever the order the routes were added in: `/posts/latest` is not taken by `/posts/:id`, even when `/posts/:id` was added first.
 - When the literal branch has no route to the end of the path, the walk goes back to the param: with `/docs/guide/intro` and `/docs/:page/edit`, the path `/docs/guide/edit` is `/docs/:page/edit` with `page` set to `guide`.
 - The path is chosen first, then the method. If the route that the path reaches has no handler for the method, the answer is a 405 and `Allow` lists the methods of that route only. The methods of `/posts/:id` are not borrowed for `/posts/latest`. This differs from Sinatra, which tries the next route: with `GET /users/me` and `PUT /users/:id`, a `PUT /users/me` is a 405 here, and it would reach `:id` there.
-- Two mistakes stop the program when the route is added: the same method and pattern twice (`/posts` and `/posts/` are the same pattern), and two names for the param at the same place, whatever the methods (`/users/:id` with `/users/:name/posts`, or with `POST /users/:uid`). Use one name at each place.
+- These mistakes stop the program when the route is added: a pattern that does not start with `/` or names a param twice, the same method and pattern twice (`/posts` and `/posts/` are the same pattern), and two names for the param at the same place, whatever the methods (`/users/:id` with `/users/:name/posts`, or with `POST /users/:uid`). Use one name at each place.
 
 ```agentica
 import HTTP from "std/http"
@@ -73,5 +73,3 @@ edit guide
 A path with no route is a 404 with the body `not found`; [Errors](/guide/errors/) shows how to answer it with your own page. A path with a route for other methods only is a 405 with an `Allow` header that lists the methods.
 
 `HEAD` uses the route of `GET` (the server drops the body), and `Allow` lists `HEAD` where it lists `GET`. `OPTIONS` is not answered by Bond: it is a 405 unless you add the route.
-
-A pattern must start with `/` and name each param once, or the program stops when the route is added.

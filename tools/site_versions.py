@@ -247,9 +247,14 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
         tree = Path(scratch) / "tree"
         tree.mkdir()
         archive = subprocess.Popen(["git", "-C", str(ROOT), "archive", "--format=tar", sha], stdout=subprocess.PIPE)
-        with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
-            tar.extractall(tree, filter="data")
-        if archive.wait() != 0:
+        try:
+            with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+                tar.extractall(tree, filter="data")
+        finally:
+            # Close the pipe before waiting: git then stops at once if the extraction failed halfway.
+            archive.stdout.close()
+            status = archive.wait()
+        if status != 0:
             raise BuildError("git archive failed")
         public = _build_tree(tree, base_url, tools, logs / (label + ".log"))
         _store(public, cache, key)

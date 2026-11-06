@@ -2,10 +2,10 @@
 
 The Bond site uses the design of the Agentica docs site: rules, tokens,
 components and accessibility notes are in
-[site/DESIGN.md of Agentica][agentica-design]. The theme files in `site/layouts/`
-and `site/assets/` are copies of that site, and a change to the theme is ported
-from there. This file lists only what differs. If it and the code disagree, the
-code is right: fix this file in the same change.
+[site/DESIGN.md of Agentica][agentica-design]. The theme files in
+`site/layouts/` and `site/assets/` are copies of that site, and a change to the
+theme is ported from there. This file lists only what differs. If it and the
+code disagree, the code is right: fix this file in the same change.
 
 ## Differences
 
@@ -57,8 +57,8 @@ brand.
 - `make site-versions-test` runs the assembly on a small git repository
   (`tools/test_site_versions.py`, the standard library only; CI runs it).
 - A deploy comes only from `main` (no tag trigger), so a new release shows up
-  with the next run of `pages.yml`. A
-  Bond release does not run it: after tagging, run
-  `gh workflow run pages.yml --ref main`.
+  with the next run of `pages.yml`. A Bond release does not run it: after
+  tagging, run `gh workflow run pages.yml --ref main`.
 
-[agentica-design]: https://github.com/agentica-lang/agentica/blob/master/site/DESIGN.md
+[agentica-design]:
+  https://github.com/agentica-lang/agentica/blob/master/site/DESIGN.md

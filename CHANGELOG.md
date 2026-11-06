@@ -16,11 +16,11 @@ Needs Agentica 0.22.0 or later. `Testing` (`pkg/bond/testing`) needs 0.23.0 or l
 
 ### Changed
 
+- **Behaviour:** `Bond.static` answers with `Last-Modified` and honours `If-Modified-Since`, and a text file with a `.gz` next to it (one made for another server, say) is now sent gzipped to a client that takes gzip.
 - **Behaviour:** the answer of `Bond.send_file` has a `Cache-Control` when the conn has none: `no-cache`, so a cache asks each time as it did when there was no validator. A `Cache-Control` set on the conn before the call is kept, and `max_age` sets it.
 - A file of at most `piece_bytes` (64 KiB by default) is read in one call and answered as a plain body, with no task and no channel; a bigger one is still sent in pieces. `Bond.static` does 1 `stat` of the file where it did 3 for a file that is not kept, and none of the lookup of the path for a file that is. The status, the headers and the bytes of a range are the same.
 - The check of the response headers (the rule that refuses a bad name, a control character or a non-Latin-1 value is the same) uses a set of the allowed characters, and skips the names and values that Bond writes itself, so it costs a fraction of the steps for each answer.
 - `Testing.request` shows `Content-Length` for a file that `send_file` answers whole, as for a streamed one.
-
 - CI tests with Agentica 0.24.1 and runs `agentica test --jobs` (`make test`). Bond still needs 0.22.0 or later; only developing Bond needs 0.24.1.
 
 ## [0.6.1] - 2026-11-04

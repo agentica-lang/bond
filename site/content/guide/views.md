@@ -73,7 +73,7 @@ end
 
 ```
 
-## Partials
+## Partials and the layout
 
 A partial is a function like `message` above. A page puts its result in with `<%== %>`, and a loop is a `for` in a tag (`<% for m in messages %>`). A partial sees only what the page passes it. The handler renders the page first and gives it to the layout: `layout(name, room(name, messages))`.
 

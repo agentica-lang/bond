@@ -45,7 +45,7 @@ end
 
 A name that starts with `__Host-` or `__Secure-` needs `secure: true`, so `set_cookie` always fails for it: use `set_cookie_with`. `__Host-` also needs `path: "/"` and no domain.
 
-Each cookie is a header of its own: Bond never joins two `Set-Cookie` headers with a comma. `Bond.header(conn, "Set-Cookie", value)` adds a header too, instead of replacing the one of the same name, so it never wipes the cookies set before it; for the same reason, set a cookie once per answer. A `before` filter can set a cookie and a later `Bond.redirect` keeps it. A 500 does not: it is a new answer with no header of the failed one.
+Each cookie is a header of its own: Bond never joins two `Set-Cookie` headers with a comma. `Bond.header(conn, "Set-Cookie", value)` adds a header too, instead of replacing the one of the same name, so it never wipes the cookies set before it. Set a cookie once per answer, since the headers are not merged by name. A `before` filter can set a cookie and a later `Bond.redirect` keeps it. A 500 does not: it is a new answer with no header of the failed one.
 
 ## Deleting a cookie
 

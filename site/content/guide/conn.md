@@ -16,8 +16,8 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
 | `Bond.escape(text)` | escapes `&`, `<`, `>`, `"` and `'` for HTML; see [HTML and escaping](/guide/escaping/) |
 | `Bond.bytes(conn, status, body)` | answers `Bytes` as they are; sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
-| `Bond.json(conn, status, value)` | answers a `Json` (`JSON.from(todos)` for a list or a map) as JSON |
-| `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec; see [JSON bodies](/guide/json/) |
+| `Bond.json(conn, status, value)` | answers a `Json` (`JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
+| `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec; sets `Content-Type`; see [JSON bodies](/guide/json/) |
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 (or the status of a third argument) with `Location` and halts; see [Redirects](#redirects) |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |

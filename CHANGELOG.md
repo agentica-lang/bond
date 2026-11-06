@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-06
+
+Needs Agentica 0.22.0 or later. `Testing` (`pkg/bond/testing`) needs 0.23.0 or later, as in 0.6.x: its defaults name a constant.
+
 ### Added
 
 - `Bond.send_file` answers with an `ETag` and a `Last-Modified`, and a `GET` or `HEAD` with a matching `If-None-Match`, or with an `If-Modified-Since` (in the three forms of RFC 9110) that is not before the change, is a 304 with no body (`If-None-Match` wins). It takes `max_age: Optional[Int] = none` for `Cache-Control` (`some(0)` is `no-cache`, `some(n)` is `private, max-age=n`, or `public, max-age=n` with `public: true`) and `piece_bytes: Int = 65_536` (4 KiB to 16 MiB). With no `max_age`, a `Cache-Control` already on the conn is kept, and otherwise it is `no-cache`, so a browser does not keep the file by the new `Last-Modified` alone.
@@ -12,11 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Behaviour:** `Bond.static` answers with `Last-Modified` and honours `If-Modified-Since`, and a text file with a `.gz` next to it (one made for another server, say) is now sent gzipped to a client that takes gzip.
 - **Behaviour:** the answer of `Bond.send_file` has a `Cache-Control` when the conn has none: `no-cache`, so a cache asks each time as it did when there was no validator. A `Cache-Control` set on the conn before the call is kept, and `max_age` sets it.
 - A file of at most `piece_bytes` (64 KiB by default) is read in one call and answered as a plain body, with no task and no channel; a bigger one is still sent in pieces. `Bond.static` does 1 `stat` of the file where it did 3 for a file that is not kept, and none of the lookup of the path for a file that is. The status, the headers and the bytes of a range are the same.
 - The check of the response headers (the rule that refuses a bad name, a control character or a non-Latin-1 value is the same) uses a set of the allowed characters, and skips the names and values that Bond writes itself, so it costs a fraction of the steps for each answer.
 - `Testing.request` shows `Content-Length` for a file that `send_file` answers whole, as for a streamed one.
-
 - CI tests with Agentica 0.24.1 and runs `agentica test --jobs` (`make test`). Bond still needs 0.22.0 or later; only developing Bond needs 0.24.1.
 
 ## [0.6.1] - 2026-11-04
@@ -144,7 +148,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.6.1...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/agentica-lang/bond/compare/0.6.1...0.7.0
 [0.6.1]: https://github.com/agentica-lang/bond/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/agentica-lang/bond/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/agentica-lang/bond/compare/0.4.0...0.5.0

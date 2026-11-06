@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-06
+
+Needs Agentica 0.25.0 or later.
+
 ### Added
 
 - The documentation site has a version selector: one site per release (`/bond/0.7.0/`, ...), the latest at the root and `dev` for the main branch, with a banner on old and development pages.
@@ -157,7 +161,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.7.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.8.0...HEAD
+[0.8.0]: https://github.com/agentica-lang/bond/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/agentica-lang/bond/compare/0.6.1...0.7.0
 [0.6.1]: https://github.com/agentica-lang/bond/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/agentica-lang/bond/compare/0.5.0...0.6.0

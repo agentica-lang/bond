@@ -10,10 +10,10 @@ Bond needs Agentica 0.25.0 or later; the [changelog](CHANGELOG.md) has the versi
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.7.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.8.0" }
 ```
 
-Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.7.0`. Both write `agentica.lock` and `deps/bond/` (`agentica install` does it for a manifest you edited).
+Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.8.0`. Both write `agentica.lock` and `deps/bond/` (`agentica install` does it for a manifest you edited).
 
 ## Example
 

@@ -8,11 +8,7 @@ description: Keep a value of the client from becoming markup, with Bond.escape, 
 
 `Bond.html` sends the text as it is. If a value that a client sent is put in it, the client writes part of your page: a name like `<script>...</script>` runs in the browser of everyone who sees the page (cross-site scripting, XSS). Escape the value.
 
-`Bond.escape(text)` is `HTML.escape` of `std/html`: it replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`.
-
-## The pattern
-
-Escape every value that you interpolate into HTML, at the place where you write it, not before: a value escaped early is escaped twice or not at all by the next function that touches it.
+`Bond.escape(text)` is `HTML.escape` of `std/html`: it replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`. Escape every value that you interpolate into HTML, at the place where you write it, not before: a value escaped early is escaped twice or not at all by the next function that touches it.
 
 ```agentica
 import Bond from "pkg/bond/bond"
@@ -150,8 +146,8 @@ javascript:alert(1) ["/"]
 <a href="&quot;&gt;">next</a>
 ```
 
-`HTML.unescape` of `std/html` turns entities back into characters. It is for reading text, not a safety step: never unescape a client value and then put it in a page.
+Never `HTML.unescape` a client value and then put it in a page.
 
 ## What Bond writes itself
 
-Bond puts no value of the client into an answer of its own. The 404, 405 and 500 have fixed texts, and so has each 400 of `query`, `form` and `json_body` (the name in the text is the one in your code). They and the message of `Bond.bad_request` are `text/plain`, which a browser does not show as markup. The handlers you give to `Bond.not_found` and `Bond.on_error` are your code: the rules of this page apply to them. `Bond.redirect` sends no body, and `Bond.static` serves files as they are: a `.html` file of the folder is as safe as you wrote it.
+Bond puts no value of the client into an answer of its own. The 404, 405 and 500 have fixed texts, and so has each 400 of `query`, `form` and `json_body` (the name in the text is the one in your code). They and the message of `Bond.bad_request` are `text/plain`, which a browser does not show as markup. The handlers you give to `Bond.not_found` and `Bond.on_error` are your code: the rules of this page apply to them. `Bond.static` serves files as they are: a `.html` file of the folder is as safe as you wrote it.

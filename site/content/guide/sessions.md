@@ -30,7 +30,7 @@ The answer carries the new session in a `Set-Cookie`, and only when a handler ch
 
 The cookie is always `HttpOnly`. In production use `name: "__Host-session"` with `secure: true`, the default `path` and no `domain`: a browser accepts a `__Host-` cookie only from a secure page for the exact host, so a sibling subdomain cannot plant a signed cookie with its own session (the first cookie of a name wins). `Secure` is off by default because a `Secure` cookie is dropped over plain HTTP, which breaks development.
 
-The end date is inside the signed data, so a client that keeps an old cookie does not get a longer session. Every change writes a cookie that lasts `max_age` from that moment; a read does not extend it.
+The end date is inside the signed data, so a client that keeps an old cookie does not get a longer session. Every change writes a cookie that lasts `max_age` from then; a read does not extend it.
 
 ## What is signed, and what is not
 

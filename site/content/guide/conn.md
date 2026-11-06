@@ -15,35 +15,28 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.text(conn, status, text)` | answers plain text; sets `Content-Type`, so call `header` after it for another |
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
 | `Bond.escape(text)` | escapes `&`, `<`, `>`, `"` and `'` for HTML; see [HTML and escaping](/guide/escaping/) |
-| `Bond.bytes(conn, status, body)` | answers `Bytes` as they are (an image, a download); sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
-| `Bond.json(conn, status, value)` | answers `value` (a `Json`, such as `JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
-| `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec (`JSON.codec(Todo)`); sets `Content-Type`; see [JSON bodies](/guide/json/) |
+| `Bond.bytes(conn, status, body)` | answers `Bytes` as they are; sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
+| `Bond.json(conn, status, value)` | answers a `Json` (`JSON.from(todos)` for a list or a map) as JSON |
+| `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec; see [JSON bodies](/guide/json/) |
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 (or the status of a third argument) with `Location` and halts; see [Redirects](#redirects) |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
 | `Bond.header(conn, name, value)` | sets a response header |
 | `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`, in the `charset` of the request (UTF-8 when it has none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 too); a `charset` or a body that does not decode is a 400 |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |
-| `Bond.param(conn, name)` | the text of a `:name` segment, as a `Result[String]` |
-| `Bond.param_int(conn, name)` | the same, as a whole number; text that is not one is a 400 |
-| `Bond.query(conn, name)` | the first value of `name` in the query string, decoded, as a `Result`; `Bond.query_int` is a whole number, `Bond.query_all` every value (`Result[List[String]]`), `Bond.query_params(conn)` the whole string decoded once (`Result[Map[String, List[String]]]`); see [Query and forms](/guide/query/) |
-| `Bond.form(conn, name)` | the first value of a field of a form body, as a `Result`; `Bond.form_int`, `Bond.form_all` and `Bond.form_params(conn)` are like the `query` ones |
-| `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; see [Cookies](/guide/cookies/) |
-| `Bond.set_cookie(conn, name, value)` | adds a `Set-Cookie` (`Path=/`, `HttpOnly`, `SameSite=Lax`) as a `Result[Conn]`; `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` with every attribute; `Bond.delete_cookie(conn, name)` deletes one; see [Cookies](/guide/cookies/) |
-| `Bond.send_file(conn, path, some(name))` | answers with a file read in pieces, with ranges; a name as `attachment` makes it a download; see [Sending files](/guide/files/) |
-| `Bond.static(app, prefix, root)` | serves the files of a folder under a path; an app function, not a `Conn` one; see [Static files](/guide/static/) |
+| `Bond.param(conn, name)` | the text of a `:name` segment, as a `Result[String]`; `Bond.param_int` is a whole number (anything else is a 400) |
+| `Bond.query(conn, name)`, `Bond.form(conn, name)` | the first value of `name` in the query string or in a form body, decoded, as a `Result`; each has an `_int`, an `_all` and a `_params` form; see [Query and forms](/guide/query/) |
+| `Bond.cookies(conn)` | the `Cookie` header read into a map; `Bond.cookie(conn, name)` is one value, as a `Result`; `Bond.set_cookie`, `Bond.set_cookie_with` and `Bond.delete_cookie` set and delete one; see [Cookies](/guide/cookies/) |
+| `Bond.send_file(conn, path)` | answers with a file; see [Sending files](/guide/files/) (`Bond.static`, which serves a folder, is an app function: see [Static files](/guide/static/)) |
 | `Bond.json_body(conn, codec)` | the body of the request decoded into a struct, as a `Result`; see [JSON bodies](/guide/json/) |
-| `Bond.assign(conn, key, value)` | keeps a value of the request for the filters and the handler that come after; see [Assigns](#assigns) |
-| `Bond.assigned(conn, key, codec)` | the value kept under `key`, as the type of the codec (`JSON.codec(Person)`), as a `Result`; `Bond.assigned?(conn, key)` asks whether there is one |
+| `Bond.assign(conn, key, value)`, `Bond.assigned(conn, key, codec)` | keeps a value of the request for the filters and the handler that come after, and reads it back; see [Assigns](#assigns) |
 | `Bond.bad_request(message)` | an `error` that makes a 400 with `message` as its body |
 
 ## Client address
 
-`conn.remote_addr` is the IP address of the peer that opened the connection, with no port (`"127.0.0.1"`, `"::1"`), as the server of `std/http` fills `HttpRequest.remote_addr` (Agentica 0.22.0 or later). It is `""` in a `Conn` that you build by hand without it.
+`conn.remote_addr` is the IP address of the peer that opened the connection, with no port (`"127.0.0.1"`, `"::1"`), as the server of `std/http` fills `HttpRequest.remote_addr`. It is `""` in a `Conn` that you build by hand without it.
 
-Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy.
-
-`Testing.request` gives the handler `"127.0.0.1"` (`Testing.LOOPBACK`); `Testing.request_from(app, "203.0.113.9", "GET", "/")` chooses another (see [Testing](/guide/testing/)).
+Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy. [Testing](/guide/testing/) shows how a test chooses the address.
 
 ## Assigns
 

@@ -10,7 +10,7 @@ description: Read the cookies of a request and set or delete them in the answer,
 
 A cookie that is not there is a plain `error`, like `Bond.param` and `Bond.request_header` (a first visit has no cookie, which is no mistake of the client), unlike `Bond.query`, where a missing name is a 400. So `try Bond.cookie(conn, "sid")` on a first visit is a 500: use `unwrap_or` or `case`, for example with a redirect to the login page.
 
-`Bond.cookie`, `Bond.cookies` and `Bond.set_cookie` (and `std/cookie`) never encode or decode a value: encode it with `URI.encode_www_form_component` (`std/uri`) before you set it, and read it back with `URI.decode_www_form_component`.
+Neither the readers nor `Bond.set_cookie` (nor `std/cookie`) encode or decode a value: use `URI.encode_www_form_component` (`std/uri`) before you set it, and `URI.decode_www_form_component` when you read it back.
 
 ## Setting a cookie
 
@@ -23,7 +23,7 @@ A cookie that is not there is a plain `error`, like `Bond.param` and `Bond.reque
 
 `Bond.set_cookie_with(conn, cookie)` takes a `Cookie.Cookie` of `std/cookie` (`import Cookie from "std/cookie"`) with the attributes you give: `path`, `domain`, `max_age`, `expires`, `secure`, `http_only` and `same_site`. Bond adds none of its own there, so write `http_only: true` and `same_site: "Lax"` when you want them.
 
-Both give a `Result[Conn]`: use `try`. A name that is not a token, or a value with a space, a comma, a semicolon, a quote, a control or a non-ASCII character, is an `error` (a 500 when it is passed on), and no cookie is set. In production, one cookie of a year, over HTTPS, is:
+Both give a `Result[Conn]`: use `try`. A name that is not a token, or a value with a space, a comma, a semicolon, a quote, a control or a non-ASCII character, is an `error` (a 500 when it is passed on), and no cookie is set. A cookie of a year, over HTTPS, is:
 
 ```agentica
 import Cookie from "std/cookie"
@@ -45,11 +45,11 @@ end
 
 A name that starts with `__Host-` or `__Secure-` needs `secure: true`, so `set_cookie` always fails for it: use `set_cookie_with`. `__Host-` also needs `path: "/"` and no domain.
 
-Each cookie is a header of its own: Bond never joins two `Set-Cookie` headers with a comma. `Bond.header(conn, "Set-Cookie", value)` is the one exception to "a header replaces the one of the same name": it adds a header, so it never wipes the cookies set before it. Set a cookie once per answer, since the headers are not merged by name. A `before` filter can set a cookie and a later `Bond.redirect` keeps it. A 500 does not: it is a new answer with no header of the failed one.
+Each cookie is a header of its own: Bond never joins two `Set-Cookie` headers with a comma. `Bond.header(conn, "Set-Cookie", value)` adds a header too, instead of replacing the one of the same name, so it never wipes the cookies set before it; for the same reason, set a cookie once per answer. A `before` filter can set a cookie and a later `Bond.redirect` keeps it. A 500 does not: it is a new answer with no header of the failed one.
 
 ## Deleting a cookie
 
-`Bond.delete_cookie(conn, "sid")` writes a `Set-Cookie` with `Max-Age=0` and a date in the past. The browser matches a cookie by name, path and domain, so pass the `path` and `domain` it was set with: `Bond.delete_cookie(conn, "sid", "/app", "example.com")`. `set_cookie` uses `/` and no domain, as the default does. A name that starts with `__Host-` or `__Secure-` is deleted with `Secure`, which browsers need for those names.
+`Bond.delete_cookie(conn, "sid")` writes a `Set-Cookie` with `Max-Age=0` and a date in the past. The browser matches a cookie by name, path and domain, so pass the `path` and `domain` it was set with: `Bond.delete_cookie(conn, "sid", "/app", "example.com")` (`set_cookie` uses `/` and no domain, the defaults). A name that starts with `__Host-` or `__Secure-` is deleted with `Secure`, which browsers need for those names.
 
 ```agentica
 import Cookie from "std/cookie"

@@ -4,6 +4,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The documentation site has a version selector: one site per release (`/bond/0.7.0/`, ...), the latest at the root and `dev` for the main branch, with a banner on old and development pages.
+
+### Changed
+
 - CI tests with Agentica 0.24.4. Bond still needs 0.22.0 or later; only developing Bond needs 0.24.4.
 
 ## [0.7.0] - 2026-11-06

@@ -6,7 +6,7 @@ description: Add Bond to a project, write a first app and run it.
 
 ## Install
 
-Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.22.0 or later (`Testing` needs 0.23.0; the [changelog](https://github.com/agentica-lang/bond/blob/main/CHANGELOG.md) has the version each release needs). Bond is a package: pin a release by its tag in the `agentica.toml` of your project.
+Install [Agentica](https://agentica-lang.github.io/agentica/getting-started/) 0.25.0 or later (the [changelog](https://github.com/agentica-lang/bond/blob/main/CHANGELOG.md) has the version each release needs). Bond is a package: pin a release by its tag in the `agentica.toml` of your project.
 
 ```sh
 agentica add bond https://github.com/agentica-lang/bond --tag 0.7.0

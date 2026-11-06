@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Breaking:** Bond needs Agentica 0.25.0 or later. `Bond.json_as`, `Bond.json_body` and `Bond.assigned` take a `Codec[T]` instead of a `JSON.Codec[T]`, and you pass `User.codec` instead of `JSON.codec(User)` (`Bond.json_body(conn, User.codec)`).
 - CI tests with Agentica 0.24.4. Bond still needs 0.22.0 or later; only developing Bond needs 0.24.4.
 
 ## [0.7.0] - 2026-11-06

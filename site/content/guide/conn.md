@@ -64,7 +64,7 @@ def sign_in(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def room(conn: Bond.Conn) -> Result[Bond.Conn]
-  person = try Bond.assigned(conn, "person", JSON.codec(Person))
+  person = try Bond.assigned(conn, "person", Person.codec)
   return ok(Bond.text(conn, 200, "#{person.name} (#{person.id}) is in the room"))
 end
 

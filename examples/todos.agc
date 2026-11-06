@@ -43,19 +43,19 @@ end
 def show_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   id = try Bond.param_int(conn, "id")
   case store.todos.get(id)
-    ok(todo) -> return ok(Bond.json_as(conn, 200, JSON.codec(Todo), todo))
+    ok(todo) -> return ok(Bond.json_as(conn, 200, Todo.codec, todo))
     error(_) -> return ok(Bond.halt(conn, 404, "not found"))
   end
 end
 
 # The body is JSON: `{"title": "buy milk"}`. A body that is not, or has no title, is a 400.
 def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
-  input = try Bond.json_body(conn, JSON.codec(NewTodo))
+  input = try Bond.json_body(conn, NewTodo.codec)
   if input.title.empty?
     return Bond.bad_request("title is empty")
   end
 
   todo = Todo(id: store.next_id.add("todo", 1), title: input.title)
   store.todos.put(todo.id, todo)
-  return ok(Bond.json_as(conn, 201, JSON.codec(Todo), todo))
+  return ok(Bond.json_as(conn, 201, Todo.codec, todo))
 end

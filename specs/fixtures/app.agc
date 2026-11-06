@@ -430,7 +430,7 @@ def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
 
   todo = Todo(id: store.next_id.add("todo", 1), title: title)
   store.todos.put(todo.id, todo)
-  return ok(Bond.json_as(conn, 201, JSON.codec(Todo), todo))
+  return ok(Bond.json_as(conn, 201, Todo.codec, todo))
 end
 
 # The text of the body, or the 400 of `body_text`.
@@ -451,7 +451,7 @@ end
 def show_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   id = try Bond.param_int(conn, "id")
   case store.todos.get(id)
-    ok(todo) -> return ok(Bond.json_as(conn, 200, JSON.codec(Todo), todo))
+    ok(todo) -> return ok(Bond.json_as(conn, 200, Todo.codec, todo))
     error(_) -> return ok(Bond.halt(conn, 404, "not found"))
   end
 end
@@ -553,12 +553,12 @@ end
 
 # A JSON body is decoded into a struct; a body that does not fit is a 400.
 def create_user(conn: Bond.Conn) -> Result[Bond.Conn]
-  user = try Bond.json_body(conn, JSON.codec(NewUser))
+  user = try Bond.json_body(conn, NewUser.codec)
   return ok(Bond.text(conn, 201, "hello #{user.name}, #{user.age}"))
 end
 
 def create_account(conn: Bond.Conn) -> Result[Bond.Conn]
-  account = try Bond.json_body(conn, JSON.codec(Account))
+  account = try Bond.json_body(conn, Account.codec)
   return ok(Bond.text(conn, 201, "zip #{account.address.zip}"))
 end
 
@@ -809,21 +809,21 @@ def mark_person(conn: Bond.Conn) -> Result[Bond.Conn]
     return ok(conn)
   end
 
-  person = try Bond.assigned(conn, "person", JSON.codec(Person))
+  person = try Bond.assigned(conn, "person", Person.codec)
   return ok(Bond.header(conn, "x-seen", person.name))
 end
 
 def who_is_signed_in(conn: Bond.Conn) -> Result[Bond.Conn]
-  person = try Bond.assigned(conn, "person", JSON.codec(Person))
+  person = try Bond.assigned(conn, "person", Person.codec)
   return ok(Bond.text(conn, 200, "#{person.id} #{person.name} #{person.email.unwrap_or("-")}"))
 end
 
 def as_team(conn: Bond.Conn) -> Result[Bond.Conn]
-  refused = not Bond.assigned(conn, "person", JSON.codec(Team)).ok?
+  refused = not Bond.assigned(conn, "person", Team.codec).ok?
   return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "person")}"))
 end
 
 def nobody(conn: Bond.Conn) -> Result[Bond.Conn]
-  refused = not Bond.assigned(conn, "nobody", JSON.codec(Person)).ok?
+  refused = not Bond.assigned(conn, "nobody", Person.codec).ok?
   return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "nobody")}"))
 end

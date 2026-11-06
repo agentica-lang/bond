@@ -43,3 +43,7 @@ jobs:
       # Every agentica block of the site must check, and run when an output block follows it.
       - name: Site samples
         run: make site-samples
+
+      # The assembly of the multi-version site (tools/site_versions.py) on a small git repository.
+      - name: Site versions
+        run: make site-versions-test

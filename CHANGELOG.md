@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- CI tests with Agentica 0.24.4. Bond still needs 0.22.0 or later; only developing Bond needs 0.24.4.
+
 ## [0.7.0] - 2026-11-06
 
 Needs Agentica 0.22.0 or later. `Testing` (`pkg/bond/testing`) needs 0.23.0 or later, as in 0.6.x: its defaults name a constant.

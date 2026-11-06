@@ -40,7 +40,7 @@ agentica fmt --check    # `agentica fmt` rewrites them
 agentica test --jobs 4  # up to 4 files at once
 ```
 
-`make check`, `make fmt-check` and `make test` run them, and `agentica test --only TEXT` runs the scenarios whose name contains `TEXT`. Developing Bond needs Agentica 0.24.1 or later (`agentica test --jobs`); CI pins its release in `.github/workflows/ci.yml`.
+`make check`, `make fmt-check` and `make test` run them, and `agentica test --only TEXT` runs the scenarios whose name contains `TEXT`. Developing Bond needs Agentica 0.24.4 or later (`agentica test --jobs`); CI pins its release in `.github/workflows/ci.yml`.
 
 ## License
 

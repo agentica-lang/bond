@@ -212,11 +212,11 @@ export def json(conn: Conn, status: Int, value: Json) -> Conn
   )
 end
 
-## Answers a struct encoded as JSON with its `codec` (`JSON.codec(Todo)`), like `json` but with no `Json` value in
+## Answers a struct encoded as JSON with its `codec` (`Todo.codec`), like `json` but with no `Json` value in
 ## between: the struct is written once. A generic function cannot call `JSON.encode` on its type parameter, so the
 ## codec comes from the caller, as in `json_body`. A non-finite `Float` stops the handler with a runtime error
 ## (a 500), as `JSON.encode` does.
-export def json_as[T](conn: Conn, status: Int, codec: JSON.Codec[T], value: T) -> Conn
+export def json_as[T](conn: Conn, status: Int, codec: Codec[T], value: T) -> Conn
   return header(release(conn), "content-type", "application/json").with(
     status: status,
     response_body: codec.encode(value).bytes,
@@ -308,14 +308,14 @@ export def param(conn: Conn, name: String) -> Result[String]
   return conn.params.get(name).to_result("no param #{name}")
 end
 
-## Decodes the body of the request with `codec` (`JSON.codec(User)`). The request must have one `Content-Type`, and
+## Decodes the body of the request with `codec` (`User.codec`). The request must have one `Content-Type`, and
 ## it must be `application/json` or a `type/name+json`, with any parameters (the body is read as UTF-8 whatever the
 ## charset says). A missing, repeated or other content type, an empty body, and a body that is not one JSON
 ## document that fits the struct, are an error that makes a 400 (see `bad_request`) with a short message, so
 ## `try Bond.json_body(...)` answers them. The message names the struct field up to the first `[` of the codec's
 ## path, so the key of a map and the index of a list that the client sent are not in it. The size of the body is
 ## limited by the server (`max_body_bytes`).
-export def json_body[T](conn: Conn, codec: JSON.Codec[T]) -> Result[T]
+export def json_body[T](conn: Conn, codec: Codec[T]) -> Result[T]
   if not json_content_type?(conn)
     return bad_request("content type must be application/json")
   end

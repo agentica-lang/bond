@@ -3,7 +3,7 @@
 ## back as the type the reader asks for. The values live as long as the request: they are never sent to the client.
 ##
 ## A value is kept as the `Json` of `JSON.from(value)`, so the `Conn` does not need a type parameter, and a reader
-## gets its type back with a codec (`JSON.codec(Person)`). A codec is made from a struct, so assign a struct (its
+## gets its type back with a codec (`Person.codec`). A codec is made from a struct, so assign a struct (its
 ## fields may be lists, maps with `String` keys, `Optional`s, numbers and text); wrap a bare number or list in one. The
 ## reader decodes the `Json` as `JSON.decode` does. A value whose type `JSON.encode` refuses (a `Fn`, `Bytes`, a
 ## `Task`, a user enum, or a struct holding one) is a `CHECK-NOT-ENCODABLE` error at the `assign` call.
@@ -21,9 +21,9 @@ end
 ## uses `try` answers a 500; use `assigned?` to ask first.
 ##
 ## ```ruby
-## person = try Bond.assigned(conn, "person", JSON.codec(Person))
+## person = try Bond.assigned(conn, "person", Person.codec)
 ## ```
-export def assigned[T](conn: Conn, key: String, codec: JSON.Codec[T]) -> Result[T]
+export def assigned[T](conn: Conn, key: String, codec: Codec[T]) -> Result[T]
   json = try conn.assigns.get(key).to_result("nothing assigned under #{key}")
   case codec.decode(json)
     ok(value) -> return ok(value)

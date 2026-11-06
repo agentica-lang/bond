@@ -6,7 +6,7 @@ description: Decode the JSON body of a request into a struct.
 
 # JSON bodies
 
-`Bond.json_body(conn, JSON.codec(User))` decodes the body of the request into a struct, as a `Result[User]`. A body that does not fit is an error that makes a 400, so `try` it and the handler needs no more code. Always `try` it (or match the `Result`): a handler that drops the `Result` goes on as if the body were fine and accepts the request.
+`Bond.json_body(conn, User.codec)` decodes the body of the request into a struct, as a `Result[User]`. A body that does not fit is an error that makes a 400, so `try` it and the handler needs no more code. Always `try` it (or match the `Result`): a handler that drops the `Result` goes on as if the body were fine and accepts the request.
 
 The request must have exactly one `Content-Type`, and it must say it is JSON: `application/json`, or a `type/name+json` such as `application/vnd.api+json`, with any parameters (`; charset=utf-8`) and in any case. A missing, repeated or other content type is a 400 with the body `content type must be application/json`, and an empty body is a 400 with `the body is empty`. The body is read as UTF-8 whatever the charset parameter says.
 
@@ -22,7 +22,7 @@ struct NewUser
 end
 
 def create_user(conn: Bond.Conn) -> Result[Bond.Conn]
-  user = try Bond.json_body(conn, JSON.codec(NewUser))
+  user = try Bond.json_body(conn, NewUser.codec)
   return ok(Bond.text(conn, 201, "hello #{user.name}, #{user.age}"))
 end
 
@@ -54,7 +54,7 @@ end
 
 ## Answering with JSON
 
-`Bond.json_as(conn, status, JSON.codec(User), user)` answers a struct as JSON and encodes it once, with `Content-Type: application/json`. Bond takes the codec, as `json_body` does, because a function of your own that is generic over `T` cannot call `JSON.encode` on `T`.
+`Bond.json_as(conn, status, User.codec, user)` answers a struct as JSON and encodes it once, with `Content-Type: application/json`. Bond takes the codec, as `json_body` does, because a function of your own that is generic over `T` cannot call `JSON.encode` on `T`.
 
 `Bond.json(conn, status, value)` takes a `Json`, which is the way for a list or a map (`JSON.from(scores)`), since a codec is for a struct.
 
@@ -68,7 +68,7 @@ struct User
 end
 
 def show_user(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.json_as(conn, 200, JSON.codec(User), User(name: "Ana", age: 30)))
+  return ok(Bond.json_as(conn, 200, User.codec, User(name: "Ana", age: 30)))
 end
 
 def show_ages(conn: Bond.Conn) -> Result[Bond.Conn]

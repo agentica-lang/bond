@@ -116,7 +116,7 @@ end
 ## a test makes an expired cookie). An `error` when the value would be over the size of a cookie.
 export def seal(options: SessionOptions, data: Map[String, String]) -> Result[String]
   envelope = Envelope(exp: Time.now_ms() + options.max_age * 1000, data: data)
-  payload = Base64.urlsafe_encode64(JSON.codec(Envelope).encode(envelope).bytes, false)
+  payload = Base64.urlsafe_encode64(Envelope.codec.encode(envelope).bytes, false)
   mac = Base64.urlsafe_encode64(signature(options.secret, options.name, payload), false)
   value = "#{payload}.#{mac}"
   if options.name.length + value.length > MAX_COOKIE_BYTES
@@ -196,7 +196,7 @@ def unseal(options: SessionOptions, text: String) -> Result[Opened]
   end
 
   raw = try Base64.urlsafe_decode64(parts[0])
-  envelope = try JSON.codec(Envelope).decode(try String.from_bytes(raw))
+  envelope = try Envelope.codec.decode(try String.from_bytes(raw))
   if envelope.exp <= Time.now_ms()
     return error("the session has expired")
   end

@@ -1,4 +1,4 @@
-# Developing Bond needs Agentica 0.24.4 or later (`agentica test --jobs`); a project that uses Bond needs only 0.22.0.
+# Developing Bond needs Agentica 0.25.0 or later (`T.codec`, `agentica test --jobs`), and so does a project that uses Bond.
 # The check, the format check, the tests of the sources, the documentation site (Hugo), the check of its samples and
 # the site of every release (site-versions).
 

@@ -1,5 +1,5 @@
 Feature: JSON request bodies
-  `Bond.json_body(conn, JSON.codec(NewUser))` decodes the body of the request into a struct. The request must say
+  `Bond.json_body(conn, NewUser.codec)` decodes the body of the request into a struct. The request must say
   it is JSON (`application/json`, or a type that ends in `+json`, with any parameters), and the body must be one JSON
   document that fits the struct. Anything else is an error that makes a 400 with a short message, so a handler that
   uses `try` answers it without more code. `POST /users` of `specs/fixtures/app.agc` takes a `NewUser` with a name

@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- A served answer (`Bond.run`, `Bond.start`) is no longer checked a character at a time in Agentica: the server of `std/http` checks the status, the length and the header names and values in C when it writes the head, so a response with ten headers is cheaper to send. An answer it refuses (a CR, LF or NUL in a value, a name that is not a token, a `Content-Length`) is now the server's 500 with no body, `Connection: close` and the reason on stderr, and none of its bytes or of a stream are sent. `Testing.request` keeps the checks and the plain 500, as does a `Location` that is not ASCII.
+
 ## [0.8.0] - 2026-11-06
 
 Needs Agentica 0.25.0 or later.

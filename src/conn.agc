@@ -421,9 +421,11 @@ end
 
 ## The response of the `Conn` for the `Answer.Stream` of `HTTP.serve`: the rules of `to_response`, with the channel
 ## of a stream sent as it is and any other body as one closed piece (`HTTP.whole`), which the server sends with
-## `Content-Length`.
+## `Content-Length`. The server checks the status, the length, the names and the values of the headers when it writes
+## the head, in C: it answers a 500 with no body and closes the connection, with the reason on stderr, before any byte
+## of the answer or of a stream is sent. Only the rule that the server does not have, `Location` in ASCII, is checked here.
 export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
-  problem = refusal(conn)
+  problem = location_refusal(conn)
   if not problem.empty?
     plain = refused(conn, problem)
     return HTTP.StreamResponse(status: plain.status, headers: plain.headers, body: HTTP.whole(plain.body))
@@ -542,7 +544,8 @@ def cut(conn: Conn, body: Channel[Bytes]) -> Void
   body.close
 end
 
-# Why the server would refuse the response, or "" when it would not.
+# Why the server would refuse the response, or "" when it would not: the rules that the server checks in C when it
+# writes the head, for `to_response`, which has no server.
 def refusal(conn: Conn) -> String
   if conn.status < 200 or conn.status > 599
     return "the status #{conn.status} is outside 200 to 599"
@@ -567,6 +570,29 @@ def refusal(conn: Conn) -> String
   return ""
 end
 
+# The one rule of `refusal` that the server does not check: a `Location` is ASCII, since a Latin-1 byte there is not a
+# URL. `to_stream_response` is the only caller that needs it alone, and the server checks all the others in C.
+def location_refusal(conn: Conn) -> String
+  for field in conn.response_headers
+    if not SAFE_NAMES.include?(field.name)
+      problem = location_problem(field, field.name.downcase)
+      if not problem.empty?
+        return problem
+      end
+    end
+  end
+
+  return ""
+end
+
+def location_problem(field: Header, lower: String) -> String
+  if lower == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
+    return "the Location header must be ASCII: percent-encode it"
+  end
+
+  return ""
+end
+
 # Why the server would refuse the header, or "". The names and values that Bond writes itself are in `SAFE_NAMES` and
 # `SAFE_VALUES`, so a plain answer costs no check of each character; anything else is checked a character at a time
 # against a set. `SAFE_NAMES` has no name that has a rule of its own (`Content-Length`, `Transfer-Encoding`,
@@ -583,8 +609,9 @@ def header_problem(field: Header) -> String
       return "the header name #{name.inspect} is not a token"
     end
 
-    if lower == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
-      return "the Location header must be ASCII: percent-encode it"
+    problem = location_problem(field, lower)
+    if not problem.empty?
+      return problem
     end
   end
 

@@ -83,6 +83,40 @@ Feature: Server
     When I get "/hello" over the socket
     Then the body is "hello"
 
+  # The server writes the head after it checks every header, so a refused answer sends none of its bytes.
+  Scenario Outline: A header value with <byte> is a 500 with no body that closes the connection, and the server goes on
+    Given the server listens on a free port
+    When I get "/header-value?value=<value>" over the socket
+    Then the status is 500
+    And the body is ""
+    And the header "connection" is "close"
+    And the header "x-note" is not set
+    When I get "/hello" over the socket
+    Then the body is "hello"
+
+    Examples:
+      | byte | value |
+      | CR   | %0D   |
+      | LF   | %0A   |
+      | NUL  | %00   |
+
+  Scenario: A stream with a header the server refuses is a 500 with no body that closes the connection
+    Given the server listens on a free port
+    When I get "/events-bad-header" over the socket
+    Then the status is 500
+    And the body is ""
+    And the header "connection" is "close"
+    And the header "content-type" is not set
+    When I get "/hello" over the socket
+    Then the body is "hello"
+
+  Scenario: A Location that is not ASCII is a 500 over a socket, a rule that Bond checks itself
+    Given the server listens on a free port
+    When I get "/location-non-ascii" over the socket
+    Then the status is 500
+    And the body is "Internal Server Error"
+    And the header "location" is not set
+
   Scenario Outline: A chunked body that is refused after the app could have started never reaches it (<case>)
     Given the server with a small body limit listens on a free port
     When I post the chunks "<chunks>" to "/todos" over a raw socket

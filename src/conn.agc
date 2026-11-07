@@ -24,13 +24,14 @@ REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 # The characters that the server accepts in a header name (RFC 9110 token): letters, digits and these symbols.
 TOKEN_CHARS = Set.new("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&'*+-.^_`|~".split(""))
 
-# The characters that the server accepts in a header value: a tab, the printable ASCII and Latin-1 above it.
+# The characters that the server rule accepts in a header value: a tab, the printable ASCII and Latin-1 above it (a
+# socket takes only the ASCII ones today, agentica#1184).
 VALUE_CHARS = Set.new(
   List.concat([9], List.concat((32..126).to_a, (128..255).to_a)).map do |code| String.from_code(code) end,
 )
 
 # The lowercase names of the headers that Bond and its helpers write, and the values that they write as they are:
-# `refusal` does not check these again for each answer.
+# `refusal` and `header_problem`, which guard `to_response`, do not check these again for each answer.
 SAFE_NAMES = Set.new([
   "accept-ranges",
   "cache-control",
@@ -378,7 +379,9 @@ end
 ## text without control characters, and a body with a 204 or 304, so this checks the same (and that `Location` is
 ## ASCII, since a Latin-1 byte there is not a URL): a 204 or
 ## 304 loses its body, and the other cases are a 500 with a warning on stderr. `Testing.request` comes through here,
-## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees what a client would.
+## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees the same status as a client.
+## The body differs: over a socket the server answers its own 500 with no body and closes the connection. A value
+## with a byte above 127 passes here but is refused over a socket today, a VM limit (agentica#1184).
 ##
 ## An accepted WebSocket upgrade is a 101 with `Upgrade: websocket` and no body, since a test has no socket for the
 ## WebSocket to run on.
@@ -421,9 +424,11 @@ end
 
 ## The response of the `Conn` for the `Answer.Stream` of `HTTP.serve`: the rules of `to_response`, with the channel
 ## of a stream sent as it is and any other body as one closed piece (`HTTP.whole`), which the server sends with
-## `Content-Length`.
+## `Content-Length`. The server checks the status, the length, the names and the values of the headers when it writes
+## the head, in C: it answers a 500 with no body and closes the connection, with the reason on stderr, before any byte
+## of the answer or of a stream is sent. Only the rule that the server does not have, `Location` in ASCII, is checked here.
 export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
-  problem = refusal(conn)
+  problem = location_refusal(conn)
   if not problem.empty?
     plain = refused(conn, problem)
     return HTTP.StreamResponse(status: plain.status, headers: plain.headers, body: HTTP.whole(plain.body))
@@ -542,7 +547,8 @@ def cut(conn: Conn, body: Channel[Bytes]) -> Void
   body.close
 end
 
-# Why the server would refuse the response, or "" when it would not.
+# Why the server would refuse the response, or "" when it would not: the rules that the server checks in C when it
+# writes the head, for `to_response`, which has no server.
 def refusal(conn: Conn) -> String
   if conn.status < 200 or conn.status > 599
     return "the status #{conn.status} is outside 200 to 599"
@@ -567,7 +573,31 @@ def refusal(conn: Conn) -> String
   return ""
 end
 
-# Why the server would refuse the header, or "". The names and values that Bond writes itself are in `SAFE_NAMES` and
+# The one rule of `refusal` that the server does not check: a `Location` is ASCII, since a Latin-1 byte there is not a
+# URL. `to_stream_response` is the only caller that needs it alone, and the server checks all the others in C.
+def location_refusal(conn: Conn) -> String
+  for field in conn.response_headers
+    if not SAFE_NAMES.include?(field.name)
+      problem = location_problem(field, field.name.downcase)
+      if not problem.empty?
+        return problem
+      end
+    end
+  end
+
+  return ""
+end
+
+def location_problem(field: Header, lower: String) -> String
+  if lower == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
+    return "the Location header must be ASCII: percent-encode it"
+  end
+
+  return ""
+end
+
+# Why the server would refuse the header, or "": the check of `to_response` (the server does it in C for a served
+# answer). The names and values that Bond writes itself are in `SAFE_NAMES` and
 # `SAFE_VALUES`, so a plain answer costs no check of each character; anything else is checked a character at a time
 # against a set. `SAFE_NAMES` has no name that has a rule of its own (`Content-Length`, `Transfer-Encoding`,
 # `Location`).
@@ -583,8 +613,9 @@ def header_problem(field: Header) -> String
       return "the header name #{name.inspect} is not a token"
     end
 
-    if lower == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
-      return "the Location header must be ASCII: percent-encode it"
+    problem = location_problem(field, lower)
+    if not problem.empty?
+      return problem
     end
   end
 

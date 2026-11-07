@@ -232,6 +232,7 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/location-newline", &location_newline)
     |> Bond.get("/header-bad-name", &header_bad_name)
     |> Bond.get("/header-newline", &header_newline)
+    |> Bond.get("/header-value", &header_value)
     |> Bond.get("/header-wide", &header_wide)
     |> Bond.get("/header-latin1", &header_latin1)
     |> Bond.get("/events") do |conn| events(producers, conn) end
@@ -512,6 +513,12 @@ end
 
 def header_newline(conn: Bond.Conn) -> Result[Bond.Conn]
   return ok(Bond.header(conn, "x-note", "a\r\nx-evil: 1"))
+end
+
+# The value comes from the query, to try the bytes that the server refuses.
+def header_value(conn: Bond.Conn) -> Result[Bond.Conn]
+  value = try Bond.query(conn, "value")
+  return ok(Bond.header(Bond.text(conn, 200, "ok"), "x-note", "a#{value}b"))
 end
 
 def header_wide(conn: Bond.Conn) -> Result[Bond.Conn]

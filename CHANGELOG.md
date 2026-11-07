@@ -4,13 +4,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.8.1] - 2026-11-08
+## [0.9.0] - 2026-11-08
 
 Needs Agentica 0.25.0 or later.
 
 ### Changed
 
-- A served answer (`Bond.run`, `Bond.start`) is no longer checked a character at a time in Agentica: the server of `std/http` checks the status, the length and the header names and values in C when it writes the head, so a response with ten headers is cheaper to send. An answer it refuses (a CR, LF or NUL in a value, a name that is not a token, a `Content-Length`) is now the server's 500 with no body, `Connection: close` and the reason on stderr, and none of its bytes or of a stream are sent. `Testing.request` keeps the checks and the plain 500, as does a `Location` that is not ASCII.
+- **Behaviour:** a served answer (`Bond.run`, `Bond.start`) is no longer checked a character at a time in Agentica: the server of `std/http` checks the status, the length and the header names and values in C when it writes the head, so a response with ten headers is cheaper to send. An answer it refuses (a CR, LF or NUL in a value, a name that is not a token, a `Content-Length`) is now the server's 500 with no body, `Connection: close` and the reason on stderr, and none of its bytes or of a stream are sent. `Testing.request` keeps the checks and the plain 500, as does a `Location` that is not ASCII.
 
 ## [0.8.0] - 2026-11-06
 
@@ -169,8 +169,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.8.1...HEAD
-[0.8.1]: https://github.com/agentica-lang/bond/compare/0.8.0...0.8.1
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.9.0...HEAD
+[0.9.0]: https://github.com/agentica-lang/bond/compare/0.8.0...0.9.0
 [0.8.0]: https://github.com/agentica-lang/bond/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/agentica-lang/bond/compare/0.6.1...0.7.0
 [0.6.1]: https://github.com/agentica-lang/bond/compare/0.6.0...0.6.1

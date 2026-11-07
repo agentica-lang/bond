@@ -24,13 +24,14 @@ REDIRECT_STATUSES = [301, 302, 303, 307, 308]
 # The characters that the server accepts in a header name (RFC 9110 token): letters, digits and these symbols.
 TOKEN_CHARS = Set.new("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&'*+-.^_`|~".split(""))
 
-# The characters that the server accepts in a header value: a tab, the printable ASCII and Latin-1 above it.
+# The characters that the server rule accepts in a header value: a tab, the printable ASCII and Latin-1 above it (a
+# socket takes only the ASCII ones today, agentica#1184).
 VALUE_CHARS = Set.new(
   List.concat([9], List.concat((32..126).to_a, (128..255).to_a)).map do |code| String.from_code(code) end,
 )
 
 # The lowercase names of the headers that Bond and its helpers write, and the values that they write as they are:
-# `refusal` does not check these again for each answer.
+# `refusal` and `header_problem`, which guard `to_response`, do not check these again for each answer.
 SAFE_NAMES = Set.new([
   "accept-ranges",
   "cache-control",
@@ -378,7 +379,9 @@ end
 ## text without control characters, and a body with a 204 or 304, so this checks the same (and that `Location` is
 ## ASCII, since a Latin-1 byte there is not a URL): a 204 or
 ## 304 loses its body, and the other cases are a 500 with a warning on stderr. `Testing.request` comes through here,
-## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees what a client would.
+## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees the same status as a client.
+## The body differs: over a socket the server answers its own 500 with no body and closes the connection. A value
+## with a byte above 127 passes here but is refused over a socket today, a VM limit (agentica#1184).
 ##
 ## An accepted WebSocket upgrade is a 101 with `Upgrade: websocket` and no body, since a test has no socket for the
 ## WebSocket to run on.
@@ -593,7 +596,8 @@ def location_problem(field: Header, lower: String) -> String
   return ""
 end
 
-# Why the server would refuse the header, or "". The names and values that Bond writes itself are in `SAFE_NAMES` and
+# Why the server would refuse the header, or "": the check of `to_response` (the server does it in C for a served
+# answer). The names and values that Bond writes itself are in `SAFE_NAMES` and
 # `SAFE_VALUES`, so a plain answer costs no check of each character; anything else is checked a character at a time
 # against a set. `SAFE_NAMES` has no name that has a rule of its own (`Content-Length`, `Transfer-Encoding`,
 # `Location`).

@@ -410,7 +410,7 @@ def folder(options: UploadOptions) -> String
     root = system_temp()
   end
 
-  return Path.join([root, "bond-upload-#{SecureRandom.hex(16)}"]).unwrap_or("")
+  return Path.join([root, "bond-upload-#{OpenSSL.Random.hex(16)}"]).unwrap_or("")
 end
 
 def system_temp() -> String

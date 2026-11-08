@@ -61,7 +61,7 @@ def main() -> Void
     root = "/tmp"
   end
 
-  dir = Path.join([root, "bond-upload-spec-#{SecureRandom.hex(8)}"]).unwrap!
+  dir = Path.join([root, "bond-upload-spec-#{OpenSSL.Random.hex(8)}"]).unwrap!
   Dir.mkdir_private(dir).unwrap!
   routes = (
     Bond.app()

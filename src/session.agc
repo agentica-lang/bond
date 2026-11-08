@@ -19,7 +19,7 @@ MAX_COOKIE_BYTES = 3800
 SAME_SITE_VALUES = ["Strict", "Lax", "None"]
 
 ## How a session cookie is signed and sent. `secret` signs the cookie and must have at least 32 bytes (draw it from
-## `SecureRandom.random_bytes` once and keep it out of the source). `old_secrets` are the secrets that signed cookies
+## `OpenSSL.Random.hex(32)` once and keep it out of the source). `old_secrets` are the secrets that signed cookies
 ## before: a cookie with one of them is read, and written again with `secret` and a new `max_age` from that moment (so
 ## a session that is in use outlives the rotation), so a secret is rotated by putting the new one in `secret` and the
 ## old one in `old_secrets` until the last cookie that it signed has expired. `name` is the
@@ -153,7 +153,7 @@ end
 
 # The signature covers the name of the cookie too, so a value copied from another cookie of the app is not accepted.
 def signature(secret: String, name: String, payload: String) -> Bytes
-  return HMAC.sha256(secret.bytes, "#{name}.#{payload}".bytes)
+  return OpenSSL.HMAC.sha256(secret.bytes, "#{name}.#{payload}".bytes)
 end
 
 def load(options: SessionOptions, conn: Conn) -> Result[Conn]
@@ -186,7 +186,7 @@ def unseal(options: SessionOptions, text: String) -> Result[Opened]
   secrets = [options.secret].concat(options.old_secrets)
   found = -1
   for at in 0...secrets.size
-    if HMAC.secure_compare(signature(secrets[at], options.name, parts[0]), mac) and found < 0
+    if OpenSSL.HMAC.secure_compare(signature(secrets[at], options.name, parts[0]), mac) and found < 0
       found = at
     end
   end

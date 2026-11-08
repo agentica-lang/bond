@@ -286,22 +286,30 @@ end
 ## Sets a response header, replacing the one of the same name (the case does not matter). `Set-Cookie` is the
 ## exception: it adds a header, so it never wipes the cookies set before it (see `set_cookie`).
 export def header(conn: Conn, name: String, value: String) -> Conn
-  if name.downcase == "set-cookie"
+  lower = name.downcase
+  if lower == "set-cookie"
     return add_header(conn, name, value)
   end
 
-  kept = conn.response_headers.select do |other| other.name.downcase != name.downcase end
+  # A name of another length is not `name`, so the usual miss costs no lowercase copy of it: an answer with ten headers
+  # would otherwise lowercase fifty names.
+  kept = conn.response_headers.select do |other|
+    other.name != lower and (other.name.length != lower.length or other.name.downcase != lower)
+  end
+
   return conn.with(response_headers: kept.push(Header(name: name, value: value)))
 end
 
 ## The first value of a request header (the case of the name does not matter), or an error when there is none.
 export def request_header(conn: Conn, name: String) -> Result[String]
-  values = conn.headers.select do |other| other.name.downcase == name.downcase end
-  if values.empty?
-    return error("no header #{name}")
+  lower = name.downcase
+  for other in conn.headers
+    if other.name == lower or (other.name.length == lower.length and other.name.downcase == lower)
+      return ok(other.value)
+    end
   end
 
-  return ok(values[0].value)
+  return error("no header #{name}")
 end
 
 ## The text of the `:name` segment of the route, or an error when the route has no such segment.

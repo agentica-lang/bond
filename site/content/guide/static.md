@@ -89,7 +89,7 @@ A file over `max_bytes` is a 500; a file of exactly `max_bytes` is served. The d
 
 ## The cache of small files
 
-Each folder keeps the files of at most `piece_bytes` in memory, up to `cache_bytes` in all (16 MiB by default, the `cache_bytes` argument after `fingerprint`; 0 turns the cache off). A hit costs one `stat`: the entry is used while the file has the size and the time of change it had when it was read, and an edited file is read again (an edit that keeps both within the same second is not seen). A file that is gone is a 404 at once.
+Each folder keeps the files of at most `piece_bytes` in memory, up to `cache_bytes` in all (16 MiB by default, the `cache_bytes` argument after `fingerprint`; 0 turns the cache off). A hit costs one `stat` (none for a fingerprinted name, see below): the entry is used while the file has the size and the time of change it had when it was read, and an edited file is read again (an edit that keeps both within the same second is not seen). A file that is gone is a 404 at once.
 
 A file is stored only under its real name, after all the checks of [Which paths are a file](#which-paths-are-a-file): `%62ig.css` for `big.css`, a link, or another case on a folder that ignores it is answered the long way, so no spelling of a name adds to the cache or pushes out another file. A file that would take more than half of `cache_bytes` is not kept, and when an entry does not fit the cache is emptied and starts again, so a folder with more small files than the budget holds needs a bigger `cache_bytes`.
 

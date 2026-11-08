@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Faster static files and answers: `Bond.header` and `Bond.request_header` no longer lowercase every header name they compare, with the same results.
+
 ## [0.10.0] - 2026-11-08
 
 Needs Agentica 0.27.0 or later.

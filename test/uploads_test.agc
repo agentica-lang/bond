@@ -86,7 +86,7 @@ def scratch() -> Result[String]
     root = "/tmp"
   end
 
-  dir = try Path.join([root, "bond-uploads-test-#{SecureRandom.hex(8)}"])
+  dir = try Path.join([root, "bond-uploads-test-#{OpenSSL.Random.hex(8)}"])
   try Dir.mkdir_private(dir)
   return ok(dir)
 end

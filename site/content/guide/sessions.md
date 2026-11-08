@@ -16,7 +16,7 @@ The answer carries the new session in a `Set-Cookie`, and only when a handler ch
 
 ## The options
 
-`Bond.app() |> Bond.sessions(Bond.SessionOptions(secret: secret))` is the whole setup. `secret` is the only option you must give: at least 32 bytes (Bond checks the length, not that it is random). Make it once with `SecureRandom.hex(32)`, keep it in the environment or a file, and never put it in the source. The program stops at the call of `sessions` when an option is wrong (a short secret, an empty name, a `max_age` below 1, a `same_site` that is not `Strict`, `Lax` or `None`, or `None` without `secure`).
+`Bond.app() |> Bond.sessions(Bond.SessionOptions(secret: secret))` is the whole setup. `secret` is the only option you must give: at least 32 bytes (Bond checks the length, not that it is random). Make it once with `OpenSSL.Random.hex(32)`, keep it in the environment or a file, and never put it in the source. The program stops at the call of `sessions` when an option is wrong (a short secret, an empty name, a `max_age` below 1, a `same_site` that is not `Strict`, `Lax` or `None`, or `None` without `secure`).
 
 | Option | Default | |
 |---|---|---|

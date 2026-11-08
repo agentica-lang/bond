@@ -301,10 +301,10 @@ export def header(conn: Conn, name: String, value: String) -> Conn
   return conn.with(response_headers: kept.push(Header(name: name, value: value)))
 end
 
-## Sets several response headers at once, as `header` would one after the other: each replaces the headers of the same
-## name that the conn has, and they follow the others in their order. The `fields` names are in lowercase, not repeated
-## and not `set-cookie`; this is for the headers that Bond writes itself, with a name known in advance, so it lowercases
-## only the names the conn already has, and none when it has none.
+## Internal, for the headers that Bond writes itself. Sets several response headers at once, as `header` would one after
+## the other: each replaces the headers of the same name that the conn has, and they follow the others in their order.
+## The `fields` names must be in lowercase, distinct and never `set-cookie` (use `add_header`): the names the conn
+## already has are lowercased to compare, and none when it has none.
 export def set_headers(conn: Conn, fields: List[Header]) -> Conn
   if conn.response_headers.empty?
     return conn.with(response_headers: fields)

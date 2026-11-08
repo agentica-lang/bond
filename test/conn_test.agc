@@ -43,5 +43,11 @@ def main() -> Void
       try Test.eq(set.response_headers.map do |field| field.name end, ["x-keep", "etag", "vary"])
       Test.eq(set.response_headers.map do |field| field.value end, ["k", "n", "v"])
     end,
+    Test.test("set_headers keeps a Set-Cookie and drops every header of a name it sets") do
+      cookie = Conns.add_header(request([]), "Set-Cookie", "a=1")
+      conn = Conns.add_header(Conns.add_header(cookie, "ETag", "1"), "etag", "2")
+      set = Conns.set_headers(conn, [Header(name: "etag", value: "n")])
+      Test.eq(set.response_headers.map do |field| "#{field.name}=#{field.value}" end, ["Set-Cookie=a=1", "etag=n"])
+    end,
   ])
 end

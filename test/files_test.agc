@@ -49,6 +49,34 @@ def main() -> Void
       try Test.eq(answer.response_headers[0].name, "X-Keep")
       Test.assert(pairs(answer).include?("cache-control=public, max-age=60"), "the policy of the file")
     end,
+    Test.test("a Set-Cookie of the conn stays after the headers of the file") do
+      before = Conns.add_header(request([]), "Set-Cookie", "a=1")
+      answer = Files.respond(before, rep(), "x.css", some("body".bytes)).unwrap!
+      try Test.eq(pairs(answer)[0], "Set-Cookie=a=1")
+      Test.eq(pairs(answer).size, 9)
+    end,
+    Test.test("a 304 has the validators and the policy, and no more") do
+      matching = request([Header(name: "if-none-match", value: rep().etag)])
+      answer = Files.respond(matching, rep(), "x.css", some("body".bytes)).unwrap!
+      try Test.eq(answer.status, 304)
+      Test.eq(
+        pairs(answer),
+        [
+          "etag=\"4-1\"",
+          "last-modified=Thu, 01 Jan 1970 00:00:01 GMT",
+          "cache-control=public, max-age=60",
+          "vary=Accept-Encoding",
+        ],
+      )
+    end,
+    Test.test("an attachment has its Content-Disposition before the encoding") do
+      named = rep().with(attachment: some("a.css"))
+      answer = Files.respond(request([]), named, "x.css", some("body".bytes)).unwrap!
+      names = pairs(answer).map do |line| line.split("=")[0] end
+      try Test.eq(names[7], "content-disposition")
+      try Test.eq(names[8], "content-encoding")
+      Test.assert(pairs(answer).include?("content-disposition=attachment; filename=\"a.css\""), "the name")
+    end,
     Test.test("a range still has its Content-Range") do
       ranged = request([Header(name: "range", value: "bytes=1-2")])
       answer = Files.respond(ranged, rep(), "x.css", some("body".bytes)).unwrap!

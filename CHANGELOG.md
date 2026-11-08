@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Bond needs Agentica 0.27.0 or later: it signs session cookies with `OpenSSL.HMAC` (`HMAC` is gone in 0.27.0), and CI tests with Agentica 0.27.0.
+- **Breaking:** Bond needs Agentica 0.27.0 or later: it signs session cookies with `OpenSSL.HMAC` and makes upload folder names with `OpenSSL.Random` (`HMAC` and `SecureRandom` are gone in 0.27.0). CI tests with Agentica 0.27.0.
 
 ## [0.9.0] - 2026-11-08
 

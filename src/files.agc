@@ -284,17 +284,20 @@ end
 
 # The headers of a 304, and of every answer: the validators, the cache policy and `Vary`.
 def validated(conn: Conn, rep: Rep) -> Conn
-  tagged = Conns.header(Conns.header(conn, "etag", rep.etag), "last-modified", rep.last_modified)
-  cached = tagged
+  return Conns.set_headers(conn, validators(rep))
+end
+
+def validators(rep: Rep) -> List[Header]
+  fields = [Header(name: "etag", value: rep.etag), Header(name: "last-modified", value: rep.last_modified)]
   if not rep.cache_control.empty?
-    cached = Conns.header(tagged, "cache-control", rep.cache_control)
+    fields = fields.push(Header(name: "cache-control", value: rep.cache_control))
   end
 
   if rep.vary
-    return Conns.header(cached, "vary", "Accept-Encoding")
+    fields = fields.push(Header(name: "vary", value: "Accept-Encoding"))
   end
 
-  return cached
+  return fields
 end
 
 # The part of a file of `size` bytes that the value of a `Range` header asks for ("" when there is none).
@@ -384,36 +387,31 @@ def request_range(conn: Conn) -> String
 end
 
 # The headers of the answer, for any `slice`: the validators, the type, the ranges, the `Content-Range` of a part, the
-# encoding, and the disposition.
+# encoding, and the disposition. They are set in one call, in this order.
 def headed(conn: Conn, rep: Rep, slice: Slice) -> Conn
-  typed = Conns.header(
-    Conns.header(validated(conn, rep), "content-type", rep.type),
-    "x-content-type-options",
-    "nosniff",
-  )
-
-  ranged = Conns.header(typed, "accept-ranges", "bytes")
-  named = ranged
+  fields = validators(rep)
+  fields = fields.push(Header(name: "content-type", value: rep.type))
+  fields = fields.push(Header(name: "x-content-type-options", value: "nosniff"))
+  fields = fields.push(Header(name: "accept-ranges", value: "bytes"))
   case rep.attachment
-    some(name) -> named = Conns.header(ranged, "content-disposition", disposition(name))
-    none -> named = ranged
+    some(name) -> fields = fields.push(Header(name: "content-disposition", value: disposition(name)))
+    none -> nil
   end
 
-  encoded = named
   if not rep.encoding.empty?
-    encoded = Conns.header(named, "content-encoding", rep.encoding)
+    fields = fields.push(Header(name: "content-encoding", value: rep.encoding))
   end
 
   if slice.status == 206
     last = slice.first + slice.size - 1
-    return Conns.header(encoded, "content-range", "bytes #{slice.first}-#{last}/#{rep.size}")
+    fields = fields.push(Header(name: "content-range", value: "bytes #{slice.first}-#{last}/#{rep.size}"))
   end
 
   if slice.status == 416
-    return Conns.header(encoded, "content-range", "bytes */#{rep.size}")
+    fields = fields.push(Header(name: "content-range", value: "bytes */#{rep.size}"))
   end
 
-  return encoded
+  return Conns.set_headers(conn, fields)
 end
 
 # The value of `Content-Disposition` for a download with the name `name`: a quoted `filename` of the printable ASCII of

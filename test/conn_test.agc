@@ -32,5 +32,16 @@ def main() -> Void
       cookies = Conns.header(Conns.header(conn, "Set-Cookie", "a=1"), "set-cookie", "b=2")
       Test.eq(cookies.response_headers.map do |field| field.value end, ["a=1", "b=2"])
     end,
+    Test.test(
+      "set_headers replaces the headers of the same name in any case, keeps the others, and appends in order",
+    ) do
+      fields = [Header(name: "etag", value: "n"), Header(name: "vary", value: "v")]
+      empty = Conns.set_headers(request([]), fields)
+      try Test.eq(empty.response_headers.map do |field| field.value end, ["n", "v"])
+      conn = Conns.add_header(Conns.add_header(request([]), "ETag", "old"), "x-keep", "k")
+      set = Conns.set_headers(conn, fields)
+      try Test.eq(set.response_headers.map do |field| field.name end, ["x-keep", "etag", "vary"])
+      Test.eq(set.response_headers.map do |field| field.value end, ["k", "n", "v"])
+    end,
   ])
 end

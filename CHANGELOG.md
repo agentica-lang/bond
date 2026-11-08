@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Faster files: `Bond.send_file` and `Bond.static` set the headers of an answer in one call instead of one by one, with the same headers in the same order.
 - Faster static files and answers: `Bond.header` and `Bond.request_header` no longer lowercase every header name they compare, with the same results.
 
 ## [0.10.0] - 2026-11-08

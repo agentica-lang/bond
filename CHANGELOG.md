@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Faster static files and answers: `Bond.header` and `Bond.request_header` no longer lowercase every header name they compare (a cached `Bond.static` hit made about 74 copies of names, now about 16), with the same results.
+- Faster static files and answers: `Bond.header` and `Bond.request_header` no longer lowercase every header name they compare, with the same results.
 
 ## [0.10.0] - 2026-11-08
 

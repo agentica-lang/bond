@@ -292,7 +292,8 @@ export def header(conn: Conn, name: String, value: String) -> Conn
   end
 
   # A name of another length is not `name`, so the usual miss costs no lowercase copy of it: an answer with ten headers
-  # would otherwise lowercase fifty names.
+  # would otherwise lowercase fifty names. This assumes token (ASCII) names, which `header_problem` enforces when the
+  # answer is sent.
   kept = conn.response_headers.select do |other|
     other.name != lower and (other.name.length != lower.length or other.name.downcase != lower)
   end
@@ -303,6 +304,7 @@ end
 ## The first value of a request header (the case of the name does not matter), or an error when there is none.
 export def request_header(conn: Conn, name: String) -> Result[String]
   lower = name.downcase
+  # The length shortcut assumes token (ASCII) names, as in `header`.
   for other in conn.headers
     if other.name == lower or (other.name.length == lower.length and other.name.downcase == lower)
       return ok(other.value)

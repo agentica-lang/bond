@@ -19,7 +19,7 @@ MAX_COOKIE_BYTES = 3800
 SAME_SITE_VALUES = ["Strict", "Lax", "None"]
 
 ## How a session cookie is signed and sent. `secret` signs the cookie and must have at least 32 bytes (draw it from
-## `OpenSSL.Random.random_bytes` once and keep it out of the source). `old_secrets` are the secrets that signed cookies
+## `OpenSSL.Random.hex(32)` once and keep it out of the source). `old_secrets` are the secrets that signed cookies
 ## before: a cookie with one of them is read, and written again with `secret` and a new `max_age` from that moment (so
 ## a session that is in use outlives the rotation), so a secret is rotated by putting the new one in `secret` and the
 ## old one in `old_secrets` until the last cookie that it signed has expired. `name` is the

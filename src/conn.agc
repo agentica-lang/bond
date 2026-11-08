@@ -301,6 +301,20 @@ export def header(conn: Conn, name: String, value: String) -> Conn
   return conn.with(response_headers: kept.push(Header(name: name, value: value)))
 end
 
+## Internal, for the headers that Bond writes itself. Sets several response headers at once, as `header` would one after
+## the other: each replaces the headers of the same name that the conn has, and they follow the others in their order.
+## The `fields` names must be in lowercase, distinct and never `set-cookie` (use `add_header`): the names the conn
+## already has are lowercased to compare, and none when it has none.
+export def set_headers(conn: Conn, fields: List[Header]) -> Conn
+  if conn.response_headers.empty?
+    return conn.with(response_headers: fields)
+  end
+
+  names = fields.map do |field| field.name end
+  kept = conn.response_headers.select do |other| not names.include?(other.name.downcase) end
+  return conn.with(response_headers: List.concat(kept, fields))
+end
+
 ## The first value of a request header (the case of the name does not matter), or an error when there is none.
 export def request_header(conn: Conn, name: String) -> Result[String]
   lower = name.downcase

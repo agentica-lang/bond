@@ -12,7 +12,7 @@ EPOCH = "Thu, 01 Jan 1970 00:00:00 GMT"
 ## take the cookies from the map when a handler needs several.
 export def cookies(conn: Conn) -> Map[String, String]
   sent = conn.headers.select do |field| field.name.downcase == "cookie" end
-  return C.parse(sent.map do |field| field.value end.join("; "))
+  C.parse(sent.map do |field| field.value end.join("; "))
 end
 
 ## The value of a cookie of the request, or an error when it is not there. A missing cookie is not a mistake of the
@@ -20,8 +20,8 @@ end
 ## use `unwrap_or` or `case`.
 export def cookie(conn: Conn, name: String) -> Result[String]
   case cookies(conn).get(name)
-    some(value) -> return ok(value)
-    none -> return error("no cookie #{name}")
+    some(value) -> ok(value)
+    none -> error("no cookie #{name}")
   end
 end
 
@@ -32,7 +32,7 @@ end
 ## a space, a comma, a semicolon, a quote or a non-ASCII character in it is an `error` (a 500 when passed on with
 ## `try`), so encode it first.
 export def set_cookie(conn: Conn, name: String, value: String) -> Result[Conn]
-  return set_cookie_with(conn, C.Cookie(name: name, value: value, path: "/", http_only: true, same_site: "Lax"))
+  set_cookie_with(conn, C.Cookie(name: name, value: value, path: "/", http_only: true, same_site: "Lax"))
 end
 
 ## Adds a `Set-Cookie` header for a `Cookie.Cookie` of `std/cookie` (`import Cookie from "std/cookie"`), with the
@@ -41,8 +41,8 @@ end
 ## value it refuses is passed on. Set a cookie once: the headers are not merged by name.
 export def set_cookie_with(conn: Conn, cookie: C.Cookie) -> Result[Conn]
   case C.set_header(cookie)
-    ok(line) -> return ok(Conns.add_header(conn, "set-cookie", line))
-    error(message) -> return error("cookie: #{message}")
+    ok(line) -> ok(Conns.add_header(conn, "set-cookie", line))
+    error(message) -> error("cookie: #{message}")
   end
 end
 
@@ -53,5 +53,5 @@ export def delete_cookie(conn: Conn, name: String, path: String = "/", domain: S
   prefix = name.downcase
   secure = prefix.start_with?("__host-") or prefix.start_with?("__secure-")
   gone = C.Cookie(name: name, value: "", path: path, domain: domain, max_age: 0, expires: EPOCH, secure: secure)
-  return set_cookie_with(conn, gone)
+  set_cookie_with(conn, gone)
 end

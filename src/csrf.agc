@@ -35,7 +35,7 @@ DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 ## Filters run in the order they were added, so add it before any filter that does work for a request.
 export def csrf(app: App, allowed_origins: List[String] = []) -> App
   origins = checked_origins(allowed_origins)
-  return Apps.before(app) do |conn| check(origins, conn) end
+  Apps.before(app) do |conn| check(origins, conn) end
 end
 
 ## The allowed origins of `csrf` and `Bond.websocket` in lowercase, as a browser writes them. The program stops when
@@ -50,7 +50,7 @@ export def checked_origins(allowed_origins: List[String]) -> List[String]
     end
   end
 
-  return origins
+  origins
 end
 
 ## True when `origin` (in lowercase) names the host of the request: its part after `://` is the `Host` header. The
@@ -58,12 +58,12 @@ end
 export def host_origin?(origin: String, conn: Conn) -> Bool
   host = Conns.request_header(conn, "host").unwrap_or("").downcase
   parts = origin.split("://")
-  return host != "" and parts.size == 2 and parts[1] == host
+  host != "" and parts.size == 2 and parts[1] == host
 end
 
 ## True when the request has more than one header `name` (in lowercase), which a browser never sends for `Origin`.
 export def repeated?(conn: Conn, name: String) -> Bool
-  return conn.headers.select do |field| field.name.downcase == name end.size > 1
+  conn.headers.select do |field| field.name.downcase == name end.size > 1
 end
 
 # Why `origin` can never be the `Origin` header of a browser, or "" when it can: it is `scheme://host` or
@@ -85,9 +85,7 @@ def origin_problem(origin: String) -> String
     close = rest.index_of("]").unwrap_or(-1)
     host = rest.slice(0, close + 1)
     after = rest.slice(close + 1, rest.length - close - 1)
-    if close < 0 or (after != "" and not after.start_with?(":"))
-      return "has a bad IPv6 host"
-    end
+    return "has a bad IPv6 host" if close < 0 or (after != "" and not after.start_with?(":"))
 
     if after != ""
       port = after.slice(1, after.length - 1)
@@ -95,66 +93,48 @@ def origin_problem(origin: String) -> String
   else
     pieces = rest.split(":")
     host = pieces[0]
-    if pieces.size > 2
-      return "has more than one port"
-    end
+    return "has more than one port" if pieces.size > 2
 
     if pieces.size == 2
       port = pieces[1]
     end
   end
 
-  if host == "" or host == "[]"
-    return "has no host"
-  end
+  return "has no host" if host == "" or host == "[]"
 
   if rest.end_with?(":") or (port != "" and not port.split("").all? do |ch| DIGITS.include?(ch) end)
     return "has a port that is not a number"
   end
 
-  if port != "" and (port.length > 5 or port.to_i! < 1 or port.to_i! > 65535)
-    return "has a port out of 1 to 65535"
-  end
+  return "has a port out of 1 to 65535" if port != "" and (port.length > 5 or port.to_i! < 1 or port.to_i! > 65535)
 
   if (parts[0] == "https" and port == "443") or (parts[0] == "http" and port == "80")
     return "has the default port of its scheme, which a browser leaves out of the Origin: write it with no port"
   end
 
-  return ""
+  ""
 end
 
 def check(origins: List[String], conn: Conn) -> Result[Conn]
-  if same_origin?(origins, conn)
-    return ok(conn)
-  end
+  return ok(conn) if same_origin?(origins, conn)
 
-  return ok(Conns.halt(conn, 403, "cross-origin request refused"))
+  ok(Conns.halt(conn, 403, "cross-origin request refused"))
 end
 
 def same_origin?(origins: List[String], conn: Conn) -> Bool
-  if SAFE_METHODS.any? do |method| method == conn.method end
-    return true
-  end
+  return true if SAFE_METHODS.any? do |method| method == conn.method end
 
   # A browser sends each of these once. A request with two is not from a browser, and `request_header` would judge it
   # by the first only, so it is refused.
-  if repeated?(conn, "origin") or repeated?(conn, "sec-fetch-site")
-    return false
-  end
+  return false if repeated?(conn, "origin") or repeated?(conn, "sec-fetch-site")
 
   origin = Conns.request_header(conn, "origin").unwrap_or("").downcase
-  if origins.any? do |allowed| allowed == origin end
-    return true
-  end
+  return true if origins.any? do |allowed| allowed == origin end
 
   site = Conns.request_header(conn, "sec-fetch-site").unwrap_or("").downcase
-  if site != ""
-    return site == "same-origin" or site == "none"
-  end
+  return site == "same-origin" or site == "none" if site != ""
 
-  if origin == ""
-    return true
-  end
+  return true if origin == ""
 
-  return host_origin?(origin, conn)
+  host_origin?(origin, conn)
 end

@@ -13,9 +13,7 @@ LIMITS = Bond.UploadOptions(
   max_total_bytes: 4_096,
 )
 
-def hello(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "hello"))
-end
+def hello(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "hello"))
 
 def upload(conn: Bond.Conn) -> Result[Bond.Conn]
   fields = try Bond.form_params(conn)
@@ -33,7 +31,7 @@ def upload(conn: Bond.Conn) -> Result[Bond.Conn]
     lines = lines.push("path #{saved.path}")
   end
 
-  return ok(Bond.text(conn, 200, lines.join("\n")))
+  ok(Bond.text(conn, 200, lines.join("\n")))
 end
 
 # The `dir` of the uploads is made at the start, and again by a before filter when a request removed it, and the
@@ -41,7 +39,7 @@ end
 # made at the start, it is there for the first request even if Bond read a body before the filters.
 def make_dir(dir: String, conn: Bond.Conn) -> Result[Bond.Conn]
   _ = Dir.mkdir_private(dir)
-  return ok(conn)
+  ok(conn)
 end
 
 def count_folders(dir: String, conn: Bond.Conn) -> Result[Bond.Conn]
@@ -52,7 +50,7 @@ def count_folders(dir: String, conn: Bond.Conn) -> Result[Bond.Conn]
   end
 
   _ = Path.remove(dir)
-  return ok(Bond.header(conn, "x-upload-folders", folders.to_s))
+  ok(Bond.header(conn, "x-upload-folders", folders.to_s))
 end
 
 def main() -> Void

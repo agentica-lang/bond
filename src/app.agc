@@ -38,7 +38,7 @@ export struct UploadOptions
 end
 
 export def app() -> App
-  return App(
+  App(
     routes: Router.empty(),
     before_filters: [],
     after_filters: [],
@@ -48,39 +48,25 @@ export def app() -> App
   )
 end
 
-export def get(app: App, pattern: String, handler: Handler) -> App
-  return route(app, "GET", pattern, handler)
-end
+export def get(app: App, pattern: String, handler: Handler) -> App = route(app, "GET", pattern, handler)
 
-export def post(app: App, pattern: String, handler: Handler) -> App
-  return route(app, "POST", pattern, handler)
-end
+export def post(app: App, pattern: String, handler: Handler) -> App = route(app, "POST", pattern, handler)
 
-export def put(app: App, pattern: String, handler: Handler) -> App
-  return route(app, "PUT", pattern, handler)
-end
+export def put(app: App, pattern: String, handler: Handler) -> App = route(app, "PUT", pattern, handler)
 
-export def patch(app: App, pattern: String, handler: Handler) -> App
-  return route(app, "PATCH", pattern, handler)
-end
+export def patch(app: App, pattern: String, handler: Handler) -> App = route(app, "PATCH", pattern, handler)
 
-export def delete(app: App, pattern: String, handler: Handler) -> App
-  return route(app, "DELETE", pattern, handler)
-end
+export def delete(app: App, pattern: String, handler: Handler) -> App = route(app, "DELETE", pattern, handler)
 
 ## Sets the handler for a path with no route. It gets the `Conn` with status 404 and answers like any handler;
 ## the `after` filters run after it. A path with a route for other methods is a 405 and does not come here.
-export def not_found(app: App, handler: Handler) -> App
-  return app.with(not_found: handler)
-end
+export def not_found(app: App, handler: Handler) -> App = app.with(not_found: handler)
 
 ## Sets the handler for a failure: an `error` of a handler or filter, or a runtime error in one. It gets the `Conn`
 ## with status 500 and the message, which Bond has already written to stderr and which must stay from the client.
 ## If the handler gives an error or crashes, the answer is the plain 500. A `bad_request` is a 400 and does not
 ## come here.
-export def on_error(app: App, handler: ErrorHandler) -> App
-  return app.with(on_error: handler)
-end
+export def on_error(app: App, handler: ErrorHandler) -> App = app.with(on_error: handler)
 
 ## Serves the files of the folder `root` under the path `prefix` (`Bond.static(app, "/assets", "public")`), for `GET`
 ## and `HEAD`. A route of the app wins over a file, and a path that is not a file of the folder (missing, a folder, a
@@ -157,19 +143,15 @@ export def static(
   end
 
   mount = Statics.make_mount(prefix, real.unwrap!, max_bytes, max_age, fingerprint, cache_bytes, piece_bytes)
-  return app.with(statics: app.statics.push(mount))
+  app.with(statics: app.statics.push(mount))
 end
 
 ## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
 ## handler that come after it.
-export def before(app: App, filter: Handler) -> App
-  return app.with(before_filters: app.before_filters.push(filter))
-end
+export def before(app: App, filter: Handler) -> App = app.with(before_filters: app.before_filters.push(filter))
 
 ## Adds a filter that runs after the route. It runs for every answer, a halted one and a 404 too.
-export def after(app: App, filter: Handler) -> App
-  return app.with(after_filters: app.after_filters.push(filter))
-end
+export def after(app: App, filter: Handler) -> App = app.with(after_filters: app.after_filters.push(filter))
 
 ## The response to a request: the before filters, the route, the after filters. It does not fail: an `error` of a
 ## filter or handler, and a runtime error in one, goes to the error handler (a 400 for `bad_request`), and a
@@ -183,7 +165,7 @@ export def handle(
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Testing.request and specs/steps.agc
 ) -> HttpResponse
-  return Conns.to_response(answer(app, request, none), max_pieces, timeout_ms)
+  Conns.to_response(answer(app, request, none), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, with the `Receiver` of `Bond.uploads` (for `Testing`; `bond.agc` does not export it): `receive` reads
@@ -196,30 +178,28 @@ export def handle_with(
   timeout_ms: Int,
   receive: Receiver,
 ) -> HttpResponse
-  return Conns.to_response(answer(app, request, some(receive)), max_pieces, timeout_ms)
+  Conns.to_response(answer(app, request, some(receive)), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
 ## other body is one closed piece.
 export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
-  return Conns.to_stream_response(answer(app, request, none))
+  Conns.to_stream_response(answer(app, request, none))
 end
 
 ## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
 ## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
-export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer
-  return upgrade_or_stream(answer(app, request, none))
-end
+export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer = upgrade_or_stream(answer(app, request, none))
 
 ## Like `handle_answer`, with the `Receiver` of `Bond.uploads`, as for `handle_with`.
 export def handle_answer_with(app: App, request: HttpRequest, receive: Receiver) -> HTTP.Answer
-  return upgrade_or_stream(answer(app, request, some(receive)))
+  upgrade_or_stream(answer(app, request, some(receive)))
 end
 
 def upgrade_or_stream(conn: Conn) -> HTTP.Answer
   case Conns.accepted_upgrade(conn)
-    some(upgrade) -> return HTTP.Answer.Upgrade(upgrade)
-    none -> return HTTP.Answer.Stream(Conns.to_stream_response(conn))
+    some(upgrade) -> HTTP.Answer.Upgrade(upgrade)
+    none -> HTTP.Answer.Stream(Conns.to_stream_response(conn))
   end
 end
 
@@ -228,11 +208,11 @@ def answer(app: App, request: HttpRequest, receive: Optional[Receiver]) -> Conn
   conn = Conns.from_request(request)
   task = Task.spawn() do serve(app, conn, receive) end
   case Task.await(task)
-    ok(done) -> return done
+    ok(done) -> done
     error(message) ->
       # The VM has printed the stack trace of the crash; the message is not logged a second time.
       IO.warn("bond: #{conn.method} #{conn.path}: crashed, the stack trace is above")
-      return answer_error(app, conn, message)
+      answer_error(app, conn, message)
   end
 end
 
@@ -250,13 +230,13 @@ def route(app: App, method: String, pattern: String, handler: Handler) -> App
     return bad.unwrap!
   end
 
-  return app.with(routes: added.unwrap!)
+  app.with(routes: added.unwrap!)
 end
 
 def serve(app: App, conn: Conn, receive: Optional[Receiver]) -> Result[Conn]
   filtered = app.before_filters.reduce(conn) do |acc, filter| apply(app, acc, filter) end
   routed = dispatch(app, filtered, receive)
-  return ok(app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end)
+  ok(app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end)
 end
 
 # The node of the tree that holds the path (a literal segment before a param), then its handler for the method: a 405
@@ -264,9 +244,7 @@ end
 # server drops the body). Paths are compared as written, without decoding. The body of `receive` is read only for a
 # request that has its handler, just before it runs.
 def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
-  if conn.halted
-    return conn
-  end
+  return conn if conn.halted
 
   found = Router.find(app.routes, conn.path)
   if not found.ok?
@@ -290,11 +268,11 @@ def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
   case receive
     some(read) ->
       case read.call(routed)
-        ok(form) -> return apply(app, routed.with(form: some(form)), hit.node.handlers[wanted])
-        error(status) -> return refused(routed, status.to_i!)
+        ok(form) -> apply(app, routed.with(form: some(form)), hit.node.handlers[wanted])
+        error(status) -> refused(routed, status.to_i!)
       end
 
-    none -> return apply(app, routed, hit.node.handlers[wanted])
+    none -> apply(app, routed, hit.node.handlers[wanted])
   end
 end
 
@@ -302,17 +280,15 @@ end
 # not read.
 def refused(conn: Conn, status: Int) -> Conn
   answer = conn.with(status: status, response_body: "".bytes, halted: true)
-  return Conns.header(answer, "connection", "close")
+  Conns.header(answer, "connection", "close")
 end
 
 # A path under no folder, or with no file, is a 404 for the not found handler; a file that cannot be sent is a failure,
 # like the error of a handler.
 def unserved(app: App, conn: Conn, reason: String) -> Conn
-  if reason == Statics.MISS
-    return run(app, conn.with(status: 404), app.not_found).with(halted: true)
-  end
+  return run(app, conn.with(status: 404), app.not_found).with(halted: true) if reason == Statics.MISS
 
-  return failure(app, conn, reason)
+  failure(app, conn, reason)
 end
 
 # The methods of the routes of the node, in the order they were added, with HEAD after GET.
@@ -325,22 +301,20 @@ def allowed(node: Router.Node) -> String
     end
   end
 
-  return methods.uniq.join(", ")
+  methods.uniq.join(", ")
 end
 
 # A halted conn skips the handler.
 def apply(app: App, conn: Conn, handler: Handler) -> Conn
-  if conn.halted
-    return conn
-  end
+  return conn if conn.halted
 
-  return run(app, conn, handler)
+  run(app, conn, handler)
 end
 
 def run(app: App, conn: Conn, handler: Handler) -> Conn
   case handler.call(conn)
-    ok(next_conn) -> return next_conn
-    error(message) -> return failure(app, conn, message)
+    ok(next_conn) -> next_conn
+    error(message) -> failure(app, conn, message)
   end
 end
 
@@ -351,7 +325,7 @@ def failure(app: App, conn: Conn, message: String) -> Conn
   end
 
   IO.warn("bond: #{conn.method} #{conn.path}: #{message}")
-  return answer_error(app, conn, message)
+  answer_error(app, conn, message)
 end
 
 # The error handler runs in a task of its own, like the chain: if it crashes, the request still gets an answer. It
@@ -371,17 +345,13 @@ def answer_error(app: App, conn: Conn, message: String) -> Conn
 
   task = Task.spawn() do app.on_error.call(failing, message) end
   case Task.await(task)
-    ok(answer) -> return answer.with(halted: true)
+    ok(answer) -> answer.with(halted: true)
     error(reason) ->
       IO.warn("bond: #{conn.method} #{conn.path}: the error handler failed: #{reason}")
-      return Conns.halt(failing, 500, Conns.INTERNAL_ERROR)
+      Conns.halt(failing, 500, Conns.INTERNAL_ERROR)
   end
 end
 
-def plain_not_found(conn: Conn) -> Result[Conn]
-  return ok(Conns.halt(conn, 404, NOT_FOUND))
-end
+def plain_not_found(conn: Conn) -> Result[Conn] = ok(Conns.halt(conn, 404, NOT_FOUND))
 
-def plain_error(conn: Conn, message: String) -> Result[Conn]
-  return ok(Conns.halt(conn, 500, Conns.INTERNAL_ERROR))
-end
+def plain_error(conn: Conn, message: String) -> Result[Conn] = ok(Conns.halt(conn, 500, Conns.INTERNAL_ERROR))

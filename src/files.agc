@@ -121,12 +121,10 @@ export def send_file(
   end
 
   info = File.stat(path)
-  if not info.ok? or info.unwrap!.kind != "file"
-    return error("the file #{file_name(path)} cannot be read")
-  end
+  return error("the file #{file_name(path)} cannot be read") if not info.ok? or info.unwrap!.kind != "file"
 
   rep = describe(file_name(path), attachment, info.unwrap!, cache).with(piece_bytes: piece_bytes)
-  return respond(conn, rep, path, none)
+  respond(conn, rep, path, none)
 end
 
 ## The `Rep` of the file with the `info` of `stat`, typed by `type_name` (a file name or an extension).
@@ -137,7 +135,7 @@ export def describe(type_name: String, attachment: Optional[String], info: FileI
     label = "#{type}; charset=utf-8"
   end
 
-  return Rep(
+  Rep(
     type: label,
     etag: etag_of(info),
     modified: info.modified_seconds,
@@ -149,9 +147,7 @@ export def describe(type_name: String, attachment: Optional[String], info: FileI
 end
 
 ## Whether the request asks for a part of the file, which a compressed answer cannot give.
-export def ranged?(conn: Conn) -> Bool
-  return not request_range(conn).empty?
-end
+export def ranged?(conn: Conn) -> Bool = not request_range(conn).empty?
 
 ## Answers with the bytes described by `rep`: a 304 for a conditional request that the validators satisfy, else a 200,
 ## 206 or 416 for the range. The bytes are `loaded` when the caller has them, else the file at `path` (the one that
@@ -165,9 +161,7 @@ export def respond(conn: Conn, rep: Rep, path: String, loaded: Optional[Bytes]) 
 
   slice = slice_of(request_range(bare), rep.size)
   typed = headed(bare, rep, slice)
-  if slice.status == 416 or slice.size == 0
-    return ok(typed.with(status: slice.status, response_body: "".bytes))
-  end
+  return ok(typed.with(status: slice.status, response_body: "".bytes)) if slice.status == 416 or slice.size == 0
 
   if conn.method == "HEAD"
     # The server closes the channel of a HEAD answer, so no producer is needed to read a file nobody asked for.
@@ -185,57 +179,43 @@ export def respond(conn: Conn, rep: Rep, path: String, loaded: Optional[Bytes]) 
   end
 
   file = File.open(path, "read", READ_MS)
-  if not file.ok?
-    return error("the file #{file_name(path)} cannot be read")
-  end
+  return error("the file #{file_name(path)} cannot be read") if not file.ok?
 
   body: Channel[Bytes] = Channel.new(QUEUE_PIECES)
   job = Job(file: file.unwrap!, body: body, skip: slice.first, length: slice.size, piece_bytes: rep.piece_bytes)
   Task.spawn_owning(&pump, job)
-  return ok(Conns.stream(typed, slice.status, body, some(slice.size)))
+  ok(Conns.stream(typed, slice.status, body, some(slice.size)))
 end
 
 ## The bytes of the file at `path`, which has `size` bytes, read in one go.
 export def read_whole(path: String, size: Int) -> Result[Bytes]
-  if size == 0
-    return ok("".bytes)
-  end
+  return ok("".bytes) if size == 0
 
   file = try File.open(path, "read", READ_MS)
   read = read_up_to(file, size)
   _ = File.close(file, READ_MS)
-  if not read.ok? or read.unwrap!.size != size
-    return error("the file #{file_name(path)} cannot be read")
-  end
+  return error("the file #{file_name(path)} cannot be read") if not read.ok? or read.unwrap!.size != size
 
-  return read
+  read
 end
 
 # A strong validator from what `stat` gives, with no read of the file: the size and the time of the last change in
 # seconds. An edit that keeps the size and happens in the same second as the last one is not seen.
-def etag_of(info: FileInfo) -> String
-  return "\"#{info.size_bytes.to_s}-#{info.modified_seconds.to_s}\""
-end
+def etag_of(info: FileInfo) -> String = "\"#{info.size_bytes.to_s}-#{info.modified_seconds.to_s}\""
 
 # The `Cache-Control` of `max_age` seconds: for one person's cache unless `public`.
 def max_age_text(seconds: Int, public: Bool) -> String
-  if seconds == 0
-    return "no-cache"
-  end
+  return "no-cache" if seconds == 0
 
-  if public
-    return "public, max-age=#{seconds}"
-  end
+  return "public, max-age=#{seconds}" if public
 
-  return "private, max-age=#{seconds}"
+  "private, max-age=#{seconds}"
 end
 
 def default_cache_control(conn: Conn) -> String
-  if conn.response_headers.any? do |header| header.name.downcase == "cache-control" end
-    return ""
-  end
+  return "" if conn.response_headers.any? do |header| header.name.downcase == "cache-control" end
 
-  return "no-cache"
+  "no-cache"
 end
 
 # The answer with the part of the bytes that `slice` names, as a plain body. `response_length` is not needed by the
@@ -246,25 +226,21 @@ def whole(typed: Conn, slice: Slice, body: Bytes) -> Conn
     part = body.slice(slice.first, slice.size)
   end
 
-  return typed.with(status: slice.status, response_body: part, response_length: some(slice.size))
+  typed.with(status: slice.status, response_body: part, response_length: some(slice.size))
 end
 
 # Whether the validators of the request say that the client has the bytes: `If-None-Match` when there is one, else
 # `If-Modified-Since` (RFC 9110 section 13.2.2). A date that is not in the form of `Dates.parse` is ignored.
 def not_modified?(conn: Conn, rep: Rep) -> Bool
   tags = Conns.request_header(conn, "if-none-match")
-  if tags.ok?
-    return matches?(tags.unwrap!, rep.etag)
-  end
+  return matches?(tags.unwrap!, rep.etag) if tags.ok?
 
   since = Conns.request_header(conn, "if-modified-since")
-  if not since.ok?
-    return false
-  end
+  return false if not since.ok?
 
   case Dates.parse(since.unwrap!)
-    some(seconds) -> return rep.modified <= seconds
-    none -> return false
+    some(seconds) -> rep.modified <= seconds
+    none -> false
   end
 end
 
@@ -272,7 +248,7 @@ end
 # section 13.1.2): a leading `W/` is dropped from the tag of the request. A tag with a comma inside is not told apart,
 # which the tags of Bond never have.
 def matches?(header: String, etag: String) -> Bool
-  return header.split(",").any? do |item|
+  header.split(",").any? do |item|
     tag = item.strip
     if tag.start_with?("W/")
       tag = tag.slice(2, tag.length - 2)
@@ -283,9 +259,7 @@ def matches?(header: String, etag: String) -> Bool
 end
 
 # The headers of a 304, and of every answer: the validators, the cache policy and `Vary`.
-def validated(conn: Conn, rep: Rep) -> Conn
-  return Conns.set_headers(conn, validators(rep))
-end
+def validated(conn: Conn, rep: Rep) -> Conn = Conns.set_headers(conn, validators(rep))
 
 def validators(rep: Rep) -> List[Header]
   fields = [Header(name: "etag", value: rep.etag), Header(name: "last-modified", value: rep.last_modified)]
@@ -297,28 +271,24 @@ def validators(rep: Rep) -> List[Header]
     fields = fields.push(Header(name: "vary", value: "Accept-Encoding"))
   end
 
-  return fields
+  fields
 end
 
 # The part of a file of `size` bytes that the value of a `Range` header asks for ("" when there is none).
 def slice_of(value: String, size: Int) -> Slice
   all = Slice(status: 200, first: 0, size: size)
   spec = value.strip
-  if not spec.downcase.start_with?("bytes=")
-    return all
-  end
+  return all if not spec.downcase.start_with?("bytes=")
 
   list = spec.slice(6, spec.length - 6).strip
-  if list.include?(",") or list.empty?
-    return all
-  end
+  return all if list.include?(",") or list.empty?
 
   case list.index_of("-")
-    none -> return all
+    none -> all
     some(at) ->
       left = list.slice(0, at).strip
       right = list.slice(at + 1, list.length - at - 1).strip
-      return choose(left, right, size, all)
+      choose(left, right, size, all)
   end
 end
 
@@ -327,17 +297,13 @@ end
 def choose(left: String, right: String, size: Int, all: Slice) -> Slice
   if left.empty? and digits?(right)
     count = number(right)
-    if count == 0 or size == 0
-      return Slice(status: 416, first: 0, size: 0)
-    end
+    return Slice(status: 416, first: 0, size: 0) if count == 0 or size == 0
 
     first = size - smaller(count, size)
     return Slice(status: 206, first: first, size: size - first)
   end
 
-  if not digits?(left) or not (right.empty? or digits?(right))
-    return all
-  end
+  return all if not digits?(left) or not (right.empty? or digits?(right))
 
   first = number(left)
   last = HUGE
@@ -345,45 +311,33 @@ def choose(left: String, right: String, size: Int, all: Slice) -> Slice
     last = number(right)
   end
 
-  if last < first
-    return all
-  end
+  return all if last < first
 
-  if first >= size
-    return Slice(status: 416, first: 0, size: 0)
-  end
+  return Slice(status: 416, first: 0, size: 0) if first >= size
 
   end_at = smaller(last, size - 1)
-  return Slice(status: 206, first: first, size: end_at - first + 1)
+  Slice(status: 206, first: first, size: end_at - first + 1)
 end
 
-def digits?(text: String) -> Bool
-  return not text.empty? and text.split("").all? do |ch| ch.code >= 48 and ch.code <= 57 end
-end
+def digits?(text: String) -> Bool = not text.empty? and text.split("").all? do |ch| ch.code >= 48 and ch.code <= 57 end
 
 def number(text: String) -> Int
-  if text.length > MAX_DIGITS
-    return HUGE
-  end
+  return HUGE if text.length > MAX_DIGITS
 
-  return text.to_i!
+  text.to_i!
 end
 
 def smaller(a: Int, b: Int) -> Int
-  if a < b
-    return a
-  end
+  return a if a < b
 
-  return b
+  b
 end
 
 # The `Range` of the request, or "" when it has none or has `If-Range`.
 def request_range(conn: Conn) -> String
-  if Conns.request_header(conn, "if-range").ok?
-    return ""
-  end
+  return "" if Conns.request_header(conn, "if-range").ok?
 
-  return Conns.request_header(conn, "range").unwrap_or("")
+  Conns.request_header(conn, "range").unwrap_or("")
 end
 
 # The headers of the answer, for any `slice`: the validators, the type, the ranges, the `Content-Range` of a part, the
@@ -411,53 +365,41 @@ def headed(conn: Conn, rep: Rep, slice: Slice) -> Conn
     fields = fields.push(Header(name: "content-range", value: "bytes */#{rep.size}"))
   end
 
-  return Conns.set_headers(conn, fields)
+  Conns.set_headers(conn, fields)
 end
 
 # The value of `Content-Disposition` for a download with the name `name`: a quoted `filename` of the printable ASCII of
 # the name (anything else is `_`), and the exact name as `filename*` (RFC 6266) when they differ.
 def disposition(name: String) -> String
-  if name.empty?
-    return "attachment"
-  end
+  return "attachment" if name.empty?
 
   plain = name.split("").map do |ch| fallback_char(ch) end.join("")
-  if plain == name
-    return "attachment; filename=\"#{plain}\""
-  end
+  return "attachment; filename=\"#{plain}\"" if plain == name
 
-  return "attachment; filename=\"#{plain}\"; filename*=UTF-8''#{URI.encode_uri_component(name)}"
+  "attachment; filename=\"#{plain}\"; filename*=UTF-8''#{URI.encode_uri_component(name)}"
 end
 
 def fallback_char(ch: String) -> String
-  if ch.code < 32 or ch.code > 126 or ch == "\"" or ch == "\\"
-    return "_"
-  end
+  return "_" if ch.code < 32 or ch.code > 126 or ch == "\"" or ch == "\\"
 
-  return ch
+  ch
 end
 
 # The last segment of a path, with either kind of separator.
-def file_name(path: String) -> String
-  return path.replace("\\", "/").split("/").last
-end
+def file_name(path: String) -> String = path.replace("\\", "/").split("/").last
 
 # Runs as the owner of the job. It ends early, with the channel closed, when the file is shorter than it was when the
 # answer was made, when a read fails or when the client is gone, and the server cuts the body: it never reads past the
 # length it announced.
 def pump(job: Job) -> Void
-  if not skip_bytes(job.file, job.skip)
-    return
-  end
+  return if not skip_bytes(job.file, job.skip)
 
   left = job.length
   while left > 0
     case read_up_to(job.file, smaller(job.piece_bytes, left))
       error(_) -> return
       ok(piece) ->
-        if piece.empty? or not job.body.send(piece, SEND_MS).ok?
-          return
-        end
+        return if piece.empty? or not job.body.send(piece, SEND_MS).ok?
 
         left = left - piece.size
     end
@@ -471,26 +413,22 @@ def read_up_to(file: FileHandle, count: Int) -> Result[Bytes]
   got = try File.read_bytes(file, smaller(READ_BYTES, count), READ_MS)
   while not got.empty? and got.size < count
     more = try File.read_bytes(file, smaller(READ_BYTES, count - got.size), READ_MS)
-    if more.empty?
-      break
-    end
+    break if more.empty?
 
     got = got + more
   end
 
-  return ok(got)
+  ok(got)
 end
 
 def skip_bytes(file: FileHandle, count: Int) -> Bool
   left = count
   while left > 0
     piece = File.read_bytes(file, smaller(SKIP_BYTES, left), READ_MS)
-    if not piece.ok? or piece.unwrap!.empty?
-      return false
-    end
+    return false if not piece.ok? or piece.unwrap!.empty?
 
     left = left - piece.unwrap!.size
   end
 
-  return true
+  true
 end

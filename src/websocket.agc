@@ -67,13 +67,13 @@ export def websocket(
     return bad.unwrap!
   end
 
-  return Apps.get(app, pattern) do |conn| handshake(conn, handler, origins, chosen) end
+  Apps.get(app, pattern) do |conn| handshake(conn, handler, origins, chosen) end
 end
 
 ## The options of a route: the ones it was given, or `WEBSOCKET_OPTIONS` for `none`. For `websocket` and its test; it
 ## is not part of `Bond`.
 export def chosen_options(options: Optional[HTTP.WebSocketOptions]) -> HTTP.WebSocketOptions
-  return options.unwrap_or(WEBSOCKET_OPTIONS)
+  options.unwrap_or(WEBSOCKET_OPTIONS)
 end
 
 def handshake(
@@ -87,9 +87,7 @@ def handshake(
     return ok(Conns.halt(upgrade, UPGRADE_REQUIRED, "upgrade required"))
   end
 
-  if not origin_allowed?(origins, conn)
-    return ok(Conns.halt(conn, 403, "cross-origin WebSocket refused"))
-  end
+  return ok(Conns.halt(conn, 403, "cross-origin WebSocket refused")) if not origin_allowed?(origins, conn)
 
   request = HttpRequest(
     method: conn.method,
@@ -104,7 +102,7 @@ def handshake(
   decided = try HTTP.accept_websocket(request, session, options)
   case decided
     HTTP.Upgrade.Reply(response) ->
-      return ok(
+      ok(
         conn.with(
           status: response.status,
           response_headers: response.headers,
@@ -113,29 +111,27 @@ def handshake(
         ),
       )
 
-    HTTP.Upgrade.Accept(_, _, _, _) -> return ok(conn.with(status: Conns.SWITCHING, upgrade: some(decided)))
+    HTTP.Upgrade.Accept(_, _, _, _) -> ok(conn.with(status: Conns.SWITCHING, upgrade: some(decided)))
   end
 end
 
 # A request asks for the upgrade when a value of its `Upgrade` header lists `websocket` (any case).
 def asks_upgrade?(conn: Conn) -> Bool
   values = HTTP.header_values(conn.headers, "upgrade")
-  return values.any? do |value| value.split(",").any? do |token| token.strip.downcase == "websocket" end end
+  values.any? do |value| value.split(",").any? do |token| token.strip.downcase == "websocket" end end
 end
 
 # The rule of `websocket` for `Origin`: a request with none passes (a browser always sends it with a handshake), and
 # one with an `Origin` passes when it is allowed or names the host of the request. An empty `Origin`, which no browser
 # sends, is refused.
 def origin_allowed?(origins: List[String], conn: Conn) -> Bool
-  if Csrf.repeated?(conn, "origin")
-    return false
-  end
+  return false if Csrf.repeated?(conn, "origin")
 
   case Conns.request_header(conn, "origin")
-    error(_) -> return true
+    error(_) -> true
     ok(value) ->
       origin = value.downcase
-      return origin != "" and (origins.any? do |allowed| allowed == origin end or Csrf.host_origin?(origin, conn))
+      origin != "" and (origins.any? do |allowed| allowed == origin end or Csrf.host_origin?(origin, conn))
   end
 end
 
@@ -144,20 +140,16 @@ end
 def run(conn: Conn, handler: WebSocketHandler, socket: HTTP.WebSocket) -> Result[Void]
   task = Task.spawn() do handler.call(conn, socket) end
   case Task.await(task)
-    ok(_) -> return ok()
+    ok(_) -> ok()
     error(message) ->
       IO.warn("bond: #{conn.method} #{conn.path}: the WebSocket ended with an error: #{message}")
-      return error(message)
+      error(message)
   end
 end
 
 # `HTTP.accept_websocket` takes the session before its last argument, so a block cannot be written there: this gives
 # the block a name first.
-def sessioning(session: HTTP.WebSocketSession) -> HTTP.WebSocketSession
-  return session
-end
+def sessioning(session: HTTP.WebSocketSession) -> HTTP.WebSocketSession = session
 
 # The session of the handshake that checks the options when the route is added; it never runs.
-def idle(socket: HTTP.WebSocket) -> Result[Void]
-  return ok()
-end
+def idle(socket: HTTP.WebSocket) -> Result[Void] = ok()

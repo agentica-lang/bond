@@ -59,7 +59,7 @@ end
 # The same app with custom handlers for a path with no route and for a failure. The error handler answers by path so
 # that one app shows each case: it gives an error for /filter-error and crashes for /boom-again.
 export def build_custom(producers: Producers) -> Bond.App
-  return (
+  (
     build(producers)
     |> Bond.get("/boom-again", &boom)
     |> Bond.not_found(&custom_not_found)
@@ -75,7 +75,7 @@ export def build_csrf(allowed: Bool) -> Bond.App
     origins = ["https://admin.example.net"]
   end
 
-  return (
+  (
     Bond.app()
     |> Bond.csrf(origins)
     |> Bond.get("/balance", &balance)
@@ -89,21 +89,17 @@ end
 ## The options of the session app. `rotated` is the app after the secret changed: it signs with the second secret and
 ## still reads what the first signed.
 export def session_options(rotated: Bool) -> Bond.SessionOptions
-  if rotated
-    return Bond.SessionOptions(secret: SECOND_SECRET, old_secrets: [FIRST_SECRET])
-  end
+  return Bond.SessionOptions(secret: SECOND_SECRET, old_secrets: [FIRST_SECRET]) if rotated
 
-  return Bond.SessionOptions(secret: FIRST_SECRET)
+  Bond.SessionOptions(secret: FIRST_SECRET)
 end
 
 ## The options of a visitor whose session ended a minute ago: `Testing.session_cookie` signs it with the first secret.
-export def expired_options() -> Bond.SessionOptions
-  return Bond.SessionOptions(secret: FIRST_SECRET, max_age: -60)
-end
+export def expired_options() -> Bond.SessionOptions = Bond.SessionOptions(secret: FIRST_SECRET, max_age: -60)
 
 ## A small app with the signed cookie sessions (`Bond.sessions`) and a few routes that read and change the session.
 export def build_sessions(rotated: Bool) -> Bond.App
-  return (
+  (
     Bond.app()
     |> Bond.sessions(session_options(rotated))
     |> Bond.get("/me", &me)
@@ -119,7 +115,7 @@ end
 ## A small app whose `before` filter assigns the person of the `x-user` header (a sign-in check that looked them up
 ## once) and whose handlers read it back with `Bond.assigned`.
 export def build_assigns() -> Bond.App
-  return (
+  (
     Bond.app()
     |> Bond.before(&load_person)
     |> Bond.before(&mark_person)
@@ -129,9 +125,7 @@ export def build_assigns() -> Bond.App
   )
 end
 
-export def build(producers: Producers) -> Bond.App
-  return build_in("specs/fixtures/public", producers)
-end
+export def build(producers: Producers) -> Bond.App = build_in("specs/fixtures/public", producers)
 
 ## The folder of the static files is relative to the working directory: `agentica test` runs the app in process from the
 ## project folder, while the program of a socket scenario runs from the folder of its feature (`specs/`).
@@ -142,7 +136,7 @@ end
 export def build_in(public: String, producers: Producers) -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
   stopped: ATS[String, Bool] = ATS.new()
-  return (
+  (
     Bond.app()
     |> Bond.before(&fail_on_request)
     |> Bond.before(&track_visit)
@@ -246,20 +240,16 @@ export def build_in(public: String, producers: Producers) -> Bond.App
 end
 
 def fail_on_request(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.path == "/filter-error"
-    return error("a filter failed")
-  end
+  return error("a filter failed") if conn.path == "/filter-error"
 
-  return ok(conn)
+  ok(conn)
 end
 
 # A before filter that redirects: the redirect halts, so no route is needed for /legacy.
 def redirect_legacy(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.path == "/legacy"
-    return ok(Bond.redirect(conn, "/hello"))
-  end
+  return ok(Bond.redirect(conn, "/hello")) if conn.path == "/legacy"
 
-  return ok(conn)
+  ok(conn)
 end
 
 def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -267,66 +257,52 @@ def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
     return ok(Bond.halt(conn, 401, "unauthorized"))
   end
 
-  return ok(conn)
+  ok(conn)
 end
 
 # Each of these adds its letter to x-trace, so the header shows the order the filters ran in.
-def trace_a(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(trace(conn, "a"))
-end
+def trace_a(conn: Bond.Conn) -> Result[Bond.Conn] = ok(trace(conn, "a"))
 
-def trace_b(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(trace(conn, "b"))
-end
+def trace_b(conn: Bond.Conn) -> Result[Bond.Conn] = ok(trace(conn, "b"))
 
-def trace_c(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(trace(conn, "c"))
-end
+def trace_c(conn: Bond.Conn) -> Result[Bond.Conn] = ok(trace(conn, "c"))
 
 def trace(conn: Bond.Conn, letter: String) -> Bond.Conn
   seen = conn.response_headers.select do |header| header.name == "x-trace" end
   before = seen.map do |header| header.value end.join("")
-  return Bond.header(conn, "x-trace", before + letter)
+  Bond.header(conn, "x-trace", before + letter)
 end
 
-def sign(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(conn, "x-powered-by", "bond"))
-end
+def sign(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.header(conn, "x-powered-by", "bond"))
 
 # A name that tries to end the header and start another (CR LF), with a NUL, a quote and a backslash.
-def hostile() -> String
-  return "a\r\nSet-Cookie: x=1#{String.from_code(0)}\"b\\.txt"
-end
+def hostile() -> String = "a\r\nSet-Cookie: x=1#{String.from_code(0)}\"b\\.txt"
 
 # A page of a file with another status: `Bond.status` comes after `send_file`, which sets 200.
 def not_found_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
   sent = try Bond.send_file(conn, "#{public}/hello.txt")
-  return ok(Bond.status(sent, 404))
+  ok(Bond.status(sent, 404))
 end
 
 # A filter that changes the body of a file answer: the length that `send_file` noted is no longer the size of the body.
 def replaced_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
   sent = try Bond.send_file(conn, "#{public}/hello.txt")
-  return ok(sent.with(response_body: "short".bytes))
+  ok(sent.with(response_body: "short".bytes))
 end
 
 # A route that sets its own `Cache-Control` before `send_file`, which keeps it.
 def own_cache_file(public: String, conn: Bond.Conn) -> Result[Bond.Conn]
-  return Bond.send_file(Bond.header(conn, "cache-control", "max-age=5"), "#{public}/hello.txt")
+  Bond.send_file(Bond.header(conn, "cache-control", "max-age=5"), "#{public}/hello.txt")
 end
 
-def hello(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "hello"))
-end
+def hello(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "hello"))
 
-def client_address(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, conn.remote_addr))
-end
+def client_address(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, conn.remote_addr))
 
 # The pattern of the guide: a value of the client is escaped before it goes into HTML.
 def greet(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
-  return ok(Bond.html(conn, 200, "<p>Hello, #{HTML.escape(name)}</p>"))
+  ok(Bond.html(conn, 200, "<p>Hello, #{HTML.escape(name)}</p>"))
 end
 
 # An EAG template that escapes with `Bond.escape`: `<%= %>` is escaped in the text and in the attribute (quoted with
@@ -338,19 +314,19 @@ def eag_page(conn: Bond.Conn) -> Result[Bond.Conn]
     <%@ escape &Bond.escape %>
     <p title='<%= name %>'>Hello, <%= name %> <%== note %></p>
   EAG
-  return ok(Bond.html(conn, 200, body.strip))
+  ok(Bond.html(conn, 200, body.strip))
 end
 
 # The views of the guide: functions that return a String; the layout takes the inner HTML.
 def view_comment(comment: RoomComment) -> String
-  return <<~EAG
+  <<~EAG
     <%@ escape &Bond.escape %>
     <li class='comment'><b><%= comment.author %></b>: <%= comment.text %></li>
   EAG
 end
 
 def view_room(name: String, comments: List[RoomComment]) -> String
-  return <<~EAG
+  <<~EAG
     <%@ escape &Bond.escape %>
     <h1><%= name %></h1>
     <ul>
@@ -362,7 +338,7 @@ def view_room(name: String, comments: List[RoomComment]) -> String
 end
 
 def view_layout(title: String, inner: String) -> String
-  return <<~EAG
+  <<~EAG
     <%@ escape &Bond.escape %>
     <title><%= title %></title>
     <main>
@@ -374,199 +350,153 @@ end
 def room_view(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
   comments = [RoomComment(author: "Ana", text: "hello"), RoomComment(author: name, text: name)]
-  return ok(Bond.html(conn, 200, view_layout(name, view_room(name, comments))))
+  ok(Bond.html(conn, 200, view_layout(name, view_room(name, comments))))
 end
 
 # The routes of the precedence scenarios. `/things/:id` is added before `/things/new` on purpose.
-def thing(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "thing #{try Bond.param(conn, "id")}"))
-end
+def thing(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "thing #{try Bond.param(conn, "id")}"))
 
 def update_thing(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "updated #{try Bond.param(conn, "id")}"))
+  ok(Bond.text(conn, 200, "updated #{try Bond.param(conn, "id")}"))
 end
 
-def new_thing(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "a new thing"))
-end
+def new_thing(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "a new thing"))
 
-def docs_intro(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "the intro"))
-end
+def docs_intro(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "the intro"))
 
-def docs_edit(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "edit #{try Bond.param(conn, "page")}"))
-end
+def docs_edit(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "edit #{try Bond.param(conn, "page")}"))
 
-def root_page(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "the root"))
-end
+def root_page(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "the root"))
 
-def deep_z(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "z"))
-end
+def deep_z(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "z"))
 
 # Reports the params it sees, to show that a branch the walk left leaves none behind.
 def deep_c(conn: Bond.Conn) -> Result[Bond.Conn]
   x = Bond.param(conn, "x").unwrap_or("absent")
   y = Bond.param(conn, "y").unwrap_or("absent")
-  return ok(Bond.text(conn, 200, "x=#{x} y=#{y}"))
+  ok(Bond.text(conn, 200, "x=#{x} y=#{y}"))
 end
 
 def show_post(conn: Bond.Conn) -> Result[Bond.Conn]
   user = try Bond.param(conn, "user_id")
   post = try Bond.param(conn, "post_id")
-  return ok(Bond.text(conn, 200, "user #{user}, post #{post}"))
+  ok(Bond.text(conn, 200, "user #{user}, post #{post}"))
 end
 
 def list_todos(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.json(conn, 200, JSON.from(store.todos.to_map.values)))
+  ok(Bond.json(conn, 200, JSON.from(store.todos.to_map.values)))
 end
 
 def create_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   title = try Bond.body_text(conn)
-  if title.empty?
-    return Bond.bad_request("title is empty")
-  end
+  return Bond.bad_request("title is empty") if title.empty?
 
   todo = Todo(id: store.next_id.add("todo", 1), title: title)
   store.todos.put(todo.id, todo)
-  return ok(Bond.json_as(conn, 201, Todo.codec, todo))
+  ok(Bond.json_as(conn, 201, Todo.codec, todo))
 end
 
 # The text of the body, or the 400 of `body_text`.
 def body_text(conn: Bond.Conn) -> Result[Bond.Conn]
   text = try Bond.body_text(conn)
-  return ok(Bond.text(conn, 200, "text #{text}"))
+  ok(Bond.text(conn, 200, "text #{text}"))
 end
 
 # The bytes of the body, sent back as they came.
-def body_echo(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.bytes(conn, 200, conn.body))
-end
+def body_echo(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.bytes(conn, 200, conn.body))
 
-def latest(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "the latest todo"))
-end
+def latest(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "the latest todo"))
 
 def show_todo(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   id = try Bond.param_int(conn, "id")
   case store.todos.get(id)
-    ok(todo) -> return ok(Bond.json_as(conn, 200, Todo.codec, todo))
-    error(_) -> return ok(Bond.halt(conn, 404, "not found"))
+    ok(todo) -> ok(Bond.json_as(conn, 200, Todo.codec, todo))
+    error(_) -> ok(Bond.halt(conn, 404, "not found"))
   end
 end
 
-def private_page(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "secret page"))
-end
+def private_page(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "secret page"))
 
-def boom(conn: Bond.Conn) -> Result[Bond.Conn]
-  return error("secret details")
-end
+def boom(conn: Bond.Conn) -> Result[Bond.Conn] = error("secret details")
 
 def crash(conn: Bond.Conn) -> Result[Bond.Conn]
   nothing: List[String] = []
-  return ok(Bond.text(conn, 200, nothing[3]))
+  ok(Bond.text(conn, 200, nothing[3]))
 end
 
-def not_modified(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 304, "not sent"))
-end
+def not_modified(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 304, "not sent"))
 
-def status_99(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 99, "too low"))
-end
+def status_99(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 99, "too low"))
 
 def content_length(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(Bond.text(conn, 200, "x"), "Content-Length", "1"))
+  ok(Bond.header(Bond.text(conn, 200, "x"), "Content-Length", "1"))
 end
 
 def transfer_encoding(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(Bond.text(conn, 200, "x"), "transfer-encoding", "chunked"))
+  ok(Bond.header(Bond.text(conn, 200, "x"), "transfer-encoding", "chunked"))
 end
 
-def page(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.html(conn, 200, "<p>hi</p>"))
-end
+def page(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.html(conn, 200, "<p>hi</p>"))
 
-def accepted(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.status(conn, 202))
-end
+def accepted(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.status(conn, 202))
 
 # The text is answered first so that the scenario sees the redirect drop its content type and body.
-def redirect_default(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.redirect(Bond.text(conn, 200, "moved"), "/hello"))
-end
+def redirect_default(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(Bond.text(conn, 200, "moved"), "/hello"))
 
-def location_non_ascii(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.redirect(conn, "/café"))
-end
+def location_non_ascii(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(conn, "/café"))
 
-def location_newline(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.redirect(conn, "/hello\r\nx-evil: 1"))
-end
+def location_newline(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.redirect(conn, "/hello\r\nx-evil: 1"))
 
-def header_bad_name(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(conn, "x bad", "1"))
-end
+def header_bad_name(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.header(conn, "x bad", "1"))
 
-def header_newline(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(conn, "x-note", "a\r\nx-evil: 1"))
-end
+def header_newline(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.header(conn, "x-note", "a\r\nx-evil: 1"))
 
 # The value comes from the query, to try the bytes that the server refuses.
 def header_value(conn: Bond.Conn) -> Result[Bond.Conn]
   value = try Bond.query(conn, "value")
-  return ok(Bond.header(Bond.text(conn, 200, "ok"), "x-note", "a#{value}b"))
+  ok(Bond.header(Bond.text(conn, 200, "ok"), "x-note", "a#{value}b"))
 end
 
-def header_wide(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(conn, "x-note", "日本"))
-end
+def header_wide(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.header(conn, "x-note", "日本"))
 
 # Latin-1 text is a legal value, and so is a tab.
 def header_latin1(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.header(Bond.text(conn, 200, "ok"), "x-note", "café\tbar"))
+  ok(Bond.header(Bond.text(conn, 200, "ok"), "x-note", "café\tbar"))
 end
 
 # A path that ends in -bad makes the handler fail, to see the error handler answer it.
 def custom_not_found(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.path.end_with?("-bad")
-    return error("the not found handler failed")
-  end
+  return error("the not found handler failed") if conn.path.end_with?("-bad")
 
-  return ok(Bond.html(conn, 404, "<h1>No page at #{HTML.escape(conn.path)}</h1>"))
+  ok(Bond.html(conn, 404, "<h1>No page at #{HTML.escape(conn.path)}</h1>"))
 end
 
 def redirect_with(conn: Bond.Conn) -> Result[Bond.Conn]
   code = try Bond.param_int(conn, "status")
-  return ok(Bond.redirect(conn, "/hello", code))
+  ok(Bond.redirect(conn, "/hello", code))
 end
 
 # Shows the message to the test as a header; a real handler would log it and keep it from the client.
 def custom_error(conn: Bond.Conn, message: String) -> Result[Bond.Conn]
-  if conn.path == "/filter-error"
-    return error("the error handler failed")
-  end
+  return error("the error handler failed") if conn.path == "/filter-error"
 
   if conn.path == "/boom-again"
     nothing: List[String] = []
     return ok(Bond.html(conn, 500, nothing[0]))
   end
 
-  return ok(Bond.header(Bond.html(conn, 500, "Something went wrong"), "x-error", message))
+  ok(Bond.header(Bond.html(conn, 500, "Something went wrong"), "x-error", message))
 end
 
 # A JSON body is decoded into a struct; a body that does not fit is a 400.
 def create_user(conn: Bond.Conn) -> Result[Bond.Conn]
   user = try Bond.json_body(conn, NewUser.codec)
-  return ok(Bond.text(conn, 201, "hello #{user.name}, #{user.age}"))
+  ok(Bond.text(conn, 201, "hello #{user.name}, #{user.age}"))
 end
 
 def create_account(conn: Bond.Conn) -> Result[Bond.Conn]
   account = try Bond.json_body(conn, Account.codec)
-  return ok(Bond.text(conn, 201, "zip #{account.address.zip}"))
+  ok(Bond.text(conn, 201, "zip #{account.address.zip}"))
 end
 
 # The query string: a required `q`, an optional `page` and every `tag`.
@@ -574,46 +504,46 @@ def search(conn: Bond.Conn) -> Result[Bond.Conn]
   q = try Bond.query(conn, "q")
   page = Bond.query_int(conn, "page").unwrap_or(1)
   found = try Bond.query_all(conn, "tag")
-  return ok(Bond.text(conn, 200, "q=#{q} page=#{page} tags=#{found.join(",")}"))
+  ok(Bond.text(conn, 200, "q=#{q} page=#{page} tags=#{found.join(",")}"))
 end
 
 def items(conn: Bond.Conn) -> Result[Bond.Conn]
   count = try Bond.query_int(conn, "n")
-  return ok(Bond.text(conn, 200, "#{count} items"))
+  ok(Bond.text(conn, 200, "#{count} items"))
 end
 
 # A form body: `name` and `age` are required.
 def signup(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.form(conn, "name")
   age = try Bond.form_int(conn, "age")
-  return ok(Bond.text(conn, 201, "welcome #{name}, #{age}"))
+  ok(Bond.text(conn, 201, "welcome #{name}, #{age}"))
 end
 
 def tags(conn: Bond.Conn) -> Result[Bond.Conn]
   found = try Bond.form_all(conn, "tag")
-  return ok(Bond.text(conn, 200, "tags=#{found.join(",")}"))
+  ok(Bond.text(conn, 200, "tags=#{found.join(",")}"))
 end
 
 # Every name with its values, in the order of the first appearance: `a=1|2;b=x`.
 def query_fields(conn: Bond.Conn) -> Result[Bond.Conn]
   fields = try Bond.query_params(conn)
-  return ok(Bond.text(conn, 200, describe(fields)))
+  ok(Bond.text(conn, 200, describe(fields)))
 end
 
 def form_fields(conn: Bond.Conn) -> Result[Bond.Conn]
   fields = try Bond.form_params(conn)
-  return ok(Bond.text(conn, 200, describe(fields)))
+  ok(Bond.text(conn, 200, describe(fields)))
 end
 
 def describe(fields: Map[String, List[String]]) -> String
-  return fields.keys.map do |name| "#{name}=#{fields[name].join("|")}" end.join(";")
+  fields.keys.map do |name| "#{name}=#{fields[name].join("|")}" end.join(";")
 end
 
 # The cookies of the request: `sid` through `cookie`, the others through the map.
 def whoami(conn: Bond.Conn) -> Result[Bond.Conn]
   sid = Bond.cookie(conn, "sid").unwrap_or("none")
   theme = Bond.cookies(conn).get("theme", "none")
-  return ok(Bond.text(conn, 200, "sid=#{sid} theme=#{theme}"))
+  ok(Bond.text(conn, 200, "sid=#{sid} theme=#{theme}"))
 end
 
 # `set_cookie` with the defaults of Bond, then every attribute through `set_cookie_with`.
@@ -632,40 +562,40 @@ def login(conn: Bond.Conn) -> Result[Bond.Conn]
   pref = Cookie.Cookie(name: "pref", value: "wide", expires: "Wed, 21 Oct 2015 07:28:00 GMT", http_only: true)
   with_theme = try Bond.set_cookie_with(with_sid, theme)
   with_pref = try Bond.set_cookie_with(with_theme, pref)
-  return ok(Bond.text(with_pref, 200, "welcome"))
+  ok(Bond.text(with_pref, 200, "welcome"))
 end
 
 def login_redirect(conn: Bond.Conn) -> Result[Bond.Conn]
   with_sid = try Bond.set_cookie(conn, "sid", "abc123")
-  return ok(Bond.redirect(with_sid, "/whoami"))
+  ok(Bond.redirect(with_sid, "/whoami"))
 end
 
 def logout(conn: Bond.Conn) -> Result[Bond.Conn]
   gone = try Bond.delete_cookie(conn, "sid")
-  return ok(Bond.text(gone, 200, "bye"))
+  ok(Bond.text(gone, 200, "bye"))
 end
 
 def logout_host(conn: Bond.Conn) -> Result[Bond.Conn]
   gone = try Bond.delete_cookie(conn, "__Host-id")
-  return ok(Bond.text(gone, 200, "bye"))
+  ok(Bond.text(gone, 200, "bye"))
 end
 
 def bad_cookie(conn: Bond.Conn) -> Result[Bond.Conn]
   bad = try Bond.set_cookie(conn, "sid", "has a space")
-  return ok(Bond.text(bad, 200, "not reached"))
+  ok(Bond.text(bad, 200, "not reached"))
 end
 
 # `header` with Set-Cookie adds to the cookies set before it and does not replace them.
 def raw_cookie(conn: Bond.Conn) -> Result[Bond.Conn]
   first = try Bond.set_cookie(conn, "a", "1")
   second = try Bond.set_cookie(first, "b", "2")
-  return ok(Bond.header(second, "Set-Cookie", "raw=1"))
+  ok(Bond.header(second, "Set-Cookie", "raw=1"))
 end
 
 # `try` on a cookie that is not there is a 500, unlike `try` on a query value that is not there.
 def require_sid(conn: Bond.Conn) -> Result[Bond.Conn]
   sid = try Bond.cookie(conn, "sid")
-  return ok(Bond.text(conn, 200, "sid=#{sid}"))
+  ok(Bond.text(conn, 200, "sid=#{sid}"))
 end
 
 # The name and the value come from the query, to try the ones that std/cookie refuses.
@@ -673,16 +603,14 @@ def set_from_query(conn: Bond.Conn) -> Result[Bond.Conn]
   name = try Bond.query(conn, "name")
   value = try Bond.query(conn, "value")
   cookie = try Bond.set_cookie(conn, name, value)
-  return ok(Bond.text(cookie, 200, "set"))
+  ok(Bond.text(cookie, 200, "set"))
 end
 
 # A before filter that sets a cookie for the paths under /track.
 def track_visit(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.path.start_with?("/track")
-    return Bond.set_cookie(conn, "visit", "1")
-  end
+  return Bond.set_cookie(conn, "visit", "1") if conn.path.start_with?("/track")
 
-  return ok(conn)
+  ok(conn)
 end
 
 # Hands the task of a producer to whoever waits for it. A full or unread channel drops it.
@@ -693,9 +621,7 @@ end
 # A task sends the events and closes the channel, as the guide says a producer must.
 def produce(events: Channel[Bytes]) -> Void
   for event in [Bond.sse_event("one"), Bond.sse_event("two\nlines", "note")]
-    if not events.send(event, 5000).ok?
-      break
-    end
+    break if not events.send(event, 5000).ok?
   end
 
   events.close
@@ -704,21 +630,21 @@ end
 def events(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   keep(producers, Task.spawn(&produce, channel))
-  return ok(Bond.sse(conn, channel))
+  ok(Bond.sse(conn, channel))
 end
 
 # A 304 has no body, so the stream is dropped and its channel closed.
 def events_not_modified(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   keep(producers, Task.spawn(&produce, channel))
-  return ok(Bond.stream(conn, 304, channel))
+  ok(Bond.stream(conn, 304, channel))
 end
 
 # A response the server refuses is a plain 500, and the channel of its stream is closed.
 def events_bad_header(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   keep(producers, Task.spawn(&produce, channel))
-  return ok(Bond.header(Bond.sse(conn, channel), "content-length", "5"))
+  ok(Bond.header(Bond.sse(conn, channel), "content-length", "5"))
 end
 
 # The pieces are not UTF-8 text: the body is their bytes.
@@ -726,14 +652,14 @@ def events_binary(conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   channel.send(Bytes.from_list([255, 216, 0]).unwrap!, 5000).unwrap!
   channel.close
-  return ok(Bond.stream(conn, 200, channel))
+  ok(Bond.stream(conn, 200, channel))
 end
 
 # A body helper after a stream replaces it and closes its channel.
 def events_replaced(producers: Producers, conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   keep(producers, Task.spawn(&produce, channel))
-  return ok(Bond.halt(Bond.sse(conn, channel), 403, "forbidden"))
+  ok(Bond.halt(Bond.sse(conn, channel), 403, "forbidden"))
 end
 
 # A producer that never ends by itself: it stops only when its send fails, and says so in `stopped`.
@@ -749,88 +675,76 @@ end
 def endless(producers: Producers, stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(2)
   keep(producers, Task.spawn() do tick(channel, stopped) end)
-  return ok(Bond.sse(conn, channel))
+  ok(Bond.sse(conn, channel))
 end
 
 # Waits (2 s at most) for the producer of /endless to see its channel closed.
 def endless_stopped(stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
   for _ in 1..40
-    if stopped.get("endless").ok?
-      return ok(Bond.text(conn, 200, "stopped"))
-    end
+    return ok(Bond.text(conn, 200, "stopped")) if stopped.get("endless").ok?
 
     Task.sleep(50)
   end
 
-  return ok(Bond.text(conn, 200, "running"))
+  ok(Bond.text(conn, 200, "running"))
 end
 
 def me(conn: Bond.Conn) -> Result[Bond.Conn]
   user = Bond.get_session(conn, "user").unwrap_or("nobody")
-  return ok(Bond.text(conn, 200, "user=#{user} values=#{Bond.session(conn).size}"))
+  ok(Bond.text(conn, 200, "user=#{user} values=#{Bond.session(conn).size}"))
 end
 
 def login_as(conn: Bond.Conn) -> Result[Bond.Conn]
   signed_in = Bond.set_session(Bond.clear_session(conn), "user", try Bond.param(conn, "name"))
-  return ok(Bond.text(signed_in, 200, "welcome"))
+  ok(Bond.text(signed_in, 200, "welcome"))
 end
 
-def forget(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(Bond.delete_session(conn, "user"), 200, "forgotten"))
-end
+def forget(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(Bond.delete_session(conn, "user"), 200, "forgotten"))
 
-def sign_out(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(Bond.clear_session(conn), 200, "bye"))
-end
+def sign_out(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(Bond.clear_session(conn), 200, "bye"))
 
 # A number is kept as text in the session.
 def visits(conn: Bond.Conn) -> Result[Bond.Conn]
   count = Bond.get_session(conn, "visits").unwrap_or("0").to_i!
   counted = Bond.set_session(conn, "visits", (count + 1).to_s)
-  return ok(Bond.text(counted, 200, "visits=#{count + 1}"))
+  ok(Bond.text(counted, 200, "visits=#{count + 1}"))
 end
 
 # A session too big for a cookie.
 def blob(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(Bond.set_session(conn, "blob", List.repeat("x", 5000).join("")), 200, "stored"))
+  ok(Bond.text(Bond.set_session(conn, "blob", List.repeat("x", 5000).join("")), 200, "stored"))
 end
 
-def balance(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "balance 10"))
-end
+def balance(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "balance 10"))
 
-def transfer(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "transferred"))
-end
+def transfer(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "transferred"))
 
 def load_person(conn: Bond.Conn) -> Result[Bond.Conn]
   case Bond.request_header(conn, "x-user")
-    ok(name) -> return ok(Bond.assign(conn, "person", Person(id: 7, name: name, email: some("#{name}@example.com"))))
-    error(_) -> return ok(conn)
+    ok(name) -> ok(Bond.assign(conn, "person", Person(id: 7, name: name, email: some("#{name}@example.com"))))
+    error(_) -> ok(conn)
   end
 end
 
 # A second filter sees what the first one assigned.
 def mark_person(conn: Bond.Conn) -> Result[Bond.Conn]
-  if not Bond.assigned?(conn, "person")
-    return ok(conn)
-  end
+  return ok(conn) if not Bond.assigned?(conn, "person")
 
   person = try Bond.assigned(conn, "person", Person.codec)
-  return ok(Bond.header(conn, "x-seen", person.name))
+  ok(Bond.header(conn, "x-seen", person.name))
 end
 
 def who_is_signed_in(conn: Bond.Conn) -> Result[Bond.Conn]
   person = try Bond.assigned(conn, "person", Person.codec)
-  return ok(Bond.text(conn, 200, "#{person.id} #{person.name} #{person.email.unwrap_or("-")}"))
+  ok(Bond.text(conn, 200, "#{person.id} #{person.name} #{person.email.unwrap_or("-")}"))
 end
 
 def as_team(conn: Bond.Conn) -> Result[Bond.Conn]
   refused = not Bond.assigned(conn, "person", Team.codec).ok?
-  return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "person")}"))
+  ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "person")}"))
 end
 
 def nobody(conn: Bond.Conn) -> Result[Bond.Conn]
   refused = not Bond.assigned(conn, "nobody", Person.codec).ok?
-  return ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "nobody")}"))
+  ok(Bond.text(conn, 200, "refused=#{refused} assigned=#{Bond.assigned?(conn, "nobody")}"))
 end

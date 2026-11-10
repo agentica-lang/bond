@@ -9,7 +9,7 @@ import {App} from "app"
 ## from the task that keeps it, such as `main`. Port 0 picks a free port (`local_port`). It uses the default
 ## options of `std/http`; `start_with` takes others.
 export def start(app: App, host: String, port: Int) -> Result[HttpServer]
-  return start_with(app, host, port, HttpServerOptions())
+  start_with(app, host, port, HttpServerOptions())
 end
 
 ## Like `start`, with the options of the server of `std/http` (`HttpServerOptions`: the timeouts, the connections
@@ -19,31 +19,25 @@ end
 export def start_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[HttpServer]
   limit = options.max_body_bytes
   served = serving() do |request, body| answer(app, limit, request, body) end
-  return HTTP.serve(host, port, served, options.with(max_body_bytes: Uploads.server_limit(app, limit)))
+  HTTP.serve(host, port, served, options.with(max_body_bytes: Uploads.server_limit(app, limit)))
 end
 
-export def local_port(server: HttpServer) -> Int
-  return HTTP.local_port(server)
-end
+export def local_port(server: HttpServer) -> Int = HTTP.local_port(server)
 
 ## Waits until the server is closed.
-export def wait(server: HttpServer) -> Result[Void]
-  return HTTP.wait(server)
-end
+export def wait(server: HttpServer) -> Result[Void] = HTTP.wait(server)
 
 export def stop(server: HttpServer) -> Void
   HTTP.close_server(server)
 end
 
 ## Serves `app` and waits: it returns only when the server closes or fails to start.
-export def run(app: App, host: String, port: Int) -> Result[Void]
-  return run_with(app, host, port, HttpServerOptions())
-end
+export def run(app: App, host: String, port: Int) -> Result[Void] = run_with(app, host, port, HttpServerOptions())
 
 ## Like `run`, with the options of `start_with`.
 export def run_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[Void]
   server = try start_with(app, host, port, options)
-  return wait(server)
+  wait(server)
 end
 
 # The body is read whole before the app runs, as the app of Bond takes the request whole (`Conn` has the body as
@@ -60,13 +54,11 @@ def answer(app: App, limit: Int, request: HttpRequest, body: HTTP.RequestBody) -
   end
 
   case HTTP.read_all(body, limit)
-    ok(data) -> return ok(Apps.handle_answer(app, request.with(body: data)))
-    error(message) -> return ok(HTTP.body_refusal(message))
+    ok(data) -> ok(Apps.handle_answer(app, request.with(body: data)))
+    error(message) -> ok(HTTP.body_refusal(message))
   end
 end
 
 # `HTTP.serve` takes the app before its last argument, so a block cannot be written there: this gives the block a
 # name first.
-def serving(app: HTTP.App) -> HTTP.App
-  return app
-end
+def serving(app: HTTP.App) -> HTTP.App = app

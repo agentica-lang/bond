@@ -45,7 +45,7 @@ export def request(
   timeout_ms: Int = TIMEOUT_MS,
   remote_addr: String = LOOPBACK,
 ) -> HttpResponse
-  return send(app, method, target, headers, body.bytes, max_pieces, timeout_ms, remote_addr)
+  send(app, method, target, headers, body.bytes, max_pieces, timeout_ms, remote_addr)
 end
 
 ## Like `request`, as the client at `remote_addr` (what the handler reads in `conn.remote_addr`, as the server fills it
@@ -59,13 +59,11 @@ export def request_from(
   headers: List[Header] = [],
   body: String = "",
 ) -> HttpResponse
-  return send(app, method, target, headers, body.bytes, 0, TIMEOUT_MS, remote_addr)
+  send(app, method, target, headers, body.bytes, 0, TIMEOUT_MS, remote_addr)
 end
 
 ## The body of `response` as text: UTF-8 only, and a `charset` other than `utf-8` is an error, as `HTTP.text` has it.
-export def text(response: HttpResponse) -> Result[String]
-  return HTTP.text(response.body, response.headers)
-end
+export def text(response: HttpResponse) -> Result[String] = HTTP.text(response.body, response.headers)
 
 ## Like `request`, with the body as `Bytes` (so `headers` come before it and have no default). The rules and the
 ## response are those of `request`.
@@ -79,7 +77,7 @@ export def request_bytes(
   timeout_ms: Int = TIMEOUT_MS,
   remote_addr: String = LOOPBACK,
 ) -> HttpResponse
-  return send(app, method, target, headers, body, max_pieces, timeout_ms, remote_addr)
+  send(app, method, target, headers, body, max_pieces, timeout_ms, remote_addr)
 end
 
 ## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would
@@ -89,7 +87,7 @@ end
 ## the session is over the size of a cookie.
 export def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
   value = try Sessions.seal(options, data)
-  return ok("#{options.name}=#{value}")
+  ok("#{options.name}=#{value}")
 end
 
 # The core of every request: the filters and routes of `Apps.handle`, or the reading of `Uploads.handle`.
@@ -120,7 +118,7 @@ def send(
   )
 
   case Uploads.applies(app, request)
-    some(options) -> return Uploads.handle(app, options, request, max_pieces, timeout_ms)
-    none -> return Apps.handle(app, request, max_pieces, timeout_ms)
+    some(options) -> Uploads.handle(app, options, request, max_pieces, timeout_ms)
+    none -> Apps.handle(app, request, max_pieces, timeout_ms)
   end
 end

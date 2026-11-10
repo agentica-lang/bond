@@ -5,12 +5,10 @@ import Testing from "../../testing"
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]
   agent = Bond.request_header(conn, "x-agent").unwrap_or("none")
-  return ok(Bond.text(conn, 200, "hello #{agent} #{conn.body.size}"))
+  ok(Bond.text(conn, 200, "hello #{agent} #{conn.body.size}"))
 end
 
-def text_of(response: HttpResponse) -> String
-  return String.from_bytes(response.body).unwrap!
-end
+def text_of(response: HttpResponse) -> String = String.from_bytes(response.body).unwrap!
 
 def main() -> Void
   app = Bond.app() |> Bond.get("/hello", &hello)

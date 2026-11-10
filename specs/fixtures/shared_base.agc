@@ -3,13 +3,9 @@
 import Bond from "../../bond"
 import Testing from "../../testing"
 
-def one(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "one"))
-end
+def one(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "one"))
 
-def status(app: Bond.App, path: String) -> Int
-  return Testing.request(app, "GET", path).status
-end
+def status(app: Bond.App, path: String) -> Int = Testing.request(app, "GET", path).status
 
 def main() -> Void
   base = Bond.app() |> Bond.get("/base", &one)

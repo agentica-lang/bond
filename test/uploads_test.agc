@@ -22,24 +22,20 @@ def show(conn: Bond.Conn) -> Result[Bond.Conn]
     lines = lines.push("path #{upload.path}")
   end
 
-  return ok(Bond.text(conn, 200, lines.join("\n")))
+  ok(Bond.text(conn, 200, lines.join("\n")))
 end
 
-def failing(conn: Bond.Conn) -> Result[Bond.Conn]
-  return error("the handler failed")
-end
+def failing(conn: Bond.Conn) -> Result[Bond.Conn] = error("the handler failed")
 
-def refuse(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.halt(conn, 403, "refused"))
-end
+def refuse(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.halt(conn, 403, "refused"))
 
 def body_size(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "#{conn.body.size} #{Bond.file_all(conn, "photo").size}"))
+  ok(Bond.text(conn, 200, "#{conn.body.size} #{Bond.file_all(conn, "photo").size}"))
 end
 
 def need_file(conn: Bond.Conn) -> Result[Bond.Conn]
   upload = try Bond.file(conn, "photo")
-  return ok(Bond.text(conn, 200, upload.filename))
+  ok(Bond.text(conn, 200, upload.filename))
 end
 
 def app_with(options: Bond.UploadOptions) -> Bond.App
@@ -50,33 +46,29 @@ def app_with(options: Bond.UploadOptions) -> Bond.App
     |> Bond.post("/need", &need_file)
   )
 
-  return (
+  (
     routes
     |> Bond.post("/fail", &failing)
     |> Bond.get("/size", &body_size)
   )
 end
 
-def app() -> Bond.App
-  return app_with(LIMITS)
-end
+def app() -> Bond.App = app_with(LIMITS)
 
 def field(name: String, value: String) -> String
-  return "--#{BOUNDARY}\r\nContent-Disposition: form-data; name=\"#{name}\"\r\n\r\n#{value}\r\n"
+  "--#{BOUNDARY}\r\nContent-Disposition: form-data; name=\"#{name}\"\r\n\r\n#{value}\r\n"
 end
 
 def file_part(name: String, filename: String, value: String) -> String
   head = "Content-Disposition: form-data; name=\"#{name}\"; filename=\"#{filename}\"\r\nContent-Type: text/plain"
-  return "--#{BOUNDARY}\r\n#{head}\r\n\r\n#{value}\r\n"
+  "--#{BOUNDARY}\r\n#{head}\r\n\r\n#{value}\r\n"
 end
 
-def post(target: String, parts: List[String]) -> HttpResponse
-  return post_to(app(), target, parts)
-end
+def post(target: String, parts: List[String]) -> HttpResponse = post_to(app(), target, parts)
 
 def post_to(served: Bond.App, target: String, parts: List[String]) -> HttpResponse
   body = "#{parts.join("")}--#{BOUNDARY}--\r\n"
-  return Testing.request_bytes(served, "POST", target, CONTENT_TYPE, body.bytes)
+  Testing.request_bytes(served, "POST", target, CONTENT_TYPE, body.bytes)
 end
 
 # A new empty folder for the uploads of one test, under the temporary folder of the system.
@@ -88,12 +80,10 @@ def scratch() -> Result[String]
 
   dir = try Path.join([root, "bond-uploads-test-#{OpenSSL.Random.hex(8)}"])
   try Dir.mkdir_private(dir)
-  return ok(dir)
+  ok(dir)
 end
 
-def text(response: HttpResponse) -> String
-  return String.from_bytes(response.body).unwrap!
-end
+def text(response: HttpResponse) -> String = String.from_bytes(response.body).unwrap!
 
 def main() -> Void
   Test.run([

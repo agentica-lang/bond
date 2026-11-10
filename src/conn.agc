@@ -137,7 +137,7 @@ export def from_request(request: HttpRequest) -> Conn
     none -> query = ""
   end
 
-  return Conn(
+  Conn(
     method: request.method,
     path: request.path,
     query: query,
@@ -159,35 +159,31 @@ end
 ## Answers `body` as plain text. It sets `Content-Type`; call `header` after it to use another.
 export def text(conn: Conn, status: Int, body: String) -> Conn
   typed = header(release(conn), "content-type", "text/plain; charset=utf-8")
-  return typed.with(status: status, response_body: body.bytes)
+  typed.with(status: status, response_body: body.bytes)
 end
 
 ## Answers `body` as HTML. It sets `Content-Type`; call `header` after it to use another. The text is sent as it is,
 ## with no escaping: escape what comes from a client before you put it in `body`, with `escape`.
 export def html(conn: Conn, status: Int, body: String) -> Conn
   typed = header(release(conn), "content-type", "text/html; charset=utf-8")
-  return typed.with(status: status, response_body: body.bytes)
+  typed.with(status: status, response_body: body.bytes)
 end
 
 ## The text for HTML: `&`, `<`, `>`, `"` and `'` become `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, which is right
 ## between tags and inside a quoted attribute. It is `HTML.escape` of `std/html` under a short name, beside `html` in
 ## the module that a handler already imports; an EAG template can use it as `<%@ escape &Bond.escape %>`, which
 ## escapes every `<%= %>` (`<%== %>` stays raw).
-export def escape(text: String) -> String
-  return HTML.escape(text)
-end
+export def escape(text: String) -> String = HTML.escape(text)
 
 ## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets `Content-Type` to
 ## `application/octet-stream`; call `header` after it to use the real type.
 export def bytes(conn: Conn, status: Int, body: Bytes) -> Conn
   typed = header(release(conn), "content-type", "application/octet-stream")
-  return typed.with(status: status, response_body: body)
+  typed.with(status: status, response_body: body)
 end
 
 ## Sets the status of the answer and nothing else.
-export def status(conn: Conn, code: Int) -> Conn
-  return conn.with(status: code)
-end
+export def status(conn: Conn, code: Int) -> Conn = conn.with(status: code)
 
 ## Answers with a redirect to `location`: a 302, or `code` when it is 301, 303, 307 or 308. It sets `Location`,
 ## clears the body and the content type and halts, so a `before` filter can use it. Another `code` is a runtime
@@ -201,13 +197,13 @@ export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
 
   kept = conn.response_headers.select do |field| field.name.downcase != "content-type" end
   untyped = release(conn).with(response_headers: kept)
-  return header(untyped, "location", location).with(status: code, response_body: NO_BODY, halted: true)
+  header(untyped, "location", location).with(status: code, response_body: NO_BODY, halted: true)
 end
 
 ## Answers `value` (a `Json`, such as `JSON.from(scores)` for a list or a map) as JSON. It sets `Content-Type`; call
 ## `header` after it to use another. For a struct, `json_as` encodes it once, with no `Json` in between.
 export def json(conn: Conn, status: Int, value: Json) -> Conn
-  return header(release(conn), "content-type", "application/json").with(
+  header(release(conn), "content-type", "application/json").with(
     status: status,
     response_body: JSON.encode(value).bytes,
   )
@@ -218,7 +214,7 @@ end
 ## codec comes from the caller, as in `json_body`. A non-finite `Float` stops the handler with a runtime error
 ## (a 500), as `JSON.encode` does.
 export def json_as[T](conn: Conn, status: Int, codec: Codec[T], value: T) -> Conn
-  return header(release(conn), "content-type", "application/json").with(
+  header(release(conn), "content-type", "application/json").with(
     status: status,
     response_body: codec.encode(value).bytes,
   )
@@ -240,14 +236,14 @@ end
 ## that ends short, or goes over, closes the connection, so the client sees an incomplete body. `Testing.request` shows
 ## the `Content-Length` header of such a stream, since it has no socket.
 export def stream(conn: Conn, status: Int, body: Channel[Bytes], length: Optional[Int] = none) -> Conn
-  return conn.with(status: status, response_body: NO_BODY, response_stream: some(body), response_length: length)
+  conn.with(status: status, response_body: NO_BODY, response_stream: some(body), response_length: length)
 end
 
 ## Answers a 200 stream of server-sent events (`text/event-stream`, no caching) from `events`: the producer sends the
 ## `Bytes` of `sse_event` and closes the channel. See `stream`.
 export def sse(conn: Conn, events: Channel[Bytes]) -> Conn
   typed = header(header(conn, "content-type", "text/event-stream; charset=utf-8"), "cache-control", "no-cache")
-  return stream(typed, 200, events)
+  stream(typed, 200, events)
 end
 
 ## One server-sent event, ready to send on the channel of `sse`: an optional `event:` line, a `data:` line for each
@@ -260,7 +256,7 @@ export def sse_event(data: String, event: String = "") -> Bytes
     name = "event: #{event.replace("\r", " ").replace("\n", " ")}\n"
   end
 
-  return "#{name}#{lines.join("")}\n".bytes
+  "#{name}#{lines.join("")}\n".bytes
 end
 
 ## Closes the stream of the conn, if it has one: for a stream that is not going to be sent, so its producer's next
@@ -273,23 +269,19 @@ export def close_stream(conn: Conn) -> Void
 end
 
 ## Answers `body` as plain text and stops the filters and the handler that come after.
-export def halt(conn: Conn, status: Int, body: String) -> Conn
-  return text(conn, status, body).with(halted: true)
-end
+export def halt(conn: Conn, status: Int, body: String) -> Conn = text(conn, status, body).with(halted: true)
 
 ## Adds a response header after the ones of the same name, as `Set-Cookie` needs: each is a header of its own and
 ## they are never joined.
 export def add_header(conn: Conn, name: String, value: String) -> Conn
-  return conn.with(response_headers: conn.response_headers.push(Header(name: name, value: value)))
+  conn.with(response_headers: conn.response_headers.push(Header(name: name, value: value)))
 end
 
 ## Sets a response header, replacing the one of the same name (the case does not matter). `Set-Cookie` is the
 ## exception: it adds a header, so it never wipes the cookies set before it (see `set_cookie`).
 export def header(conn: Conn, name: String, value: String) -> Conn
   lower = name.downcase
-  if lower == "set-cookie"
-    return add_header(conn, name, value)
-  end
+  return add_header(conn, name, value) if lower == "set-cookie"
 
   # A name of another length is not `name`, so the usual miss costs no lowercase copy of it: an answer with ten headers
   # would otherwise lowercase fifty names. This assumes token (ASCII) names, which `header_problem` enforces when the
@@ -298,7 +290,7 @@ export def header(conn: Conn, name: String, value: String) -> Conn
     other.name != lower and (other.name.length != lower.length or other.name.downcase != lower)
   end
 
-  return conn.with(response_headers: kept.push(Header(name: name, value: value)))
+  conn.with(response_headers: kept.push(Header(name: name, value: value)))
 end
 
 ## Internal, for the headers that Bond writes itself. Sets several response headers at once, as `header` would one after
@@ -306,13 +298,11 @@ end
 ## The `fields` names must be in lowercase, distinct and never `set-cookie` (use `add_header`): the names the conn
 ## already has are lowercased to compare, and none when it has none.
 export def set_headers(conn: Conn, fields: List[Header]) -> Conn
-  if conn.response_headers.empty?
-    return conn.with(response_headers: fields)
-  end
+  return conn.with(response_headers: fields) if conn.response_headers.empty?
 
   names = fields.map do |field| field.name end
   kept = conn.response_headers.select do |other| not names.include?(other.name.downcase) end
-  return conn.with(response_headers: List.concat(kept, fields))
+  conn.with(response_headers: List.concat(kept, fields))
 end
 
 ## The first value of a request header (the case of the name does not matter), or an error when there is none.
@@ -325,13 +315,11 @@ export def request_header(conn: Conn, name: String) -> Result[String]
     end
   end
 
-  return error("no header #{name}")
+  error("no header #{name}")
 end
 
 ## The text of the `:name` segment of the route, or an error when the route has no such segment.
-export def param(conn: Conn, name: String) -> Result[String]
-  return conn.params.get(name).to_result("no param #{name}")
-end
+export def param(conn: Conn, name: String) -> Result[String] = conn.params.get(name).to_result("no param #{name}")
 
 ## Decodes the body of the request with `codec` (`User.codec`). The request must have one `Content-Type`, and
 ## it must be `application/json` or a `type/name+json`, with any parameters (the body is read as UTF-8 whatever the
@@ -341,22 +329,18 @@ end
 ## path, so the key of a map and the index of a list that the client sent are not in it. The size of the body is
 ## limited by the server (`max_body_bytes`).
 export def json_body[T](conn: Conn, codec: Codec[T]) -> Result[T]
-  if not json_content_type?(conn)
-    return bad_request("content type must be application/json")
-  end
+  return bad_request("content type must be application/json") if not json_content_type?(conn)
 
-  if conn.body.empty?
-    return bad_request("the body is empty")
-  end
+  return bad_request("the body is empty") if conn.body.empty?
 
   case String.from_bytes(conn.body)
     ok(text) ->
       case codec.decode(text)
-        ok(value) -> return ok(value)
-        error(message) -> return bad_request("invalid body: #{decode_problem(message)}")
+        ok(value) -> ok(value)
+        error(message) -> bad_request("invalid body: #{decode_problem(message)}")
       end
 
-    error(_) -> return bad_request(NOT_UTF8)
+    error(_) -> bad_request(NOT_UTF8)
   end
 end
 
@@ -367,8 +351,8 @@ end
 ## by the server (`max_body_bytes`).
 export def body_text(conn: Conn) -> Result[String]
   case HTTP.text(conn.body, conn.headers)
-    ok(text) -> return ok(text)
-    error(_) -> return bad_request(NOT_UTF8)
+    ok(text) -> ok(text)
+    error(_) -> bad_request(NOT_UTF8)
   end
 end
 
@@ -376,25 +360,21 @@ end
 ## has no `Content-Type` or more than one.
 export def media_type(conn: Conn) -> String
   values = conn.headers.select do |field| field.name.downcase == "content-type" end
-  if values.size != 1
-    return ""
-  end
+  return "" if values.size != 1
 
-  return values[0].value.split(";")[0].strip().downcase
+  values[0].value.split(";")[0].strip().downcase
 end
 
 ## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
 ## with `try`).
-export def bad_request[T](message: String) -> Result[T]
-  return error("#{BAD_REQUEST}#{message}")
-end
+export def bad_request[T](message: String) -> Result[T] = error("#{BAD_REQUEST}#{message}")
 
 ## Like `param`, for a whole number. Text that is not one is a 400 (see `bad_request`).
 export def param_int(conn: Conn, name: String) -> Result[Int]
   text = try param(conn, name)
   case text.to_i
-    ok(number) -> return ok(number)
-    error(_) -> return bad_request("#{name} must be an integer")
+    ok(number) -> ok(number)
+    error(_) -> bad_request("#{name} must be an integer")
   end
 end
 
@@ -418,14 +398,10 @@ end
 ## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
 ## `Testing.request` and `specs/steps.agc`.
 export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HttpResponse
-  if accepted_upgrade(conn).some?
-    return switching()
-  end
+  return switching() if accepted_upgrade(conn).some?
 
   problem = refusal(conn)
-  if not problem.empty?
-    return refused(conn, problem)
-  end
+  return refused(conn, problem) if not problem.empty?
 
   if conn.status == 204 or conn.status == 304
     close_stream(conn)
@@ -440,9 +416,9 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
   case conn.response_stream
     some(body) ->
       pieces = collect(conn, body, max_pieces, timeout_ms)
-      return HttpResponse(status: conn.status, headers: sized_headers(conn), body: pieces)
+      HttpResponse(status: conn.status, headers: sized_headers(conn), body: pieces)
 
-    none -> return HttpResponse(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
+    none -> HttpResponse(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
   end
 end
 
@@ -466,11 +442,11 @@ export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
   case conn.response_stream
     some(body) ->
       headers = conn.response_headers
-      return HTTP.StreamResponse(status: conn.status, headers: headers, body: body, length: conn.response_length)
+      HTTP.StreamResponse(status: conn.status, headers: headers, body: body, length: conn.response_length)
 
     none ->
       whole = HTTP.whole(conn.response_body)
-      return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
+      HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
   end
 end
 
@@ -478,25 +454,23 @@ end
 ## and is not halted. An `after` filter that answers something else (`text`, `html`, `status`, `halt`, `redirect`)
 ## changes the status or halts, so its answer is sent and the WebSocket never starts.
 export def accepted_upgrade(conn: Conn) -> Optional[HTTP.Upgrade]
-  if conn.status != SWITCHING or conn.halted
-    return none
-  end
+  return none if conn.status != SWITCHING or conn.halted
 
-  return conn.upgrade
+  conn.upgrade
 end
 
 # The answer of an accepted upgrade for a test: the head of the server's 101, without the `Sec-WebSocket-Accept` that
 # the server computes from the key.
 def switching() -> HttpResponse
   headers = [Header(name: "upgrade", value: "websocket"), Header(name: "connection", value: "Upgrade")]
-  return HttpResponse(status: 101, headers: headers, body: NO_BODY)
+  HttpResponse(status: 101, headers: headers, body: NO_BODY)
 end
 
 # The headers of the answer for a test: the `Content-Length` of a stream with a length is added, as the server does.
 def sized_headers(conn: Conn) -> List[Header]
   case conn.response_length
-    some(length) -> return conn.response_headers.push(Header(name: "content-length", value: length.to_s))
-    none -> return conn.response_headers
+    some(length) -> conn.response_headers.push(Header(name: "content-length", value: length.to_s))
+    none -> conn.response_headers
   end
 end
 
@@ -505,32 +479,30 @@ end
 def whole_headers(conn: Conn) -> List[Header]
   case conn.response_length
     some(length) ->
-      if length == conn.response_body.size
-        return sized_headers(conn)
-      end
+      return sized_headers(conn) if length == conn.response_body.size
 
-      return conn.response_headers
+      conn.response_headers
 
-    none -> return conn.response_headers
+    none -> conn.response_headers
   end
 end
 
 # The conn with no stream: the one it had is closed, since nothing will read it.
 def release(conn: Conn) -> Conn
   close_stream(conn)
-  return conn.with(response_stream: none, response_length: none)
+  conn.with(response_stream: none, response_length: none)
 end
 
 # The plain 500 for a response the server would refuse. A stream that will not be sent is closed.
 def refused(conn: Conn, problem: String) -> HttpResponse
   IO.warn("bond: #{conn.method} #{conn.path}: invalid response: #{problem}")
   close_stream(conn)
-  return plain_500(INTERNAL_ERROR)
+  plain_500(INTERNAL_ERROR)
 end
 
 def plain_500(body: String) -> HttpResponse
   headers = [Header(name: "content-type", value: "text/plain; charset=utf-8")]
-  return HttpResponse(status: 500, headers: headers, body: body.bytes)
+  HttpResponse(status: 500, headers: headers, body: body.bytes)
 end
 
 # The pieces of a stream until the producer closes it, as one `Bytes`. It stops at `max_pieces` pieces (when it is
@@ -563,7 +535,7 @@ def collect(conn: Conn, body: Channel[Bytes], max_pieces: Int, timeout_ms: Int) 
     end
   end
 
-  return Bytes.concat(pieces)
+  Bytes.concat(pieces)
 end
 
 def cut(conn: Conn, body: Channel[Bytes]) -> Void
@@ -574,27 +546,20 @@ end
 # Why the server would refuse the response, or "" when it would not: the rules that the server checks in C when it
 # writes the head, for `to_response`, which has no server.
 def refusal(conn: Conn) -> String
-  if conn.status < 200 or conn.status > 599
-    return "the status #{conn.status} is outside 200 to 599"
-  end
+  return "the status #{conn.status} is outside 200 to 599" if conn.status < 200 or conn.status > 599
 
   case conn.response_length
-    some(length) ->
-      if length < 0
-        return "the length of a stream is negative"
-      end
+    some(length) -> return "the length of a stream is negative" if length < 0
 
     none -> ""
   end
 
   for field in conn.response_headers
     problem = header_problem(field)
-    if not problem.empty?
-      return problem
-    end
+    return problem if not problem.empty?
   end
 
-  return ""
+  ""
 end
 
 # The one rule of `refusal` that the server does not check: a `Location` is ASCII, since a Latin-1 byte there is not a
@@ -603,13 +568,11 @@ def location_refusal(conn: Conn) -> String
   for field in conn.response_headers
     if not SAFE_NAMES.include?(field.name)
       problem = location_problem(field, field.name.downcase)
-      if not problem.empty?
-        return problem
-      end
+      return problem if not problem.empty?
     end
   end
 
-  return ""
+  ""
 end
 
 def location_problem(field: Header, lower: String) -> String
@@ -617,7 +580,7 @@ def location_problem(field: Header, lower: String) -> String
     return "the Location header must be ASCII: percent-encode it"
   end
 
-  return ""
+  ""
 end
 
 # Why the server would refuse the header, or "": the check of `to_response` (the server does it in C for a served
@@ -633,48 +596,38 @@ def header_problem(field: Header) -> String
       return "Content-Length and Transfer-Encoding are set by the server"
     end
 
-    if not token?(name)
-      return "the header name #{name.inspect} is not a token"
-    end
+    return "the header name #{name.inspect} is not a token" if not token?(name)
 
     problem = location_problem(field, lower)
-    if not problem.empty?
-      return problem
-    end
+    return problem if not problem.empty?
   end
 
   if not SAFE_VALUES.include?(field.value) and not field.value.split("").all? do |ch| VALUE_CHARS.include?(ch) end
     return "the value of the header #{name} has a control or non-Latin-1 character"
   end
 
-  return ""
+  ""
 end
 
-def token?(name: String) -> Bool
-  return not name.empty? and name.split("").all? do |ch| TOKEN_CHARS.include?(ch) end
-end
+def token?(name: String) -> Bool = not name.empty? and name.split("").all? do |ch| TOKEN_CHARS.include?(ch) end
 
 # application/json or type/name+json, in any case, with or without parameters (`; charset=utf-8`).
 def json_content_type?(conn: Conn) -> Bool
   media = media_type(conn)
-  if media == "application/json"
-    return true
-  end
+  return true if media == "application/json"
 
   parts = media.split("/")
-  return parts.size == 2 and not parts[0].empty? and parts[1].length > 5 and parts[1].end_with?("+json")
+  parts.size == 2 and not parts[0].empty? and parts[1].length > 5 and parts[1].end_with?("+json")
 end
 
 # The error of the codec is `path: problem`, and the path may hold a map key or a list index that the client sent
 # (`scores["KEY"]`, `tags[0]`): keep the text before the first `[` and the problem after the last `: `. A parse
 # error has the prefix `JSON.parse: `, which is dropped.
 def decode_problem(message: String) -> String
-  if message.start_with?(PARSE_PREFIX)
-    return message.slice(PARSE_PREFIX.length, message.length - PARSE_PREFIX.length)
-  end
+  return message.slice(PARSE_PREFIX.length, message.length - PARSE_PREFIX.length) if message.start_with?(PARSE_PREFIX)
 
   case message.index_of("[")
-    some(at) -> return "#{message.slice(0, at)}: #{message.split(": ").last}"
-    none -> return message
+    some(at) -> "#{message.slice(0, at)}: #{message.split(": ").last}"
+    none -> message
   end
 end

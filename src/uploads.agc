@@ -82,54 +82,46 @@ export def uploads(app: App, options: UploadOptions = UploadOptions()) -> App
     return bad.unwrap!
   end
 
-  return app.with(uploads: some(options))
+  app.with(uploads: some(options))
 end
 
 ## The first file of the field `name`, or an error that makes a 400 when there is none (so `try Bond.file(...)`
 ## answers it). A field that came as text is no file.
 export def file(conn: Conn, name: String) -> Result[UploadedFile]
   found = file_all(conn, name)
-  if found.empty?
-    return Conns.bad_request("file #{name} is missing")
-  end
+  return Conns.bad_request("file #{name} is missing") if found.empty?
 
-  return ok(found[0])
+  ok(found[0])
 end
 
 ## Every file of the field `name`, in order (`<input type="file" multiple>`): an empty list when there is none.
 export def file_all(conn: Conn, name: String) -> List[UploadedFile]
   case conn.form
-    some(parts) -> return parts.files.select do |upload| upload.name == name end
-    none -> return []
+    some(parts) -> parts.files.select do |upload| upload.name == name end
+    none -> []
   end
 end
 
 ## The upload options when they apply to the request: the app has uploads, the method is one that sends a form body
 ## (POST, PUT, PATCH; a DELETE or a GET with a body is no upload) and the body is `multipart/form-data`.
 export def applies(app: App, request: HttpRequest) -> Optional[UploadOptions]
-  if not BODY_METHODS.any? do |method| method == request.method end
-    return none
-  end
+  return none if not BODY_METHODS.any? do |method| method == request.method end
 
   types = HTTP.header_values(request.headers, "content-type")
-  if types.size != 1 or types[0].split(";")[0].strip.downcase != MULTIPART_TYPE
-    return none
-  end
+  return none if types.size != 1 or types[0].split(";")[0].strip.downcase != MULTIPART_TYPE
 
-  return app.uploads
+  app.uploads
 end
 
 ## The body limit of the server: the larger of the one of the other requests and the uploads' total.
 export def server_limit(app: App, limit: Int) -> Int
   case app.uploads
     some(options) ->
-      if options.max_total_bytes > limit
-        return options.max_total_bytes
-      end
+      return options.max_total_bytes if options.max_total_bytes > limit
 
-      return limit
+      limit
 
-    none -> return limit
+    none -> limit
   end
 end
 
@@ -142,7 +134,7 @@ export def answer(app: App, options: UploadOptions, request: HttpRequest, body: 
   end
 
   remove(dir)
-  return answered
+  answered
 end
 
 ## Like `answer`, for `Testing.request`: the body is given whole, in pieces of 64 KiB, and the answer is whole.
@@ -171,12 +163,10 @@ export def handle(
   # The body may be left unread (a filter halted, no route); a test must not end with this task running.
   _ = Task.await(done)
   remove(dir)
-  return response
+  response
 end
 
-def arrived() -> Result[Void]
-  return ok()
-end
+def arrived() -> Result[Void] = ok()
 
 # Reads the body piece by piece through the parser. A refusal closes the file being written; the folder, with what
 # was saved, is removed after the answer by the caller (`answer`, `handle`), in one place for every outcome. A body cut
@@ -185,9 +175,7 @@ end
 def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTTP.RequestBody) -> Result[Form]
   content_type = HTTP.header_values(request.headers, "content-type")[0]
   boundary = Multipart.boundary(content_type)
-  if not boundary.ok?
-    return error(BAD)
-  end
+  return error(BAD) if not boundary.ok?
 
   reading = Reading(
     dir: dir,
@@ -231,22 +219,18 @@ def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTT
   end
 
   form = ended.unwrap!
-  return ok(Form(fields: form.fields, files: form.files))
+  ok(Form(fields: form.fields, files: form.files))
 end
 
 # One piece: its bytes count toward the total, then each event of the parser. The error is the status to answer; a
 # part opened by this piece is closed before it is returned.
 def take(options: UploadOptions, reading: Reading, piece: Bytes) -> Result[Reading]
   total = reading.total + piece.size
-  if total > options.max_total_bytes
-    return error(TOO_LARGE)
-  end
+  return error(TOO_LARGE) if total > options.max_total_bytes
 
   step = Multipart.feed(reading.parser, piece)
   if not step.ok?
-    if step.message == Multipart.TOO_MANY_PARTS
-      return error(TOO_LARGE)
-    end
+    return error(TOO_LARGE) if step.message == Multipart.TOO_MANY_PARTS
 
     return error(BAD)
   end
@@ -261,26 +245,24 @@ def take(options: UploadOptions, reading: Reading, piece: Bytes) -> Result[Readi
     end
   end
 
-  return ok(current)
+  ok(current)
 end
 
 def event_of(options: UploadOptions, reading: Reading, event: Multipart.Event) -> Result[Reading]
   case event
     Multipart.Event.Part(headers) ->
       ended = end_part(reading)
-      if not ended.ok?
-        return error(BAD)
-      end
+      return error(BAD) if not ended.ok?
 
-      return begin_part(ended.unwrap!, headers)
+      begin_part(ended.unwrap!, headers)
 
     Multipart.Event.Data(bytes) ->
       case reading.part
-        some(part) -> return write_part(options, reading, part, bytes)
-        none -> return ok(reading)
+        some(part) -> write_part(options, reading, part, bytes)
+        none -> ok(reading)
       end
 
-    Multipart.Event.Finished -> return ok(reading)
+    Multipart.Event.Finished -> ok(reading)
   end
 end
 
@@ -288,9 +270,7 @@ end
 # request, which the first file makes.
 def begin_part(reading: Reading, headers: List[Header]) -> Result[Reading]
   disposition = Multipart.disposition(headers)
-  if not disposition.ok?
-    return error(BAD)
-  end
+  return error(BAD) if not disposition.ok?
 
   found = disposition.unwrap!
   types = headers.select do |field| field.name == "content-type" end
@@ -309,9 +289,7 @@ def begin_part(reading: Reading, headers: List[Header]) -> Result[Reading]
     text: [],
   )
 
-  if found.filename.none?
-    return ok(reading.with(part: some(part)))
-  end
+  return ok(reading.with(part: some(part))) if found.filename.none?
 
   if not reading.made and (reading.dir == "" or not Dir.mkdir_private(reading.dir).ok?)
     IO.warn("bond: cannot make a folder for uploads at #{reading.dir}: the dir of UploadOptions must exist")
@@ -326,7 +304,7 @@ def begin_part(reading: Reading, headers: List[Header]) -> Result[Reading]
   end
 
   opened = part.with(handle: some(handle.unwrap!), path: where)
-  return ok(reading.with(made: true, part: some(opened)))
+  ok(reading.with(made: true, part: some(opened)))
 end
 
 # The caps are checked before the bytes are written or kept: a file against `max_file_bytes`, a text field against
@@ -335,25 +313,21 @@ def write_part(options: UploadOptions, reading: Reading, part: Part, bytes: Byte
   size = part.size + bytes.size
   case part.handle
     some(handle) ->
-      if size > options.max_file_bytes
-        return error(TOO_LARGE)
-      end
+      return error(TOO_LARGE) if size > options.max_file_bytes
 
       if not File.write_bytes(handle, bytes).ok?
         IO.warn("bond: cannot write an upload to #{part.path}")
         return error(FAILED)
       end
 
-      return ok(reading.with(part: some(part.with(size: size))))
+      ok(reading.with(part: some(part.with(size: size))))
 
     none ->
       fields_size = reading.fields_size + bytes.size
-      if size > options.max_field_bytes or fields_size > options.max_fields_bytes
-        return error(TOO_LARGE)
-      end
+      return error(TOO_LARGE) if size > options.max_field_bytes or fields_size > options.max_fields_bytes
 
       grown = part.with(size: size, text: part.text.push(bytes))
-      return ok(reading.with(part: some(grown), fields_size: fields_size))
+      ok(reading.with(part: some(grown), fields_size: fields_size))
   end
 end
 
@@ -361,13 +335,13 @@ end
 # size (a file input left empty, with no filename and no bytes, is dropped, as browsers send it).
 def end_part(reading: Reading) -> Result[Reading]
   case reading.part
-    none -> return ok(reading)
+    none -> ok(reading)
     some(part) ->
       closed = reading.with(part: none)
       case part.handle
         none ->
           value = try String.from_bytes(Bytes.concat(part.text))
-          return ok(closed.with(fields: closed.fields.push(URI.Pair(name: part.name, value: value))))
+          ok(closed.with(fields: closed.fields.push(URI.Pair(name: part.name, value: value))))
 
         some(handle) ->
           _ = File.close(handle)
@@ -385,7 +359,7 @@ def end_part(reading: Reading) -> Result[Reading]
             size: part.size,
           )
 
-          return ok(closed.with(files: closed.files.push(upload)))
+          ok(closed.with(files: closed.files.push(upload)))
       end
   end
 end
@@ -410,22 +384,19 @@ def folder(options: UploadOptions) -> String
     root = system_temp()
   end
 
-  return Path.join([root, "bond-upload-#{OpenSSL.Random.hex(16)}"]).unwrap_or("")
+  Path.join([root, "bond-upload-#{OpenSSL.Random.hex(16)}"]).unwrap_or("")
 end
 
 def system_temp() -> String
   for name in ["TMPDIR", "TEMP", "TMP"]
     case System.env(name)
-      ok(value) ->
-        if value != ""
-          return value
-        end
+      ok(value) -> return value if value != ""
 
       error(_) -> nil
     end
   end
 
-  return "/tmp"
+  "/tmp"
 end
 
 # A folder that was never made is no error (`Path.remove` of a missing path is `ok`).

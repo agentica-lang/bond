@@ -2,9 +2,7 @@
 
 import Bond from "../../bond"
 
-def one(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "one"))
-end
+def one(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "one"))
 
 def main() -> Void
   app = (

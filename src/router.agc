@@ -29,42 +29,34 @@ struct Route
 end
 
 ## A tree with no route.
-export def empty() -> Node
-  return Node(literals: {}, params: [], name: "", handlers: {})
-end
+export def empty() -> Node = Node(literals: {}, params: [], name: "", handlers: {})
 
 ## Adds the route to the tree. It is an `error` when the same method and pattern are already there (a trailing or a
 ## double slash does not make another pattern), or when the pattern has another param name than the routes already in
 ## the tree at the same place: `/users/:id` and `/users/:name/posts` cannot both be.
 export def add(root: Node, method: String, pattern: String, handler: Handler) -> Result[Node]
-  return insert(root, Pattern.segments(pattern), Route(method: method, pattern: pattern, handler: handler))
+  insert(root, Pattern.segments(pattern), Route(method: method, pattern: pattern, handler: handler))
 end
 
 ## The node that holds the route of `path`, with the params. A literal segment is tried before the param of the same
 ## place, and when the literal branch has no route to the end the walk goes back to the param. `error` when no route
 ## has this path (the method is not looked at here).
-export def find(root: Node, path: String) -> Result[Found]
-  return walk(root, Pattern.segments(path), 0, {})
-end
+export def find(root: Node, path: String) -> Result[Found] = walk(root, Pattern.segments(path), 0, {})
 
 def insert(node: Node, parts: List[String], route: Route) -> Result[Node]
   if parts.empty?
-    if node.handlers.key?(route.method)
-      return error("bond: the route #{route.method} #{route.pattern} is added twice")
-    end
+    return error("bond: the route #{route.method} #{route.pattern} is added twice") if node.handlers.key?(route.method)
 
     return ok(node.with(handlers: node.handlers.put(route.method, route.handler)))
   end
 
   part = parts[0]
   rest = parts.drop(1)
-  if part.start_with?(":")
-    return insert_param(node, part.slice(1, part.length - 1), rest, route)
-  end
+  return insert_param(node, part.slice(1, part.length - 1), rest, route) if part.start_with?(":")
 
   child = node.literals.get(part, empty())
   updated = try insert(child, rest, route)
-  return ok(node.with(literals: node.literals.put(part, updated)))
+  ok(node.with(literals: node.literals.put(part, updated)))
 end
 
 def insert_param(node: Node, name: String, rest: List[String], route: Route) -> Result[Node]
@@ -78,14 +70,12 @@ def insert_param(node: Node, name: String, rest: List[String], route: Route) -> 
   end
 
   updated = try insert(child, rest, route)
-  return ok(node.with(params: [updated]))
+  ok(node.with(params: [updated]))
 end
 
 def walk(node: Node, parts: List[String], at: Int, params: Map[String, String]) -> Result[Found]
   if at == parts.size
-    if node.handlers.empty?
-      return error("no route")
-    end
+    return error("no route") if node.handlers.empty?
 
     return ok(Found(node: node, params: params))
   end
@@ -93,15 +83,11 @@ def walk(node: Node, parts: List[String], at: Int, params: Map[String, String]) 
   part = parts[at]
   if node.literals.key?(part)
     found = walk(node.literals[part], parts, at + 1, params)
-    if found.ok?
-      return found
-    end
+    return found if found.ok?
   end
 
-  if node.params.empty?
-    return error("no route")
-  end
+  return error("no route") if node.params.empty?
 
   child = node.params[0]
-  return walk(child, parts, at + 1, params.put(child.name, part))
+  walk(child, parts, at + 1, params.put(child.name, part))
 end

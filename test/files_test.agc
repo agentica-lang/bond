@@ -2,13 +2,13 @@ import Conns from "../src/conn"
 import Files from "../src/files"
 
 def request(headers: List[Header]) -> Conns.Conn
-  return Conns.from_request(
+  Conns.from_request(
     HttpRequest(method: "GET", target: "/", path: "/", headers: headers, body: "".bytes, remote_addr: "127.0.0.1"),
   )
 end
 
 def rep() -> Files.Rep
-  return Files.Rep(
+  Files.Rep(
     type: "text/css; charset=utf-8",
     etag: "\"4-1\"",
     modified: 1,
@@ -20,9 +20,7 @@ def rep() -> Files.Rep
   )
 end
 
-def pairs(conn: Conns.Conn) -> List[String]
-  return conn.response_headers.map do |field| "#{field.name}=#{field.value}" end
-end
+def pairs(conn: Conns.Conn) -> List[String] = conn.response_headers.map do |field| "#{field.name}=#{field.value}" end
 
 def main() -> Void
   Test.run([

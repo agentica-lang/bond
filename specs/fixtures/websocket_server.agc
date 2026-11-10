@@ -10,16 +10,14 @@ import Bond from "../../bond"
 SEND_MS = 5_000
 IDLE_MS = 10_000
 
-def hello(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.text(conn, 200, "hello"))
-end
+def hello(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "hello"))
 
 def ticks(conn: Bond.Conn) -> Result[Bond.Conn]
   pieces: Channel[Bytes] = Channel.new(2)
   try pieces.send("one ".bytes, SEND_MS)
   try pieces.send("two".bytes, SEND_MS)
   pieces.close
-  return ok(Bond.stream(conn, 200, pieces))
+  ok(Bond.stream(conn, 200, pieces))
 end
 
 def chat(conn: Bond.Conn, socket: HTTP.WebSocket) -> Result[Void]
@@ -46,7 +44,7 @@ def chat(conn: Bond.Conn, socket: HTTP.WebSocket) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 
 def main() -> Void

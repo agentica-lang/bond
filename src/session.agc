@@ -71,44 +71,38 @@ export def sessions(app: App, options: SessionOptions) -> App
   end
 
   loading = Apps.before(app) do |conn| load(options, conn) end
-  return Apps.after(loading) do |conn| save(options, conn) end
+  Apps.after(loading) do |conn| save(options, conn) end
 end
 
 ## The session of the request: a map from name to value, empty for a visitor with no valid session (and when
 ## `sessions` was not called). It holds what the handlers of this request set so far.
-export def session(conn: Conn) -> Map[String, String]
-  return conn.session
-end
+export def session(conn: Conn) -> Map[String, String] = conn.session
 
 ## One value of the session, or an `error` when it is not there. A missing value is not a mistake of the client, so it
 ## is a plain `error`, like `cookie`: use `unwrap_or` or `case`.
 export def get_session(conn: Conn, name: String) -> Result[String]
   case conn.session.get(name)
-    some(value) -> return ok(value)
-    none -> return error("no session value #{name}")
+    some(value) -> ok(value)
+    none -> error("no session value #{name}")
   end
 end
 
 ## A `Conn` whose session has `name` set to `value`; the answer carries the new session in its cookie. The session is
 ## text only: encode a number or a list (`to_s`, `JSON.encode`) before, and decode it after.
 export def set_session(conn: Conn, name: String, value: String) -> Conn
-  return conn.with(session: conn.session.put(name, value), session_changed: true)
+  conn.with(session: conn.session.put(name, value), session_changed: true)
 end
 
 ## A `Conn` whose session no longer has `name`. When it was not there, the `Conn` is the same.
 export def delete_session(conn: Conn, name: String) -> Conn
-  if not conn.session.key?(name)
-    return conn
-  end
+  return conn if not conn.session.key?(name)
 
-  return conn.with(session: conn.session.delete(name), session_changed: true)
+  conn.with(session: conn.session.delete(name), session_changed: true)
 end
 
 ## A `Conn` with an empty session: the answer deletes the cookie. Call it at logout, and before you set the user at
 ## login, so that nothing of a session the visitor had before is kept.
-export def clear_session(conn: Conn) -> Conn
-  return conn.with(session: {}, session_changed: true)
-end
+export def clear_session(conn: Conn) -> Conn = conn.with(session: {}, session_changed: true)
 
 ## The value of the session cookie for `data`, signed with `options.secret` and valid for `options.max_age` seconds
 ## from now: what `sessions` would send. `Testing.session_cookie` uses it to make the `Cookie` header of a request
@@ -123,7 +117,7 @@ export def seal(options: SessionOptions, data: Map[String, String]) -> Result[St
     return error("bond: the session cookie has #{value.length} bytes, more than #{MAX_COOKIE_BYTES}")
   end
 
-  return ok(value)
+  ok(value)
 end
 
 def check(options: SessionOptions) -> String
@@ -132,28 +126,22 @@ def check(options: SessionOptions) -> String
     return "a session secret must have at least #{MIN_SECRET_BYTES} bytes"
   end
 
-  if options.name == "" or options.path == ""
-    return "the session cookie needs a name and a path"
-  end
+  return "the session cookie needs a name and a path" if options.name == "" or options.path == ""
 
-  if options.max_age < 1
-    return "the max_age of the session must be at least 1 second"
-  end
+  return "the max_age of the session must be at least 1 second" if options.max_age < 1
 
   if not SAME_SITE_VALUES.any? do |value| value == options.same_site end
     return "the same_site of the session must be Strict, Lax or None"
   end
 
-  if options.same_site == "None" and not options.secure
-    return "a session cookie with SameSite=None needs secure"
-  end
+  return "a session cookie with SameSite=None needs secure" if options.same_site == "None" and not options.secure
 
-  return ""
+  ""
 end
 
 # The signature covers the name of the cookie too, so a value copied from another cookie of the app is not accepted.
 def signature(secret: String, name: String, payload: String) -> Bytes
-  return OpenSSL.HMAC.sha256(secret.bytes, "#{name}.#{payload}".bytes)
+  OpenSSL.HMAC.sha256(secret.bytes, "#{name}.#{payload}".bytes)
 end
 
 def load(options: SessionOptions, conn: Conn) -> Result[Conn]
@@ -162,25 +150,21 @@ def load(options: SessionOptions, conn: Conn) -> Result[Conn]
       case unseal(options, value)
         ok(opened) ->
           # A cookie that an old secret signed is written again with the current one.
-          return ok(conn.with(session: opened.data, session_changed: opened.key > 0 and not opened.data.empty?))
-        error(_) -> return ok(conn)
+          ok(conn.with(session: opened.data, session_changed: opened.key > 0 and not opened.data.empty?))
+        error(_) -> ok(conn)
       end
 
-    none -> return ok(conn)
+    none -> ok(conn)
   end
 end
 
 # Checks the signature against every secret, so the time does not tell which one matched, and then the end date.
 def unseal(options: SessionOptions, text: String) -> Result[Opened]
   # No cookie of Bond is this long, so a bigger one is not worth a MAC for each secret.
-  if text.length > MAX_COOKIE_BYTES
-    return error("the session cookie is too big")
-  end
+  return error("the session cookie is too big") if text.length > MAX_COOKIE_BYTES
 
   parts = text.split(".")
-  if parts.size != 2
-    return error("malformed session cookie")
-  end
+  return error("malformed session cookie") if parts.size != 2
 
   mac = try Base64.urlsafe_decode64(parts[1])
   secrets = [options.secret].concat(options.old_secrets)
@@ -191,27 +175,19 @@ def unseal(options: SessionOptions, text: String) -> Result[Opened]
     end
   end
 
-  if found < 0
-    return error("the session cookie is not signed with a known secret")
-  end
+  return error("the session cookie is not signed with a known secret") if found < 0
 
   raw = try Base64.urlsafe_decode64(parts[0])
   envelope = try Envelope.codec.decode(try String.from_bytes(raw))
-  if envelope.exp <= Time.now_ms()
-    return error("the session has expired")
-  end
+  return error("the session has expired") if envelope.exp <= Time.now_ms()
 
-  return ok(Opened(data: envelope.data, key: found))
+  ok(Opened(data: envelope.data, key: found))
 end
 
 def save(options: SessionOptions, conn: Conn) -> Result[Conn]
-  if not conn.session_changed
-    return ok(conn)
-  end
+  return ok(conn) if not conn.session_changed
 
-  if conn.session.empty?
-    return Cookies.delete_cookie(conn, options.name, options.path, options.domain)
-  end
+  return Cookies.delete_cookie(conn, options.name, options.path, options.domain) if conn.session.empty?
 
   value = try seal(options, conn.session)
   cookie = C.Cookie(
@@ -225,5 +201,5 @@ def save(options: SessionOptions, conn: Conn) -> Result[Conn]
     same_site: options.same_site,
   )
 
-  return Cookies.set_cookie_with(conn, cookie)
+  Cookies.set_cookie_with(conn, cookie)
 end

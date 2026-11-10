@@ -51,7 +51,7 @@ export def format(seconds: Int) -> String
   end
 
   clock = "#{two(rest / 3600)}:#{two(rest % 3600 / 60)}:#{two(rest % 60)}"
-  return "#{WEEKDAYS[days % 7]}, #{two(day)} #{MONTHS[month - 1]} #{year} #{clock} GMT"
+  "#{WEEKDAYS[days % 7]}, #{two(day)} #{MONTHS[month - 1]} #{year} #{clock} GMT"
 end
 
 ## The Unix seconds of a date in one of the three forms that a recipient reads (RFC 9110 section 5.6.7): the one
@@ -66,41 +66,31 @@ export def parse(text: String) -> Optional[Int]
 
   if parts.size == 4 and parts[3] == "GMT" and parts[0].end_with?(",")
     pieces = parts[1].split("-")
-    if pieces.size == 3
-      return assemble(pieces[0], pieces[1], pieces[2], parts[2])
-    end
+    return assemble(pieces[0], pieces[1], pieces[2], parts[2]) if pieces.size == 3
   end
 
-  if parts.size == 5 and not parts[0].end_with?(",")
-    return assemble(parts[2], parts[1], parts[4], parts[3])
-  end
+  return assemble(parts[2], parts[1], parts[4], parts[3]) if parts.size == 5 and not parts[0].end_with?(",")
 
-  return none
+  none
 end
 
 ### The year of the digits `year` (0 to 99) of the old form, by RFC 9110 section 5.6.7: the one of this century, unless
 ## that is more than 50 years after `current_year`, and then the one of the century before.
 export def full_year(year: Int, current_year: Int) -> Int
   candidate = (current_year / 100) * 100 + year
-  if candidate > current_year + 50
-    return candidate - 100
-  end
+  return candidate - 100 if candidate > current_year + 50
 
-  return candidate
+  candidate
 end
 
 # The seconds of the date made of the text of its parts, or `none` when one is not what it must be.
 def assemble(day_text: String, month_text: String, year_text: String, clock_text: String) -> Optional[Int]
   clock = clock_text.split(":")
   month = MONTH_NUMBERS.get(month_text, 0)
-  if clock.size != 3 or month == 0
-    return none
-  end
+  return none if clock.size != 3 or month == 0
 
   numbers = [day_text, year_text, clock[0], clock[1], clock[2]].map do |part| number(part) end
-  if numbers.any? do |n| n < 0 end
-    return none
-  end
+  return none if numbers.any? do |n| n < 0 end
 
   day = numbers[0]
   year = numbers[1]
@@ -109,21 +99,15 @@ def assemble(day_text: String, month_text: String, year_text: String, clock_text
     year = full_year(year, this_year())
   end
 
-  if year_text.length != 2 and year_text.length != 4
-    return none
-  end
+  return none if year_text.length != 2 and year_text.length != 4
 
-  if day < 1 or day > 31 or hour > 23 or numbers[3] > 59 or numbers[4] > 60
-    return none
-  end
+  return none if day < 1 or day > 31 or hour > 23 or numbers[3] > 59 or numbers[4] > 60
 
   days = days_since_epoch(year, month, day)
-  return some(days * SECONDS_PER_DAY + hour * 3600 + numbers[3] * 60 + numbers[4])
+  some(days * SECONDS_PER_DAY + hour * 3600 + numbers[3] * 60 + numbers[4])
 end
 
-def this_year() -> Int
-  return format(Time.now_ms() / 1000).split(" ")[3].to_i!
-end
+def this_year() -> Int = format(Time.now_ms() / 1000).split(" ")[3].to_i!
 
 # The civil date as days since 1970-01-01 (the proleptic Gregorian calendar).
 def days_since_epoch(year: Int, month: Int, day: Int) -> Int
@@ -136,22 +120,18 @@ def days_since_epoch(year: Int, month: Int, day: Int) -> Int
   year_of_era = shifted_year - era * 400
   day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1
   day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year
-  return era * DAYS_PER_ERA + day_of_era - EPOCH_SHIFT
+  era * DAYS_PER_ERA + day_of_era - EPOCH_SHIFT
 end
 
 # The digits of `text` as a number, or -1 when it is not only digits.
 def number(text: String) -> Int
-  if text.empty? or not text.split("").all? do |ch| ch.code >= 48 and ch.code <= 57 end
-    return -1
-  end
+  return -1 if text.empty? or not text.split("").all? do |ch| ch.code >= 48 and ch.code <= 57 end
 
-  return text.to_i!
+  text.to_i!
 end
 
 def two(n: Int) -> String
-  if n < 10
-    return "0#{n}"
-  end
+  return "0#{n}" if n < 10
 
-  return n.to_s
+  n.to_s
 end

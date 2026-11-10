@@ -44,14 +44,14 @@ def tell(body: Bytes, size: Int) -> Result[Told]
     at = at + size
   end
 
-  return ok(Told(lines: lines, finished: Multipart.finish(parser).ok?))
+  ok(Told(lines: lines, finished: Multipart.finish(parser).ok?))
 end
 
 def kind(event: Multipart.Event) -> String
   case event
-    Multipart.Event.Part(headers) -> return "part #{headers.size}"
-    Multipart.Event.Data(bytes) -> return "data #{bytes.size}"
-    Multipart.Event.Finished -> return "end"
+    Multipart.Event.Part(headers) -> "part #{headers.size}"
+    Multipart.Event.Data(bytes) -> "data #{bytes.size}"
+    Multipart.Event.Finished -> "end"
   end
 end
 
@@ -74,17 +74,11 @@ def data_of(body: Bytes, size: Int) -> Result[Bytes]
   end
 
   try Multipart.finish(parser)
-  return ok(Bytes.concat(data))
+  ok(Bytes.concat(data))
 end
 
 def expected() -> List[String]
-  return [
-    "part title -",
-    "data \"buy milk\"",
-    "part photo a.txt",
-    "data \"line one\\r\\nline two --XyZ not yet\"",
-    "end",
-  ]
+  ["part title -", "data \"buy milk\"", "part photo a.txt", "data \"line one\\r\\nline two --XyZ not yet\"", "end"]
 end
 
 def main() -> Void

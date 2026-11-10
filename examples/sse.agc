@@ -7,9 +7,7 @@ PORT = 4568
 
 def produce(events: Channel[Bytes]) -> Void
   for n in 1..5
-    if not events.send(Bond.sse_event("tick #{n}", "tick"), 5000).ok?
-      break
-    end
+    break if not events.send(Bond.sse_event("tick #{n}", "tick"), 5000).ok?
 
     Task.sleep(1000)
   end
@@ -20,7 +18,7 @@ end
 def events(conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(8)
   Task.spawn(&produce, channel)
-  return ok(Bond.sse(conn, channel))
+  ok(Bond.sse(conn, channel))
 end
 
 def main() -> Void

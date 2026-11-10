@@ -13,7 +13,7 @@ import {Conn} from "conn"
 ## A `Conn` that has `value` under `key`; an earlier value of `key` is replaced. A `before` filter calls it, and the
 ## handler and the filters after it read the value with `assigned`.
 export def assign[T](conn: Conn, key: String, value: T) -> Conn
-  return conn.with(assigns: conn.assigns.put(key, JSON.from(value)))
+  conn.with(assigns: conn.assigns.put(key, JSON.from(value)))
 end
 
 ## The value under `key` as the type of `codec`, as a `Result`. It is an `error` when nothing was assigned under `key`
@@ -26,12 +26,10 @@ end
 export def assigned[T](conn: Conn, key: String, codec: Codec[T]) -> Result[T]
   json = try conn.assigns.get(key).to_result("nothing assigned under #{key}")
   case codec.decode(json)
-    ok(value) -> return ok(value)
-    error(message) -> return error("assigned #{key}: #{message}")
+    ok(value) -> ok(value)
+    error(message) -> error("assigned #{key}: #{message}")
   end
 end
 
 ## Whether a value was assigned under `key`.
-export def assigned?(conn: Conn, key: String) -> Bool
-  return conn.assigns.key?(key)
-end
+export def assigned?(conn: Conn, key: String) -> Bool = conn.assigns.key?(key)

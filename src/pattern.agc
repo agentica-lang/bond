@@ -1,16 +1,12 @@
 ## Route patterns such as `/users/:id/posts/:post_id`.
 
 ## The non-empty segments of a path, so `/a/` and `//a` are `/a`.
-export def segments(path: String) -> List[String]
-  return path.split("/").select do |part| not part.empty? end
-end
+export def segments(path: String) -> List[String] = path.split("/").select do |part| not part.empty? end
 
 ## True when `pattern` starts with `/` and its `:name` segments have a name each, all different.
 export def valid?(pattern: String) -> Bool
-  if not pattern.start_with?("/")
-    return false
-  end
+  return false if not pattern.start_with?("/")
 
   names = segments(pattern).select do |part| part.start_with?(":") end
-  return names.all? do |name| name.length > 1 end and names.uniq.size == names.size
+  names.all? do |name| name.length > 1 end and names.uniq.size == names.size
 end

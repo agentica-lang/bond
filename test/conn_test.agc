@@ -1,7 +1,7 @@
 import Conns from "../src/conn"
 
 def request(headers: List[Header]) -> Conns.Conn
-  return Conns.from_request(
+  Conns.from_request(
     HttpRequest(method: "GET", target: "/", path: "/", headers: headers, body: "".bytes, remote_addr: "127.0.0.1"),
   )
 end

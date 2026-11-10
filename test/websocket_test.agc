@@ -10,9 +10,7 @@ HANDSHAKE = [
   Header(name: "sec-websocket-version", value: "13"),
 ]
 
-def silent(conn: Bond.Conn, socket: HTTP.WebSocket) -> Result[Void]
-  return ok()
-end
+def silent(conn: Bond.Conn, socket: HTTP.WebSocket) -> Result[Void] = ok()
 
 # A login check: a handshake without a token is answered 401 before the route.
 def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
@@ -20,35 +18,29 @@ def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
     return ok(Bond.halt(conn, 401, "login first"))
   end
 
-  return ok(conn)
+  ok(conn)
 end
 
 # The headers with the value of `name` replaced.
 def replaced(headers: List[Header], name: String, value: String) -> List[Header]
   kept = headers.select do |field| field.name != name end
-  return kept.push(Header(name: name, value: value))
+  kept.push(Header(name: name, value: value))
 end
 
 # After the route: `/closed` is answered 403 by the filter, and `/broken` makes it fail.
 def overrule(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.path == "/closed"
-    return ok(Bond.text(conn, 403, "closed for maintenance"))
-  end
+  return ok(Bond.text(conn, 403, "closed for maintenance")) if conn.path == "/closed"
 
-  if conn.path == "/broken"
-    return error("the after filter failed")
-  end
+  return error("the after filter failed") if conn.path == "/broken"
 
-  return ok(conn)
+  ok(conn)
 end
 
 # A filter that changes the session of every request, so the answer of a page would carry the cookie.
-def remember(conn: Bond.Conn) -> Result[Bond.Conn]
-  return ok(Bond.set_session(conn, "seen", "yes"))
-end
+def remember(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.set_session(conn, "seen", "yes"))
 
 def app() -> Bond.App
-  return (
+  (
     Bond.app()
     |> Bond.before(&require_token)
     |> Bond.after(&overrule)
@@ -60,7 +52,7 @@ def app() -> Bond.App
 end
 
 def sessions_app() -> Bond.App
-  return (
+  (
     Bond.app()
     |> Bond.sessions(Bond.SessionOptions(secret: "a secret of at least thirty-two bytes!!"))
     |> Bond.before(&remember)

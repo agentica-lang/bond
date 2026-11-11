@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Breaking:** needs Agentica 0.29.0 or later: the sources are formatted with `agentica fmt` of 0.29.0, which uses its syntax (implicit returns, guards, one-line defs). CI tests with Agentica 0.29.0.
+- **Breaking:** needs Agentica 0.30.0 or later: the sources are formatted with `agentica fmt`, which uses the syntax of 0.29.0 (implicit returns, guards, one-line defs). CI tests with Agentica 0.30.0.
 
 ## [0.10.1] - 2026-11-08
 

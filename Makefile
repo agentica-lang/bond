@@ -1,4 +1,4 @@
-# Developing Bond needs Agentica 0.29.0 or later (the sources use its syntax), and so does a project that uses Bond.
+# Developing Bond needs Agentica 0.30.0 or later (the sources use the syntax of 0.29.0 and CI tests with 0.30.0), and so does a project that uses Bond.
 # The check, the format check, the tests of the sources, the documentation site (Hugo), the check of its samples and
 # the site of every release (site-versions).
 

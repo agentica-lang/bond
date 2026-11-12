@@ -339,7 +339,8 @@ end
 
 def header_count_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
   reply = last_reply(ctx)
-  count = reply.fields.select do |field| field.name.downcase == args[0].downcase end.size
+  same = reply.fields.select do |field| field.name.downcase == args[0].downcase end
+  count = same.size
   BDD.assert(ctx, count == args[1].to_i!, "the header appears #{count} times in #{reply.fields}")
 end
 
@@ -418,7 +419,8 @@ end
 
 # The text of a gzip body, or "" when the body is not gzip.
 def gunzipped(reply: Reply) -> String
-  data = Bytes.from_list(reply.bytes.split(" ").select do |word| not word.empty? end.map do |word| word.to_i! end)
+  words = reply.bytes.split(" ").select do |word| not word.empty? end
+  data = Bytes.from_list(words.map do |word| word.to_i! end)
   packed = Zlib.gunzip(data.unwrap_or("".bytes))
   String.from_bytes(packed.unwrap_or("".bytes)).unwrap_or("")
 end
@@ -539,17 +541,27 @@ def keep_big_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.keep(ctx, APP) do |request| serve_big(base, size, request) end
 end
 
+# Gives a `do` block the type of a handler, so that a name can hold it before the pipeline that uses it (master refuses
+# a chain after the `end` of a block).
+def handler(f: Bond.Handler) -> Bond.Handler = f
+
 def serve_big(base: String, size: Int, request: Json) -> Result[Json]
   ask = try JSON.decode(request, Ask)
   try Dir.mkdir(base)
   try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
+  on_get_big = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin") end
+  on_get_save = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
+  on_get_pieces = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 4_096) end
+  on_get_whole = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 1_048_576) end
+  on_get_bad_piece = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 16_777_217) end
+
   app = (
     Bond.app()
-    |> Bond.get("/big") do |conn| Bond.send_file(conn, "#{base}/big.bin") end
-    |> Bond.get("/save") do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
-    |> Bond.get("/pieces") do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 4_096) end
-    |> Bond.get("/whole") do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 1_048_576) end
-    |> Bond.get("/bad-piece") do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 16_777_217) end
+    |> Bond.get("/big", on_get_big)
+    |> Bond.get("/save", on_get_save)
+    |> Bond.get("/pieces", on_get_pieces)
+    |> Bond.get("/whole", on_get_whole)
+    |> Bond.get("/bad-piece", on_get_bad_piece)
     |> Bond.static("/files", base)
     |> Bond.static("/pieces-files", base, 1_073_741_824, 0, false, 0, 4_096)
     |> Bond.static("/whole-files", base, 1_073_741_824, 0, false, 1_048_576, 1_048_576)
@@ -570,9 +582,11 @@ def keep_edit_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   made = Dir.mkdir(base)
   return BDD.skip(ctx, "the folder of the edits cannot be made here: #{made.message}") if not made.ok?
 
+  on_get_sent = handler() do |conn| Bond.send_file(conn, "#{base}/a.txt") end
+
   app = (
     Bond.app()
-    |> Bond.get("/sent") do |conn| Bond.send_file(conn, "#{base}/a.txt") end
+    |> Bond.get("/sent", on_get_sent)
     |> Bond.static("/files", base, 1_073_741_824, 0, false, args[0].to_i!)
     |> Bond.static("/versioned", base, 1_073_741_824, 0, true, args[0].to_i!)
   )
@@ -706,7 +720,8 @@ def reply_of(response: HttpResponse) -> Reply
   start: Map[String, String] = {}
   fields = response.headers.reduce(start) do |acc, header| acc.put(header.name.downcase, header.value) end
   text = String.from_bytes(response.body).unwrap_or("")
-  values = response.body.to_a.map do |byte| byte.to_s end.join(" ")
+  texts = response.body.to_a.map do |byte| byte.to_s end
+  values = texts.join(" ")
   Reply(status: response.status, headers: fields, fields: response.headers, body: text, bytes: values)
 end
 
@@ -778,7 +793,8 @@ def read_raw_answer(socket: Socket) -> HttpResponse
   end
 
   # A refusal has `Content-Length: 0`, so no body is read; an answer without one (a streamed one) would read as empty.
-  wanted = HTTP.header_values(headers, "content-length").map do |value| value.to_i! end.reduce(0) do |_, size| size end
+  sizes = HTTP.header_values(headers, "content-length").map do |value| value.to_i! end
+  wanted = sizes.reduce(0) do |_, size| size end
   body = "".bytes
   while body.size < wanted
     body = Bytes.concat([body, TCP.recv_bytes(socket, wanted - body.size, SOCKET_MS).unwrap!])

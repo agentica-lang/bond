@@ -4,8 +4,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-12
+
+Needs Agentica 0.30.0 or later.
+
 ### Changed
 
+- The sources, the examples and the code samples of the guide never chain a call, an index or a pipe after the `end` of a `do` block, which the next Agentica refuses (`CHECK-CHAIN-AFTER-END`). The behavior does not change.
 - **Breaking:** needs Agentica 0.30.0 or later: the sources are formatted with `agentica fmt`, which uses the syntax of 0.29.0 (implicit returns, guards, one-line defs). CI tests with Agentica 0.30.0.
 
 ## [0.10.1] - 2026-11-08
@@ -191,6 +196,7 @@ First release. Needs Agentica 0.16.0 or later.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
 [unreleased]: https://github.com/agentica-lang/bond/compare/0.10.1...HEAD
+[0.11.0]: https://github.com/agentica-lang/bond/compare/0.10.1...0.11.0
 [0.10.1]: https://github.com/agentica-lang/bond/compare/0.10.0...0.10.1
 [0.10.0]: https://github.com/agentica-lang/bond/compare/0.9.0...0.10.0
 [0.9.0]: https://github.com/agentica-lang/bond/compare/0.8.0...0.9.0

@@ -63,7 +63,8 @@ end
 
 ## True when the request has more than one header `name` (in lowercase), which a browser never sends for `Origin`.
 export def repeated?(conn: Conn, name: String) -> Bool
-  conn.headers.select do |field| field.name.downcase == name end.size > 1
+  same = conn.headers.select do |field| field.name.downcase == name end
+  same.size > 1
 end
 
 # Why `origin` can never be the `Origin` header of a browser, or "" when it can: it is `scheme://host` or

@@ -373,7 +373,8 @@ end
 def disposition(name: String) -> String
   return "attachment" if name.empty?
 
-  plain = name.split("").map do |ch| fallback_char(ch) end.join("")
+  chars = name.split("").map do |ch| fallback_char(ch) end
+  plain = chars.join("")
   return "attachment; filename=\"#{plain}\"" if plain == name
 
   "attachment; filename=\"#{plain}\"; filename*=UTF-8''#{URI.encode_uri_component(name)}"

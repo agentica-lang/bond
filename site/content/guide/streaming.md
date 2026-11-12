@@ -40,7 +40,8 @@ def main() -> Void
   app = Bond.app() |> Bond.get("/ticks", &ticks)
   response = Testing.request(app, "GET", "/ticks")
   puts(response.status)
-  puts(response.headers.select do |header| header.name == "content-type" end[0].value)
+  types = response.headers.select do |header| header.name == "content-type" end
+  puts(types[0].value)
   puts(Testing.text(response).unwrap!)
 end
 ```

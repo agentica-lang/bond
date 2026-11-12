@@ -43,7 +43,8 @@ def main() -> Void
     Test.test("the headers of a file replace the same headers of the conn in any case, and keep the others") do
       before = Conns.add_header(Conns.add_header(request([]), "Cache-Control", "no-store"), "X-Keep", "k")
       answer = Files.respond(before, rep(), "x.css", some("body".bytes)).unwrap!
-      try Test.eq(answer.response_headers.filter do |field| field.name.downcase == "cache-control" end.size, 1)
+      cache_headers = answer.response_headers.filter do |field| field.name.downcase == "cache-control" end
+      try Test.eq(cache_headers.size, 1)
       try Test.eq(answer.response_headers[0].name, "X-Keep")
       Test.assert(pairs(answer).include?("cache-control=public, max-age=60"), "the policy of the file")
     end,

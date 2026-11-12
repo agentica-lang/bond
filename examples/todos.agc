@@ -23,18 +23,27 @@ end
 
 def main() -> Void
   store = Store(todos: ATS.new(), next_id: ATS.new())
+  on_get_root = handler() do |conn| ok(Bond.redirect(conn, "/todos")) end
+  on_get_todos = handler() do |conn| list_todos(store, conn) end
+  on_get_todos_id = handler() do |conn| show_todo(store, conn) end
+  on_post_todos = handler() do |conn| create_todo(store, conn) end
+
   app = (
     Bond.app()
     |> Bond.before(&Bond.log_request)
-    |> Bond.get("/") do |conn| ok(Bond.redirect(conn, "/todos")) end
-    |> Bond.get("/todos") do |conn| list_todos(store, conn) end
-    |> Bond.get("/todos/:id") do |conn| show_todo(store, conn) end
-    |> Bond.post("/todos") do |conn| create_todo(store, conn) end
+    |> Bond.get("/", on_get_root)
+    |> Bond.get("/todos", on_get_todos)
+    |> Bond.get("/todos/:id", on_get_todos_id)
+    |> Bond.post("/todos", on_post_todos)
     |> Bond.not_found() do |conn| ok(Bond.text(conn, 404, "there is nothing at #{conn.path}")) end
   )
 
   Bond.run(app, "127.0.0.1", PORT).unwrap!
 end
+
+# Gives a `do` block the type of a handler, so that a name can hold it before the pipeline that uses it (master refuses
+# a chain after the `end` of a block).
+def handler(f: Bond.Handler) -> Bond.Handler = f
 
 def list_todos(store: Store, conn: Bond.Conn) -> Result[Bond.Conn]
   ok(Bond.json(conn, 200, JSON.from(store.todos.to_map.values)))

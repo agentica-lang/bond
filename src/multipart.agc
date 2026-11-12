@@ -179,7 +179,8 @@ end
 ## `..`. It is never a path on the server: Bond saves a file under a name of its own.
 export def safe_filename(raw: String) -> String
   last = raw.split("/").last.split("\\").last
-  kept = last.split("").select do |ch| shown?(ch.code) end.join("").strip
+  chars = last.split("").select do |ch| shown?(ch.code) end
+  kept = chars.join("").strip
   return "file" if kept == "" or kept == "." or kept == ".."
 
   return kept.slice(0, MAX_FILENAME) if kept.length > MAX_FILENAME

@@ -12,7 +12,8 @@ EPOCH = "Thu, 01 Jan 1970 00:00:00 GMT"
 ## take the cookies from the map when a handler needs several.
 export def cookies(conn: Conn) -> Map[String, String]
   sent = conn.headers.select do |field| field.name.downcase == "cookie" end
-  C.parse(sent.map do |field| field.value end.join("; "))
+  values = sent.map do |field| field.value end
+  C.parse(values.join("; "))
 end
 
 ## The value of a cookie of the request, or an error when it is not there. A missing cookie is not a mistake of the

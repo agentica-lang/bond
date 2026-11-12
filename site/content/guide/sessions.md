@@ -82,16 +82,16 @@ def main() -> Void
   # The cookie of the answer goes back in the next request, as a browser does.
   answer = Testing.request(app, "GET", "/login")
   cookie = HTTP.header_values(answer.headers, "set-cookie").first.split(";").first
-  headers = [Header(name: "Cookie", value: cookie)]
+  headers = [HTTP.Header(name: "Cookie", value: cookie)]
   puts(Testing.text(Testing.request(app, "GET", "/me", headers)).unwrap!)
 
   # A visitor who is logged in, with no login in the test.
   made = Testing.session_cookie(OPTIONS, {"user": "bo"}).unwrap!
-  puts(Testing.text(Testing.request(app, "GET", "/me", [Header(name: "Cookie", value: made)])).unwrap!)
+  puts(Testing.text(Testing.request(app, "GET", "/me", [HTTP.Header(name: "Cookie", value: made)])).unwrap!)
 
   # A changed cookie is an empty session.
   changed = "_bond_session=A" + cookie.split("=")[1].slice(1, 40) + ".AAAA"
-  puts(Testing.text(Testing.request(app, "GET", "/me", [Header(name: "Cookie", value: changed)])).unwrap!)
+  puts(Testing.text(Testing.request(app, "GET", "/me", [HTTP.Header(name: "Cookie", value: changed)])).unwrap!)
 
   gone = Testing.request(app, "GET", "/logout", headers)
   puts(HTTP.header_values(gone.headers, "set-cookie").first)

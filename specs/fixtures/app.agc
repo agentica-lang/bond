@@ -136,34 +136,32 @@ export def build(producers: Producers) -> Bond.App = build_in("specs/fixtures/pu
 export def build_in(public: String, producers: Producers) -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
   stopped: ATS[String, Bool] = ATS.new()
-  on_get_todos = handler() do |conn| list_todos(store, conn) end
-  on_post_todos = handler() do |conn| create_todo(store, conn) end
-  on_get_todos_id = handler() do |conn| show_todo(store, conn) end
-  on_get_download = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("report.txt")) end
-  on_get_download_unicode = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("café \"x\".txt")) end
-  on_get_download_hostile = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", some(hostile())) end
-  on_get_download_nameless = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("")) end
-  on_get_download_not_found = handler() do |conn| not_found_file(public, conn) end
-  on_get_download_plain = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt") end
-  on_get_download_png = handler() do |conn| Bond.send_file(conn, "#{public}/pixel.png") end
-  on_get_download_empty = handler() do |conn| Bond.send_file(conn, "#{public}/empty.txt") end
-  on_get_download_fresh = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(0)) end
-  on_get_download_kept = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(600)) end
-  on_get_download_public = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(600), true) end
-  on_get_download_age_low = handler() do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(-1)) end
-  on_get_download_piece_low = handler() do |conn|
-    Bond.send_file(conn, "#{public}/hello.txt", none, none, false, 100)
-  end
+  on_get_todos = handler do |conn| list_todos(store, conn) end
+  on_post_todos = handler do |conn| create_todo(store, conn) end
+  on_get_todos_id = handler do |conn| show_todo(store, conn) end
+  on_get_download = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("report.txt")) end
+  on_get_download_unicode = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("café \"x\".txt")) end
+  on_get_download_hostile = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", some(hostile())) end
+  on_get_download_nameless = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", some("")) end
+  on_get_download_not_found = handler do |conn| not_found_file(public, conn) end
+  on_get_download_plain = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt") end
+  on_get_download_png = handler do |conn| Bond.send_file(conn, "#{public}/pixel.png") end
+  on_get_download_empty = handler do |conn| Bond.send_file(conn, "#{public}/empty.txt") end
+  on_get_download_fresh = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(0)) end
+  on_get_download_kept = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(600)) end
+  on_get_download_public = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(600), true) end
+  on_get_download_age_low = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, some(-1)) end
+  on_get_download_piece_low = handler do |conn| Bond.send_file(conn, "#{public}/hello.txt", none, none, false, 100) end
 
-  on_get_download_replaced = handler() do |conn| replaced_file(public, conn) end
-  on_get_download_own_cache = handler() do |conn| own_cache_file(public, conn) end
-  on_get_download_missing = handler() do |conn| Bond.send_file(conn, "#{public}/missing.txt") end
-  on_get_download_folder = handler() do |conn| Bond.send_file(conn, "#{public}/sub") end
-  on_get_events = handler() do |conn| events(producers, conn) end
-  on_get_events_304 = handler() do |conn| events_not_modified(producers, conn) end
-  on_get_events_bad_header = handler() do |conn| events_bad_header(producers, conn) end
-  on_get_events_replaced = handler() do |conn| events_replaced(producers, conn) end
-  on_get_endless = handler() do |conn| endless(producers, stopped, conn) end
+  on_get_download_replaced = handler do |conn| replaced_file(public, conn) end
+  on_get_download_own_cache = handler do |conn| own_cache_file(public, conn) end
+  on_get_download_missing = handler do |conn| Bond.send_file(conn, "#{public}/missing.txt") end
+  on_get_download_folder = handler do |conn| Bond.send_file(conn, "#{public}/sub") end
+  on_get_events = handler do |conn| events(producers, conn) end
+  on_get_events_304 = handler do |conn| events_not_modified(producers, conn) end
+  on_get_events_bad_header = handler do |conn| events_bad_header(producers, conn) end
+  on_get_events_replaced = handler do |conn| events_replaced(producers, conn) end
+  on_get_endless = handler do |conn| endless(producers, stopped, conn) end
 
   (
     Bond.app()
@@ -707,7 +705,7 @@ end
 
 def endless(producers: Producers, stopped: ATS[String, Bool], conn: Bond.Conn) -> Result[Bond.Conn]
   channel: Channel[Bytes] = Channel.new(2)
-  keep(producers, Task.spawn() do tick(channel, stopped) end)
+  keep(producers, Task.spawn do tick(channel, stopped) end)
   ok(Bond.sse(conn, channel))
 end
 

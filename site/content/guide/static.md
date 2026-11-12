@@ -27,12 +27,12 @@ import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
-def get(app: Bond.App, path: String, tag: String) -> HttpResponse
-  headers = [Header(name: "If-None-Match", value: tag)]
+def get(app: Bond.App, path: String, tag: String) -> HTTP.Response
+  headers = [HTTP.Header(name: "If-None-Match", value: tag)]
   return Testing.request(app, "GET", path, headers)
 end
 
-def etag(response: HttpResponse) -> String
+def etag(response: HTTP.Response) -> String
   return HTTP.header_values(response.headers, "etag").first
 end
 

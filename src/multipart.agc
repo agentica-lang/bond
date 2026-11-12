@@ -7,6 +7,8 @@
 ## window that grows only when it finds nothing, so a piece of many small parts costs its size, not its size times its
 ## parts.
 
+import HTTP from "std/http"
+
 # Where the parser is: before the first delimiter, right after a delimiter (the rest of its line, or `--` for the
 # last one), in the headers of a part, in its data, or after the last delimiter (the epilogue, which is ignored).
 PREAMBLE = 0
@@ -47,7 +49,7 @@ end
 ## What a piece told: a new part with its headers (names in lowercase), a piece of the data of the current part, or
 ## the last delimiter.
 export enum Event
-  Part(List[Header])
+  Part(List[HTTP.Header])
   Data(Bytes)
   Finished
 end
@@ -66,7 +68,7 @@ end
 
 # A parameter of a header and the index where it ended (its `;` or the end).
 struct Item
-  header: Header
+  header: HTTP.Header
   next: Int
 end
 
@@ -149,7 +151,7 @@ end
 
 ## The `Content-Disposition` of the headers of a part: `form-data` with a `name` (it may be empty) and maybe a
 ## `filename`. An error when there is none, two, another type, or no `name`.
-export def disposition(headers: List[Header]) -> Result[Disposition]
+export def disposition(headers: List[HTTP.Header]) -> Result[Disposition]
   values = headers.select do |field| field.name == "content-disposition" end
   return error("a part must have one Content-Disposition") if values.size != 1
 
@@ -279,16 +281,16 @@ def tail(delimiter: String, buffer: Bytes, at: Int) -> Int
 end
 
 # `Name: value` lines; the names in lowercase, the values as UTF-8 (Latin-1 when they are not).
-def header_lines(head: Bytes) -> Result[List[Header]]
+def header_lines(head: Bytes) -> Result[List[HTTP.Header]]
   text = String.from_bytes(head).unwrap_or(latin1(head))
-  fields: List[Header] = []
+  fields: List[HTTP.Header] = []
   for line in text.split(CRLF)
     case line.index_of(":")
       some(at) ->
         name = line.slice(0, at).strip.downcase
         return error("a header of a part has no name") if name == ""
 
-        fields = fields.push(Header(name: name, value: line.slice(at + 1, line.length - at - 1).strip))
+        fields = fields.push(HTTP.Header(name: name, value: line.slice(at + 1, line.length - at - 1).strip))
 
       none -> return error("a header line of a part has no colon")
     end
@@ -300,8 +302,8 @@ end
 # The value and the parameters of a header such as `form-data; name="a"; filename="b.txt"`: the first item is the
 # value (as a name with an empty value), then each `key=value`, a quoted value unquoted. In quotes only `\"` and `\\`
 # are escapes, as browsers write them: another backslash stays, so `C:\temp\a.txt` keeps its path for `safe_filename`.
-def parameters(header: String) -> List[Header]
-  items: List[Header] = []
+def parameters(header: String) -> List[HTTP.Header]
+  items: List[HTTP.Header] = []
   chars = header.split("")
   at = 0
   while at <= chars.size
@@ -364,7 +366,7 @@ def read_item(chars: List[String], at: Int) -> Item
     text = text.strip
   end
 
-  Item(header: Header(name: key.join("").strip, value: text), next: index)
+  Item(header: HTTP.Header(name: key.join("").strip, value: text), next: index)
 end
 
 # The first `text` in `bytes` from `at`, as an offset in `bytes`. The search looks at a window from `at` that grows 4

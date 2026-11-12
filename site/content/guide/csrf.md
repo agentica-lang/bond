@@ -26,6 +26,7 @@ The scheme of the origin is not compared, since the server may sit behind a prox
 `allowed_origins` lists the sites that may call your app on purpose, for example a front end on another domain. An origin is written as a browser writes it: `"https://admin.example.com"`, with a port when it is not the default, and no path. The comparison ignores case. The program stops at the call when an entry could never be the `Origin` of a browser: a path, a query, a fragment or a user (`/`, `?`, `#`, `@`), no host, a port that is not 1 to 65535, a scheme that is not `http` or `https`, or the default port of the scheme (`https://example.com:443`), which a browser leaves out of the header: write `https://example.com`.
 
 ```agentica
+import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -35,9 +36,9 @@ end
 
 def try_post(app: Bond.App, origin: String, site: String) -> Int
   headers = [
-    Header(name: "Host", value: "example.com"),
-    Header(name: "Origin", value: origin),
-    Header(name: "Sec-Fetch-Site", value: site),
+    HTTP.Header(name: "Host", value: "example.com"),
+    HTTP.Header(name: "Origin", value: origin),
+    HTTP.Header(name: "Sec-Fetch-Site", value: site),
   ]
   return Testing.request(app, "POST", "/transfer", headers).status
 end

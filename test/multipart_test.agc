@@ -1,3 +1,4 @@
+import HTTP from "std/http"
 import Multipart from "../src/multipart"
 
 BOUNDARY = "XyZ"
@@ -130,17 +131,25 @@ def main() -> Void
       Test.error?(Multipart.boundary("multipart/form-data; boundary=a;b=\"c\"; boundary=d"))
     end,
     Test.test("the Content-Disposition: name, filename with quotes and semicolons, and the bad ones") do
-      field = [Header(name: "content-disposition", value: "form-data; name=\"a;b\"; filename=\"x \\\"y\\\".txt\"")]
+      field = [
+        HTTP.Header(name: "content-disposition", value: "form-data; name=\"a;b\"; filename=\"x \\\"y\\\".txt\""),
+      ]
+
       found = try Multipart.disposition(field)
       try Test.eq(found.name, "a;b")
       try Test.eq(found.filename, some("x \"y\".txt"))
-      path = [Header(name: "content-disposition", value: "form-data; name=\"f\"; filename=\"C:\\temp\\a.txt\"")]
+      path = [HTTP.Header(name: "content-disposition", value: "form-data; name=\"f\"; filename=\"C:\\temp\\a.txt\"")]
       raw = (try Multipart.disposition(path)).filename.unwrap_or("")
       try Test.eq(raw, "C:\\temp\\a.txt")
       try Test.eq(Multipart.safe_filename(raw), "a.txt")
       try Test.error?(Multipart.disposition([]))
-      try Test.error?(Multipart.disposition([Header(name: "content-disposition", value: "attachment; name=\"a\"")]))
-      Test.error?(Multipart.disposition([Header(name: "content-disposition", value: "form-data; filename=\"a\"")]))
+      try Test.error?(
+        Multipart.disposition([HTTP.Header(name: "content-disposition", value: "attachment; name=\"a\"")]),
+      )
+
+      Test.error?(
+        Multipart.disposition([HTTP.Header(name: "content-disposition", value: "form-data; filename=\"a\"")]),
+      )
     end,
     Test.test("the data of a file may hold any byte, the bytes of a delimiter too") do
       every = Bytes.from_list((0..255).to_a).unwrap!

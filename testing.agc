@@ -39,12 +39,12 @@ export def request(
   app: App,
   method: String,
   target: String,
-  headers: List[Header] = [],
+  headers: List[HTTP.Header] = [],
   body: String = "",
   max_pieces: Int = 0,
   timeout_ms: Int = TIMEOUT_MS,
   remote_addr: String = LOOPBACK,
-) -> HttpResponse
+) -> HTTP.Response
   send(app, method, target, headers, body.bytes, max_pieces, timeout_ms, remote_addr)
 end
 
@@ -56,14 +56,14 @@ export def request_from(
   remote_addr: String,
   method: String,
   target: String,
-  headers: List[Header] = [],
+  headers: List[HTTP.Header] = [],
   body: String = "",
-) -> HttpResponse
+) -> HTTP.Response
   send(app, method, target, headers, body.bytes, 0, TIMEOUT_MS, remote_addr)
 end
 
 ## The body of `response` as text: UTF-8 only, and a `charset` other than `utf-8` is an error, as `HTTP.text` has it.
-export def text(response: HttpResponse) -> Result[String] = HTTP.text(response.body, response.headers)
+export def text(response: HTTP.Response) -> Result[String] = HTTP.text(response.body, response.headers)
 
 ## Like `request`, with the body as `Bytes` (so `headers` come before it and have no default). The rules and the
 ## response are those of `request`.
@@ -71,17 +71,17 @@ export def request_bytes(
   app: App,
   method: String,
   target: String,
-  headers: List[Header],
+  headers: List[HTTP.Header],
   body: Bytes,
   max_pieces: Int = 0,
   timeout_ms: Int = TIMEOUT_MS,
   remote_addr: String = LOOPBACK,
-) -> HttpResponse
+) -> HTTP.Response
   send(app, method, target, headers, body, max_pieces, timeout_ms, remote_addr)
 end
 
 ## The `Cookie` header value of a request that has a session with `data`, signed as `Bond.sessions(app, options)` would
-## sign it (`_bond_session=...`, for `options.name`): `[Header(name: "cookie", value: cookie)]` is a request of a
+## sign it (`_bond_session=...`, for `options.name`): `[HTTP.Header(name: "cookie", value: cookie)]` is a request of a
 ## visitor who is logged in, with no round trip to a login route. The options are not checked as `sessions` checks
 ## them (a short secret and a negative `max_age` are accepted, so a test can make an expired cookie). An `error` when
 ## the session is over the size of a cookie.
@@ -95,20 +95,20 @@ def send(
   app: App,
   method: String,
   target: String,
-  headers: List[Header],
+  headers: List[HTTP.Header],
   body: Bytes,
   max_pieces: Int,
   timeout_ms: Int,
   remote_addr: String,
-) -> HttpResponse
+) -> HTTP.Response
   path = target
   case target.index_of("?")
     some(at) -> path = target.slice(0, at)
     none -> path = target
   end
 
-  lowered = headers.map do |header| Header(name: header.name.downcase, value: header.value) end
-  request = HttpRequest(
+  lowered = headers.map do |header| HTTP.Header(name: header.name.downcase, value: header.value) end
+  request = HTTP.Request(
     method: method,
     target: target,
     path: path,

@@ -161,10 +161,10 @@ export def after(app: App, filter: Handler) -> App = app.with(after_filters: app
 ## uses `handle_stream` instead.
 export def handle(
   app: App,
-  request: HttpRequest,
+  request: HTTP.Request,
   max_pieces: Int = 0,
   timeout_ms: Int = 10_000, # keep in sync with Conns.to_response, Testing.request and specs/steps.agc
-) -> HttpResponse
+) -> HTTP.Response
   Conns.to_response(answer(app, request, none), max_pieces, timeout_ms)
 end
 
@@ -173,26 +173,28 @@ end
 ## halted before it, or with no route, is not read.
 export def handle_with(
   app: App,
-  request: HttpRequest,
+  request: HTTP.Request,
   max_pieces: Int,
   timeout_ms: Int,
   receive: Receiver,
-) -> HttpResponse
+) -> HTTP.Response
   Conns.to_response(answer(app, request, some(receive)), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
 ## other body is one closed piece.
-export def handle_stream(app: App, request: HttpRequest) -> HTTP.StreamResponse
+export def handle_stream(app: App, request: HTTP.Request) -> HTTP.StreamResponse
   Conns.to_stream_response(answer(app, request, none))
 end
 
 ## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
 ## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
-export def handle_answer(app: App, request: HttpRequest) -> HTTP.Answer = upgrade_or_stream(answer(app, request, none))
+export def handle_answer(app: App, request: HTTP.Request) -> HTTP.Answer
+  upgrade_or_stream(answer(app, request, none))
+end
 
 ## Like `handle_answer`, with the `Receiver` of `Bond.uploads`, as for `handle_with`.
-export def handle_answer_with(app: App, request: HttpRequest, receive: Receiver) -> HTTP.Answer
+export def handle_answer_with(app: App, request: HTTP.Request, receive: Receiver) -> HTTP.Answer
   upgrade_or_stream(answer(app, request, some(receive)))
 end
 
@@ -204,9 +206,9 @@ def upgrade_or_stream(conn: Conn) -> HTTP.Answer
 end
 
 # The `Conn` that answers the request, before it is turned into a response.
-def answer(app: App, request: HttpRequest, receive: Optional[Receiver]) -> Conn
+def answer(app: App, request: HTTP.Request, receive: Optional[Receiver]) -> Conn
   conn = Conns.from_request(request)
-  task = Task.spawn() do serve(app, conn, receive) end
+  task = Task.spawn do serve(app, conn, receive) end
   case Task.await(task)
     ok(done) -> done
     error(message) ->
@@ -343,7 +345,7 @@ def answer_error(app: App, conn: Conn, message: String) -> Conn
     upgrade: none,
   )
 
-  task = Task.spawn() do app.on_error.call(failing, message) end
+  task = Task.spawn do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> answer.with(halted: true)
     error(reason) ->

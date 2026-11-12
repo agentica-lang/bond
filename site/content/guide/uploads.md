@@ -21,6 +21,7 @@ A file is a `Bond.UploadedFile`:
 - `size`: its size in bytes.
 
 ```agentica
+import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -38,7 +39,7 @@ def main() -> Void
     "--XyZ\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"../me.png\"\r\n",
     "Content-Type: image/png\r\n\r\nPNG...\r\n--XyZ--\r\n",
   ].join("")
-  headers = [Header(name: "content-type", value: "multipart/form-data; boundary=#{boundary}")]
+  headers = [HTTP.Header(name: "content-type", value: "multipart/form-data; boundary=#{boundary}")]
   response = Testing.request_bytes(app, "POST", "/photos", headers, body.bytes)
   puts(response.status)
   puts(Testing.text(response).unwrap!)

@@ -8,34 +8,34 @@ import {App} from "app"
 ## Serves `app` in the background and returns at once. The server belongs to the task that calls this, so call it
 ## from the task that keeps it, such as `main`. Port 0 picks a free port (`local_port`). It uses the default
 ## options of `std/http`; `start_with` takes others.
-export def start(app: App, host: String, port: Int) -> Result[HttpServer]
-  start_with(app, host, port, HttpServerOptions())
+export def start(app: App, host: String, port: Int) -> Result[HTTP.Server]
+  start_with(app, host, port, HTTP.ServerOptions())
 end
 
-## Like `start`, with the options of the server of `std/http` (`HttpServerOptions`: the timeouts, the connections
-## at once and the body limit), such as `HttpServerOptions(max_body_bytes: 4_194_304)`.
+## Like `start`, with the options of the server of `std/http` (`HTTP.ServerOptions`: the timeouts, the connections
+## at once and the body limit), such as `HTTP.ServerOptions(max_body_bytes: 4_194_304)`.
 ## With `Bond.uploads`, the server takes a `multipart/form-data` body up to the `max_total_bytes` of the uploads, and
 ## the other bodies keep `max_body_bytes`.
-export def start_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[HttpServer]
+export def start_with(app: App, host: String, port: Int, options: HTTP.ServerOptions) -> Result[HTTP.Server]
   limit = options.max_body_bytes
-  served = serving() do |request, body| answer(app, limit, request, body) end
+  served = serving do |request, body| answer(app, limit, request, body) end
   HTTP.serve(host, port, served, options.with(max_body_bytes: Uploads.server_limit(app, limit)))
 end
 
-export def local_port(server: HttpServer) -> Int = HTTP.local_port(server)
+export def local_port(server: HTTP.Server) -> Int = HTTP.local_port(server)
 
 ## Waits until the server is closed.
-export def wait(server: HttpServer) -> Result[Void] = HTTP.wait(server)
+export def wait(server: HTTP.Server) -> Result[Void] = HTTP.wait(server)
 
-export def stop(server: HttpServer) -> Void
+export def stop(server: HTTP.Server) -> Void
   HTTP.close_server(server)
 end
 
 ## Serves `app` and waits: it returns only when the server closes or fails to start.
-export def run(app: App, host: String, port: Int) -> Result[Void] = run_with(app, host, port, HttpServerOptions())
+export def run(app: App, host: String, port: Int) -> Result[Void] = run_with(app, host, port, HTTP.ServerOptions())
 
 ## Like `run`, with the options of `start_with`.
-export def run_with(app: App, host: String, port: Int, options: HttpServerOptions) -> Result[Void]
+export def run_with(app: App, host: String, port: Int, options: HTTP.ServerOptions) -> Result[Void]
   server = try start_with(app, host, port, options)
   wait(server)
 end
@@ -47,7 +47,7 @@ end
 # read whole first, so the server accepts an upgrade (it refuses one before the body of the request was read).
 #
 # A `multipart/form-data` body of an app with uploads is read as it arrives instead (`Uploads.answer`).
-def answer(app: App, limit: Int, request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def answer(app: App, limit: Int, request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case Uploads.applies(app, request)
     some(options) -> return ok(Uploads.answer(app, options, request, body))
     none -> nil

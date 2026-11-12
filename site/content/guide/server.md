@@ -27,6 +27,6 @@ end
 
 ## Options
 
-`Bond.run_with(app, host, port, options)` and `Bond.start_with(app, host, port, options)` take the options of the server of `std/http`. `HttpServerOptions` has `request_timeout_ms`, `idle_timeout_ms`, `max_connections` and `max_body_bytes`. Every field has a default, so `HttpServerOptions(max_body_bytes: 4_194_304)` changes one field and keeps the rest. The other functions use `HttpServerOptions()`.
+`Bond.run_with(app, host, port, options)` and `Bond.start_with(app, host, port, options)` take the options of the server of `std/http`. `HTTP.ServerOptions` has `request_timeout_ms`, `idle_timeout_ms`, `max_connections` and `max_body_bytes`. Every field has a default, so `HTTP.ServerOptions(max_body_bytes: 4_194_304)` changes one field and keeps the rest. The other functions use `HTTP.ServerOptions()`.
 
 Bond reads the body whole before it calls the app, as `Conn` holds it as bytes. A refused body is answered by `HTTP.body_refusal` and the app is not called: a body over `max_body_bytes` is a 413, a chunk line that is too long a 431 and a bad chunk a 400, all with `Connection: close`. A client that leaves before the body is whole gets no answer.

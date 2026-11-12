@@ -3,6 +3,7 @@
 ## in one call and answered as a plain body; a bigger one is read and sent in pieces by a task. `Bond.static` answers
 ## through the same `respond`.
 
+import HTTP from "std/http"
 import MIME from "std/mime"
 import URI from "std/uri"
 import Conns from "conn"
@@ -261,14 +262,14 @@ end
 # The headers of a 304, and of every answer: the validators, the cache policy and `Vary`.
 def validated(conn: Conn, rep: Rep) -> Conn = Conns.set_headers(conn, validators(rep))
 
-def validators(rep: Rep) -> List[Header]
-  fields = [Header(name: "etag", value: rep.etag), Header(name: "last-modified", value: rep.last_modified)]
+def validators(rep: Rep) -> List[HTTP.Header]
+  fields = [HTTP.Header(name: "etag", value: rep.etag), HTTP.Header(name: "last-modified", value: rep.last_modified)]
   if not rep.cache_control.empty?
-    fields = fields.push(Header(name: "cache-control", value: rep.cache_control))
+    fields = fields.push(HTTP.Header(name: "cache-control", value: rep.cache_control))
   end
 
   if rep.vary
-    fields = fields.push(Header(name: "vary", value: "Accept-Encoding"))
+    fields = fields.push(HTTP.Header(name: "vary", value: "Accept-Encoding"))
   end
 
   fields
@@ -344,25 +345,25 @@ end
 # encoding, and the disposition. They are set in one call, in this order.
 def headed(conn: Conn, rep: Rep, slice: Slice) -> Conn
   fields = validators(rep)
-  fields = fields.push(Header(name: "content-type", value: rep.type))
-  fields = fields.push(Header(name: "x-content-type-options", value: "nosniff"))
-  fields = fields.push(Header(name: "accept-ranges", value: "bytes"))
+  fields = fields.push(HTTP.Header(name: "content-type", value: rep.type))
+  fields = fields.push(HTTP.Header(name: "x-content-type-options", value: "nosniff"))
+  fields = fields.push(HTTP.Header(name: "accept-ranges", value: "bytes"))
   case rep.attachment
-    some(name) -> fields = fields.push(Header(name: "content-disposition", value: disposition(name)))
+    some(name) -> fields = fields.push(HTTP.Header(name: "content-disposition", value: disposition(name)))
     none -> nil
   end
 
   if not rep.encoding.empty?
-    fields = fields.push(Header(name: "content-encoding", value: rep.encoding))
+    fields = fields.push(HTTP.Header(name: "content-encoding", value: rep.encoding))
   end
 
   if slice.status == 206
     last = slice.first + slice.size - 1
-    fields = fields.push(Header(name: "content-range", value: "bytes #{slice.first}-#{last}/#{rep.size}"))
+    fields = fields.push(HTTP.Header(name: "content-range", value: "bytes #{slice.first}-#{last}/#{rep.size}"))
   end
 
   if slice.status == 416
-    fields = fields.push(Header(name: "content-range", value: "bytes */#{rep.size}"))
+    fields = fields.push(HTTP.Header(name: "content-range", value: "bytes */#{rep.size}"))
   end
 
   Conns.set_headers(conn, fields)

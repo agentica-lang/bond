@@ -18,8 +18,8 @@ jobs:
       - name: Install the pinned Agentica release
         uses: agentica-lang/setup-agentica@v1
         with:
-          version: 0.30.0
-          sha256: cad88bfdd768271efd31e4a8b84f5e8b0c7a232edae27b494e6d518cbc401e38 # linux-x86_64
+          version: 0.31.0-alpha.1
+          sha256: f41577570adeaaaa1b3d78e18a65de78187f2175742a2f8a5f0241741fc30b78 # linux-x86_64
 
       # The WebSocket client of the specs (package websocket-client, with a manifest of its own in specs/fixtures/ws_client).
       - name: Install the dependencies of the specs

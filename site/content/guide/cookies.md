@@ -87,7 +87,7 @@ def main() -> Void
       puts(line)
     end
   end
-  headers = [Header(name: "Cookie", value: "sid=abc123; theme=dark")]
+  headers = [HTTP.Header(name: "Cookie", value: "sid=abc123; theme=dark")]
   puts(Testing.text(Testing.request(app, "GET", "/whoami", headers)).unwrap!)
   puts(Testing.text(Testing.request(app, "GET", "/whoami")).unwrap!)
 end

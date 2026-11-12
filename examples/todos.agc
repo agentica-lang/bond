@@ -23,10 +23,10 @@ end
 
 def main() -> Void
   store = Store(todos: ATS.new(), next_id: ATS.new())
-  on_get_root = handler() do |conn| ok(Bond.redirect(conn, "/todos")) end
-  on_get_todos = handler() do |conn| list_todos(store, conn) end
-  on_get_todos_id = handler() do |conn| show_todo(store, conn) end
-  on_post_todos = handler() do |conn| create_todo(store, conn) end
+  on_get_root = handler do |conn| ok(Bond.redirect(conn, "/todos")) end
+  on_get_todos = handler do |conn| list_todos(store, conn) end
+  on_get_todos_id = handler do |conn| show_todo(store, conn) end
+  on_post_todos = handler do |conn| create_todo(store, conn) end
 
   app = (
     Bond.app()

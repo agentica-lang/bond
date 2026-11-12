@@ -34,7 +34,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 
 ## Client address
 
-`conn.remote_addr` is the IP address of the peer that opened the connection, with no port (`"127.0.0.1"`, `"::1"`), as the server of `std/http` fills `HttpRequest.remote_addr`. It is `""` in a `Conn` that you build by hand without it.
+`conn.remote_addr` is the IP address of the peer that opened the connection, with no port (`"127.0.0.1"`, `"::1"`), as the server of `std/http` fills `HTTP.Request.remote_addr`. It is `""` in a `Conn` that you build by hand without it.
 
 Behind a proxy or a load balancer, it is the address of the proxy, not of the visitor. Bond does not read `X-Forwarded-For` or `Forwarded`: any client can send them, so trusting them by default would let a visitor choose its own address. If your proxy sets one, read it with `Bond.request_header(conn, "x-forwarded-for")` and use it only when the request came from your proxy. [Testing](/guide/testing/) shows how a test chooses the address.
 
@@ -47,6 +47,7 @@ A filter often looks something up that the handler needs too, such as the signed
 `Bond.assigned` is an `error` when nothing was assigned under the key and when the value does not decode as the codec's type. Both are mistakes of the program, not of the client, so a handler that uses `try` answers a 500. A handler that allows both cases asks with `Bond.assigned?` first.
 
 ```agentica
+import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -70,7 +71,7 @@ end
 
 def main() -> Void
   app = Bond.app() |> Bond.before(&sign_in) |> Bond.get("/room", &room)
-  headers = [Header(name: "x-user", value: "ana")]
+  headers = [HTTP.Header(name: "x-user", value: "ana")]
   puts(Testing.text(Testing.request(app, "GET", "/room", headers)).unwrap!)
   puts(Testing.request(app, "GET", "/room").status)
 end

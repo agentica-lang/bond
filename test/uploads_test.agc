@@ -3,7 +3,7 @@ import Bond from "../bond"
 import Testing from "../testing"
 
 BOUNDARY = "bond-test-boundary"
-CONTENT_TYPE = [Header(name: "content-type", value: "multipart/form-data; boundary=bond-test-boundary")]
+CONTENT_TYPE = [HTTP.Header(name: "content-type", value: "multipart/form-data; boundary=bond-test-boundary")]
 LIMITS = Bond.UploadOptions(max_file_bytes: 16, max_field_bytes: 64, max_fields_bytes: 256, max_total_bytes: 1_024)
 
 # What a handler saw of a form: the text fields, then each file with its content, and whether its file is there.
@@ -64,9 +64,9 @@ def file_part(name: String, filename: String, value: String) -> String
   "--#{BOUNDARY}\r\n#{head}\r\n\r\n#{value}\r\n"
 end
 
-def post(target: String, parts: List[String]) -> HttpResponse = post_to(app(), target, parts)
+def post(target: String, parts: List[String]) -> HTTP.Response = post_to(app(), target, parts)
 
-def post_to(served: Bond.App, target: String, parts: List[String]) -> HttpResponse
+def post_to(served: Bond.App, target: String, parts: List[String]) -> HTTP.Response
   body = "#{parts.join("")}--#{BOUNDARY}--\r\n"
   Testing.request_bytes(served, "POST", target, CONTENT_TYPE, body.bytes)
 end
@@ -83,7 +83,7 @@ def scratch() -> Result[String]
   ok(dir)
 end
 
-def text(response: HttpResponse) -> String = String.from_bytes(response.body).unwrap!
+def text(response: HTTP.Response) -> String = String.from_bytes(response.body).unwrap!
 
 def main() -> Void
   Test.run([
@@ -134,7 +134,7 @@ def main() -> Void
       Test.eq(after_failed.unwrap_or(["?"]), [])
     end,
     Test.test("a body is not read when a before filter halts, the path has no route or the method is GET") do
-      broken = [Header(name: "content-type", value: "multipart/form-data; boundary=bond-test-boundary")]
+      broken = [HTTP.Header(name: "content-type", value: "multipart/form-data; boundary=bond-test-boundary")]
       junk = "--#{BOUNDARY} junk\r\n".bytes
       try Test.eq(Testing.request_bytes(app(), "POST", "/show", broken, junk).status, 400)
       try Test.eq(Testing.request_bytes(app(), "POST", "/nothing", broken, junk).status, 404)
@@ -153,7 +153,7 @@ def main() -> Void
       try Test.eq(post("/show", ["--#{BOUNDARY} junk\r\n"]).status, 400)
       cut = Testing.request_bytes(app(), "POST", "/show", CONTENT_TYPE, field("title", "t").bytes)
       try Test.eq(cut.status, 400)
-      no_boundary = [Header(name: "content-type", value: "multipart/form-data")]
+      no_boundary = [HTTP.Header(name: "content-type", value: "multipart/form-data")]
       Test.eq(Testing.request_bytes(app(), "POST", "/show", no_boundary, "".bytes).status, 400)
     end,
     Test.test("a text field that is not UTF-8 is a 400") do

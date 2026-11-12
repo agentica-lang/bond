@@ -4,6 +4,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Needs Agentica 0.31.0-alpha.1 or later.
+
+### Changed
+
+- **Breaking:** needs Agentica 0.31.0-alpha.1 or later: the sources, the examples and the guide use the HTTP types of `std/http` (`HTTP.Header`, `HTTP.Request`, `HTTP.Response`, `HTTP.Server`, `HTTP.ServerOptions`), which are now the only names of those types. CI tests with Agentica 0.31.0-alpha.1.
+
 ## [0.11.0] - 2026-11-12
 
 Needs Agentica 0.30.0 or later.

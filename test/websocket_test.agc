@@ -4,10 +4,10 @@ import Testing from "../testing"
 import WebSockets from "../src/websocket"
 
 HANDSHAKE = [
-  Header(name: "upgrade", value: "websocket"),
-  Header(name: "connection", value: "Upgrade"),
-  Header(name: "sec-websocket-key", value: "dGhlIHNhbXBsZSBub25jZQ=="),
-  Header(name: "sec-websocket-version", value: "13"),
+  HTTP.Header(name: "upgrade", value: "websocket"),
+  HTTP.Header(name: "connection", value: "Upgrade"),
+  HTTP.Header(name: "sec-websocket-key", value: "dGhlIHNhbXBsZSBub25jZQ=="),
+  HTTP.Header(name: "sec-websocket-version", value: "13"),
 ]
 
 def silent(conn: Bond.Conn, socket: HTTP.WebSocket) -> Result[Void] = ok()
@@ -22,9 +22,9 @@ def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 # The headers with the value of `name` replaced.
-def replaced(headers: List[Header], name: String, value: String) -> List[Header]
+def replaced(headers: List[HTTP.Header], name: String, value: String) -> List[HTTP.Header]
   kept = headers.select do |field| field.name != name end
-  kept.push(Header(name: name, value: value))
+  kept.push(HTTP.Header(name: name, value: value))
 end
 
 # After the route: `/closed` is answered 403 by the filter, and `/broken` makes it fail.
@@ -78,7 +78,7 @@ def main() -> Void
     end,
     Test.test("a before filter that halts answers the handshake instead") do
       try Test.eq(Testing.request(app(), "GET", "/private", HANDSHAKE, "").status, 401)
-      with_token = HANDSHAKE.push(Header(name: "x-token", value: "t"))
+      with_token = HANDSHAKE.push(HTTP.Header(name: "x-token", value: "t"))
       Test.eq(Testing.request(app(), "GET", "/private", with_token, "").status, 101)
     end,
     Test.test("an after filter that answers something else is sent, with no upgrade") do
@@ -93,10 +93,10 @@ def main() -> Void
       Test.eq(HTTP.header_values(response.headers, "upgrade"), [])
     end,
     Test.test("an empty Origin and two Origin headers are refused") do
-      empty = HANDSHAKE.push(Header(name: "origin", value: ""))
+      empty = HANDSHAKE.push(HTTP.Header(name: "origin", value: ""))
       try Test.eq(Testing.request(app(), "GET", "/live", empty, "").status, 403)
-      host = Header(name: "host", value: "example.com")
-      same = Header(name: "origin", value: "http://example.com")
+      host = HTTP.Header(name: "host", value: "example.com")
+      same = HTTP.Header(name: "origin", value: "http://example.com")
       try Test.eq(Testing.request(app(), "GET", "/live", HANDSHAKE.concat([host, same]), "").status, 101)
       twice = HANDSHAKE.concat([host, same, same])
       Test.eq(Testing.request(app(), "GET", "/live", twice, "").status, 403)

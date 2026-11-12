@@ -6,14 +6,14 @@ Documentation: https://agentica-lang.github.io/bond/
 
 ## Install
 
-Bond needs Agentica 0.31.0-alpha.1 or later; the [changelog](CHANGELOG.md) has the version each release needs. In your `agentica.toml`:
+Bond needs Agentica 0.31.0-alpha.1 or later; with Agentica 0.30, use Bond 0.11.0. The [changelog](CHANGELOG.md) has the version each release needs. In your `agentica.toml`:
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.11.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.12.0-alpha.1" }
 ```
 
-Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.11.0`. Both write `agentica.lock` and `deps/bond/` (`agentica install` does it for a manifest you edited).
+Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.12.0-alpha.1`. Both write `agentica.lock` and `deps/bond/` (`agentica install` does it for a manifest you edited).
 
 ## Example
 

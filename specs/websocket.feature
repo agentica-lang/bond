@@ -6,7 +6,7 @@ Feature: WebSocket routes
   its bytes by hand. The framing itself (masks, fragments, pings) is the contract of `std/http`, and nothing more is
   checked here.
 
-  # The client checks `Sec-WebSocket-Accept` against its own random key, and an upgrade with a wrong one is no handshake.
+  # The client checks `Sec-WebSocket-Accept` against its own random key: an upgrade with a wrong one is no handshake.
   Scenario: A page, a stream and a WebSocket on one port, and the WebSocket echoes with the param of the route
     Given the WebSocket server listens on a free port
     When I get "/hello" over the socket

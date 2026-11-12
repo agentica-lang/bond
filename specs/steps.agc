@@ -1,7 +1,8 @@
 ## The steps of the features. A scenario drives the app of `fixtures/app.agc` in process through `Testing.request`
 ## (no socket), except the steps of the server, which talk to the program of `fixtures/server.agc` (or
 ## `fixtures/websocket_server.agc`) over a socket. A WebSocket client is the program of `fixtures/ws_client/peer.agc`
-## (the package `websocket-client`); the one peer that a correct client cannot be (it never answers a ping) writes its bytes by hand.
+## (the package `websocket-client`); the one peer that a correct client cannot be (it never answers a ping) writes its
+## bytes by hand.
 
 import BDD from "std/bdd"
 import HTTP from "std/http"
@@ -817,7 +818,12 @@ def talk_websocket(
   program = Path.join([Path.cwd().unwrap!, PEER]).unwrap!
   fields = headers.map do |field| "#{field.name}: #{field.value}" end
   peer = Process.spawn_captured("agentica", [program, "#{port}", path, mode, text].concat(fields)).unwrap!
-  line = Process.read_line(peer, PEER_MS).unwrap!
+  read = Process.read_line(peer, PEER_MS)
+  # The peer prints one line and ends; a peer that is stuck is killed here, not left to run until the scenario ends.
+  Process.close(peer)
+  return BDD.assert(ctx, false, "the WebSocket peer gave no answer: #{read.message}") if not read.ok?
+
+  line = read.unwrap!
   talk = JSON.decode(JSON.parse(line).unwrap!, Talk).unwrap!
   response = HttpResponse(status: talk.status, headers: talk.fields, body: talk.body.bytes)
   replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))

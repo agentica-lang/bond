@@ -7,8 +7,8 @@ JOBS ?= 4
 
 .PHONY: install check fmt-check test site site-serve site-sass site-samples site-versions site-versions-test
 
-# The WebSocket client of the specs is a package with a manifest of its own (specs/fixtures/ws_client), so that Bond has no
-# dependencies: it must be installed before `check` and `test`.
+# The WebSocket client of the specs is a package with a manifest of its own (specs/fixtures/ws_client), so that Bond
+# has no dependencies: it must be installed before `check` and `test`.
 install:
 	@cd specs/fixtures/ws_client && agentica install
 

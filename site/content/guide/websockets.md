@@ -92,14 +92,14 @@ end
 def main() -> Void
   app = Bond.app() |> Bond.websocket("/live", &live)
   handshake = [
-    Header(name: "upgrade", value: "websocket"),
-    Header(name: "connection", value: "Upgrade"),
-    Header(name: "sec-websocket-key", value: "dGhlIHNhbXBsZSBub25jZQ=="),
-    Header(name: "sec-websocket-version", value: "13"),
+    HTTP.Header(name: "upgrade", value: "websocket"),
+    HTTP.Header(name: "connection", value: "Upgrade"),
+    HTTP.Header(name: "sec-websocket-key", value: "dGhlIHNhbXBsZSBub25jZQ=="),
+    HTTP.Header(name: "sec-websocket-version", value: "13"),
   ]
   puts(Testing.request(app, "GET", "/live", handshake).status)
   puts(Testing.request(app, "GET", "/live").status)
-  cross = handshake.push(Header(name: "origin", value: "https://evil.test"))
+  cross = handshake.push(HTTP.Header(name: "origin", value: "https://evil.test"))
   puts(Testing.request(app, "GET", "/live", cross).status)
 end
 ```

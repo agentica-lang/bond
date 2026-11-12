@@ -32,7 +32,7 @@ BYTE = 256
 struct Ask
   method: String
   path: String
-  headers: List[Header]
+  headers: List[HTTP.Header]
   body: String
   raw: List[Int] = [] # the body as bytes when it is not empty (then `body` is not used)
   max_pieces: Int = 0
@@ -50,7 +50,7 @@ end
 # The line that `fixtures/ws_client/peer.agc` prints: the answer of the handshake and what the WebSocket heard.
 struct Talk
   status: Int
-  fields: List[Header]
+  fields: List[HTTP.Header]
   body: String
   answer: String = ""
   close_code: Int = 0
@@ -65,7 +65,7 @@ end
 struct Reply
   status: Int
   headers: Map[String, String]
-  fields: List[Header]
+  fields: List[HTTP.Header]
   body: String # the text of the body, or "" when it is not UTF-8
   bytes: String # the byte values of the body, as "255 254 0"
 end
@@ -107,7 +107,7 @@ def main() -> Void
     end,
     BDD.step("I post the bytes {string} to {string} as {string}", &post_bytes),
     BDD.step("I send {string} to {string} with the header {string} set to {string}") do |ctx, args|
-      send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: args[2], value: args[3])], body: ""))
+      send(ctx, Ask(method: args[0], path: args[1], headers: [HTTP.Header(name: args[2], value: args[3])], body: ""))
     end,
     BDD.step(
       "I send {string} to {string} with the header {string} set to {string} and the body:",
@@ -120,7 +120,7 @@ def main() -> Void
     BDD.step("I post to {string} as {string}:", &post_as),
     BDD.step("I post to {string} as {string} and {string}:", &post_as_two_types),
     BDD.step("I send {string} to {string} with the cookie {string}") do |ctx, args|
-      send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: args[2])], body: ""))
+      send(ctx, Ask(method: args[0], path: args[1], headers: [HTTP.Header(name: "cookie", value: args[2])], body: ""))
     end,
     BDD.step("I send {string} to {string} with the cookies {string} and {string}", &send_two_cookies),
     BDD.step("I send {string} to {string} with the session cookie of the last answer", &send_with_last_session),
@@ -183,7 +183,14 @@ def main() -> Void
       send_upload(ctx, "title=#{List.repeat("y", args[0].to_i!).join("")}", "a.txt", "small", args[1])
     end,
     BDD.step("I post the file {string} holding {string} to {string} over the socket from another site") do |ctx, args|
-      send_upload(ctx, "title=x", args[0], args[1], args[2], [Header(name: "sec-fetch-site", value: "cross-site")])
+      send_upload(
+        ctx,
+        "title=x",
+        args[0],
+        args[1],
+        args[2],
+        [HTTP.Header(name: "sec-fetch-site", value: "cross-site")],
+      )
     end,
     BDD.step("the body has the line {string}", &body_has_line),
     BDD.step("the saved file of the answer is removed", &saved_file_removed),
@@ -206,27 +213,27 @@ def main() -> Void
 end
 
 def post_bytes(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: "content-type", value: args[2])]
+  headers = [HTTP.Header(name: "content-type", value: args[2])]
   send(ctx, Ask(method: "POST", path: args[1], headers: headers, body: "", raw: numbers(args[0])))
 end
 
 def send_header_and_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: args[2], value: args[3])]
+  headers = [HTTP.Header(name: args[2], value: args[3])]
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: BDD.doc_string(ctx)))
 end
 
 def post_as(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: "content-type", value: args[1])]
+  headers = [HTTP.Header(name: "content-type", value: args[1])]
   send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
 end
 
 def post_as_two_types(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: "content-type", value: args[1]), Header(name: "content-type", value: args[2])]
+  headers = [HTTP.Header(name: "content-type", value: args[1]), HTTP.Header(name: "content-type", value: args[2])]
   send(ctx, Ask(method: "POST", path: args[0], headers: headers, body: BDD.doc_string(ctx)))
 end
 
 def send_two_cookies(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: "cookie", value: args[2]), Header(name: "cookie", value: args[3])]
+  headers = [HTTP.Header(name: "cookie", value: args[2]), HTTP.Header(name: "cookie", value: args[3])]
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
@@ -237,7 +244,7 @@ def last_session_cookie(ctx: BDD.Context) -> String
 end
 
 def send_with_last_session(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: "cookie", value: last_session_cookie(ctx))]
+  headers = [HTTP.Header(name: "cookie", value: last_session_cookie(ctx))]
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
@@ -252,7 +259,7 @@ def send_with_changed_session(ctx: BDD.Context, args: List[String]) -> BDD.Conte
   end
 
   changed = "#{parts[0]}=#{other}#{value.slice(1, value.length - 1)}"
-  send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: changed)], body: ""))
+  send(ctx, Ask(method: args[0], path: args[1], headers: [HTTP.Header(name: "cookie", value: changed)], body: ""))
 end
 
 def send_with_first_secret(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -268,20 +275,20 @@ def send_with_other_name(ctx: BDD.Context, args: List[String]) -> BDD.Context
   options = Bond.SessionOptions(secret: Fixture.session_options(false).secret, name: "other_session")
   cookie = Testing.session_cookie(options, {"user": args[2]}).unwrap!
   moved = "_bond_session=#{cookie.replace("other_session=", "")}"
-  send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: moved)], body: ""))
+  send(ctx, Ask(method: args[0], path: args[1], headers: [HTTP.Header(name: "cookie", value: moved)], body: ""))
 end
 
 def send_with_signed(ctx: BDD.Context, args: List[String], options: Bond.SessionOptions) -> BDD.Context
   cookie = Testing.session_cookie(options, {"user": args[2]}).unwrap!
-  send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "cookie", value: cookie)], body: ""))
+  send(ctx, Ask(method: args[0], path: args[1], headers: [HTTP.Header(name: "cookie", value: cookie)], body: ""))
 end
 
 # A request as a browser makes it: a header that is "" is not sent.
 def send_as_browser(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers: List[Header] = []
+  headers: List[HTTP.Header] = []
   for pair in [["origin", args[2]], ["sec-fetch-site", args[3]], ["host", args[4]]]
     if pair[1] != ""
-      headers = headers.push(Header(name: pair[0], value: pair[1]))
+      headers = headers.push(HTTP.Header(name: pair[0], value: pair[1]))
     end
   end
 
@@ -296,7 +303,7 @@ def send_with_table(ctx: BDD.Context, args: List[String]) -> BDD.Context
     last = last_reply(ctx)
   end
 
-  headers = BDD.table(ctx).map do |row| Header(name: row[0], value: filled(row[1], last)) end
+  headers = BDD.table(ctx).map do |row| HTTP.Header(name: row[0], value: filled(row[1], last)) end
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
@@ -309,14 +316,14 @@ end
 def send_if_none_match(ctx: BDD.Context, args: List[String]) -> BDD.Context
   etag = last_reply(ctx).headers.get("etag", "")
   value = args[2].replace("{etag}", etag).replace("{other}", "\"0-0\"")
-  send(ctx, Ask(method: args[0], path: args[1], headers: [Header(name: "if-none-match", value: value)], body: ""))
+  send(ctx, Ask(method: args[0], path: args[1], headers: [HTTP.Header(name: "if-none-match", value: value)], body: ""))
 end
 
 def send_two_origins(ctx: BDD.Context, args: List[String]) -> BDD.Context
   headers = [
-    Header(name: "origin", value: args[2]),
-    Header(name: "origin", value: args[3]),
-    Header(name: "host", value: args[4]),
+    HTTP.Header(name: "origin", value: args[2]),
+    HTTP.Header(name: "origin", value: args[3]),
+    HTTP.Header(name: "host", value: args[4]),
   ]
 
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
@@ -324,16 +331,16 @@ end
 
 def send_two_fetch_sites(ctx: BDD.Context, args: List[String]) -> BDD.Context
   headers = [
-    Header(name: "sec-fetch-site", value: args[2]),
-    Header(name: "sec-fetch-site", value: args[3]),
-    Header(name: "host", value: args[4]),
+    HTTP.Header(name: "sec-fetch-site", value: args[2]),
+    HTTP.Header(name: "sec-fetch-site", value: args[3]),
+    HTTP.Header(name: "host", value: args[4]),
   ]
 
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
 def send_range(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  headers = [Header(name: "range", value: args[2]), Header(name: "if-range", value: args[3])]
+  headers = [HTTP.Header(name: "range", value: args[2]), HTTP.Header(name: "if-range", value: args[3])]
   send(ctx, Ask(method: args[0], path: args[1], headers: headers, body: ""))
 end
 
@@ -549,11 +556,11 @@ def serve_big(base: String, size: Int, request: Json) -> Result[Json]
   ask = try JSON.decode(request, Ask)
   try Dir.mkdir(base)
   try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
-  on_get_big = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin") end
-  on_get_save = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
-  on_get_pieces = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 4_096) end
-  on_get_whole = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 1_048_576) end
-  on_get_bad_piece = handler() do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 16_777_217) end
+  on_get_big = handler do |conn| Bond.send_file(conn, "#{base}/big.bin") end
+  on_get_save = handler do |conn| Bond.send_file(conn, "#{base}/big.bin", some("big file.bin")) end
+  on_get_pieces = handler do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 4_096) end
+  on_get_whole = handler do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 1_048_576) end
+  on_get_bad_piece = handler do |conn| Bond.send_file(conn, "#{base}/big.bin", none, none, false, 16_777_217) end
 
   app = (
     Bond.app()
@@ -582,7 +589,7 @@ def keep_edit_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   made = Dir.mkdir(base)
   return BDD.skip(ctx, "the folder of the edits cannot be made here: #{made.message}") if not made.ok?
 
-  on_get_sent = handler() do |conn| Bond.send_file(conn, "#{base}/a.txt") end
+  on_get_sent = handler do |conn| Bond.send_file(conn, "#{base}/a.txt") end
 
   app = (
     Bond.app()
@@ -693,8 +700,8 @@ def wait_for_producers(producers: Fixture.Producers) -> Void
 end
 
 def send_two_types(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  first = Header(name: "content-type", value: args[2])
-  second = Header(name: "content-type", value: args[3])
+  first = HTTP.Header(name: "content-type", value: args[2])
+  second = HTTP.Header(name: "content-type", value: args[3])
   send(ctx, Ask(method: args[0], path: args[1], headers: [first, second], body: BDD.doc_string(ctx)))
 end
 
@@ -704,7 +711,7 @@ def send(ctx: BDD.Context, ask: Ask) -> BDD.Context
 end
 
 # The request of a step: its text body, or its bytes when it has some.
-def ask_request(app: Bond.App, ask: Ask, max_pieces: Int, timeout_ms: Int) -> HttpResponse
+def ask_request(app: Bond.App, ask: Ask, max_pieces: Int, timeout_ms: Int) -> HTTP.Response
   if ask.raw.empty?
     return Testing.request(app, ask.method, ask.path, ask.headers, ask.body, max_pieces, timeout_ms, ask.remote_addr)
   end
@@ -716,7 +723,7 @@ end
 # "255 254 0" as the numbers it lists.
 def numbers(text: String) -> List[Int] = text.split(" ").map do |word| word.to_i! end
 
-def reply_of(response: HttpResponse) -> Reply
+def reply_of(response: HTTP.Response) -> Reply
   start: Map[String, String] = {}
   fields = response.headers.reduce(start) do |acc, header| acc.put(header.name.downcase, header.value) end
   text = String.from_bytes(response.body).unwrap_or("")
@@ -752,7 +759,7 @@ def get_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context = over_
 def post_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context = over_socket(ctx, "POST", args[1], args[0])
 
 def get_over_socket_with(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  over_socket(ctx, "GET", args[0], "", [Header(name: args[1], value: args[2])])
+  over_socket(ctx, "GET", args[0], "", [HTTP.Header(name: args[1], value: args[2])])
 end
 
 def over_socket(
@@ -760,7 +767,7 @@ def over_socket(
   method: String,
   path: String,
   body: String,
-  headers: List[Header] = [],
+  headers: List[HTTP.Header] = [],
 ) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
   client = HTTP.client().unwrap!
@@ -782,13 +789,13 @@ def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
 end
 
-def read_raw_answer(socket: Socket) -> HttpResponse
+def read_raw_answer(socket: Socket) -> HTTP.Response
   status = TCP.read_line(socket, SOCKET_MS).unwrap!.strip.split(" ")[1].to_i!
-  headers: List[Header] = []
+  headers: List[HTTP.Header] = []
   line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
   while not line.empty?
     at = line.index_of(":").unwrap!
-    headers = headers.push(Header(name: line.slice(0, at), value: line.slice(at + 1, line.length - at - 1).strip))
+    headers = headers.push(HTTP.Header(name: line.slice(0, at), value: line.slice(at + 1, line.length - at - 1).strip))
     line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
   end
 
@@ -800,7 +807,7 @@ def read_raw_answer(socket: Socket) -> HttpResponse
     body = Bytes.concat([body, TCP.recv_bytes(socket, wanted - body.size, SOCKET_MS).unwrap!])
   end
 
-  HttpResponse(status: status, headers: headers, body: body)
+  HTTP.Response(status: status, headers: headers, body: body)
 end
 
 def start_websocket_server(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -810,14 +817,17 @@ end
 # `PORT` in the origin is the port of the server, so "http://127.0.0.1:PORT" is the origin of its own pages.
 def open_websocket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  origin = Header(name: "Origin", value: args[1].replace("PORT", port.to_s))
+  origin = HTTP.Header(name: "Origin", value: args[1].replace("PORT", port.to_s))
   talk_websocket(ctx, args[0], [origin], args[2])
 end
 
 # Two `Origin` headers, which no browser sends.
 def open_websocket_twice(ctx: BDD.Context, args: List[String]) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  origins = [args[1], args[2]].map do |origin| Header(name: "Origin", value: origin.replace("PORT", port.to_s)) end
+  origins = [args[1], args[2]].map do |origin|
+    HTTP.Header(name: "Origin", value: origin.replace("PORT", port.to_s))
+  end
+
   talk_websocket(ctx, args[0], origins, args[3])
 end
 
@@ -826,7 +836,7 @@ end
 def talk_websocket(
   ctx: BDD.Context,
   path: String,
-  headers: List[Header],
+  headers: List[HTTP.Header],
   text: String,
   mode: String = "talk",
 ) -> BDD.Context
@@ -841,13 +851,13 @@ def talk_websocket(
 
   line = read.unwrap!
   talk = JSON.decode(JSON.parse(line).unwrap!, Talk).unwrap!
-  response = HttpResponse(status: talk.status, headers: talk.fields, body: talk.body.bytes)
+  response = HTTP.Response(status: talk.status, headers: talk.fields, body: talk.body.bytes)
   replied = BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
   BDD.set(replied, WEBSOCKET, JSON.from(Heard(answer: talk.answer, close_code: talk.close_code)))
 end
 
 # The handshake of RFC 6455 for `path`, with the extra `headers`.
-def handshake(path: String, port: Int, headers: List[Header]) -> String
+def handshake(path: String, port: Int, headers: List[HTTP.Header]) -> String
   fields = [
     "Host: 127.0.0.1:#{port}",
     "Upgrade: websocket",
@@ -942,7 +952,7 @@ def send_upload(
   filename: String,
   content: String,
   path: String,
-  headers: List[Header] = [],
+  headers: List[HTTP.Header] = [],
 ) -> BDD.Context
   parts = fields.split("&").map do |pair|
     at = pair.index_of("=").unwrap!
@@ -954,7 +964,7 @@ def send_upload(
   disposition = "Content-Disposition: form-data; name=\"photo\"; filename=\"#{filename}\""
   file = "--#{UPLOAD_BOUNDARY}\r\n#{disposition}\r\nContent-Type: text/plain\r\n\r\n#{content}\r\n"
   body = "#{parts.join("")}#{file}--#{UPLOAD_BOUNDARY}--\r\n"
-  content_type = Header(name: "content-type", value: "multipart/form-data; boundary=#{UPLOAD_BOUNDARY}")
+  content_type = HTTP.Header(name: "content-type", value: "multipart/form-data; boundary=#{UPLOAD_BOUNDARY}")
   over_socket(ctx, "POST", path, body, headers.push(content_type))
 end
 

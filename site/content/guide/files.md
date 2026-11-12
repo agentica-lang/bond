@@ -59,7 +59,7 @@ def save(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def show(app: Bond.App, method: String, path: String, range: String) -> Void
-  headers = [Header(name: "range", value: range)]
+  headers = [HTTP.Header(name: "range", value: range)]
   response = Testing.request(app, method, path, headers)
   length = HTTP.header_values(response.headers, "content-length").join(",")
   part = HTTP.header_values(response.headers, "content-range").join(",")

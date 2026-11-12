@@ -57,7 +57,7 @@ export def websocket(
   # `accept_websocket` checks the options before the request, so a request with no headers shows a bad option now,
   # at the start; it is no handshake, so its `Reply` is never sent and `idle` never runs.
   probe = HTTP.accept_websocket(
-    HttpRequest(method: "GET", target: "/", path: "/", headers: [], body: "".bytes),
+    HTTP.Request(method: "GET", target: "/", path: "/", headers: [], body: "".bytes),
     &idle,
     chosen,
   )
@@ -89,7 +89,7 @@ def handshake(
 
   return ok(Conns.halt(conn, 403, "cross-origin WebSocket refused")) if not origin_allowed?(origins, conn)
 
-  request = HttpRequest(
+  request = HTTP.Request(
     method: conn.method,
     target: conn.path,
     path: conn.path,
@@ -98,7 +98,7 @@ def handshake(
     remote_addr: conn.remote_addr,
   )
 
-  session = sessioning() do |socket| run(conn, handler, socket) end
+  session = sessioning do |socket| run(conn, handler, socket) end
   decided = try HTTP.accept_websocket(request, session, options)
   case decided
     HTTP.Upgrade.Reply(response) ->
@@ -138,7 +138,7 @@ end
 # The handler runs in a task of its own, as the handlers of the routes do, so that a runtime error ends the WebSocket
 # and not the server's connection task; its `error` closes the WebSocket with 1011.
 def run(conn: Conn, handler: WebSocketHandler, socket: HTTP.WebSocket) -> Result[Void]
-  task = Task.spawn() do handler.call(conn, socket) end
+  task = Task.spawn do handler.call(conn, socket) end
   case Task.await(task)
     ok(_) -> ok()
     error(message) ->

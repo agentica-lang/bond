@@ -62,6 +62,7 @@ end
 The charset parameter is ignored: the body is read as UTF-8. A line break at the end of the body stays in the last value, as in Rack.
 
 ```agentica
+import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -72,7 +73,7 @@ def signup(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def post_form(app: Bond.App, body: String) -> Void
-  headers = [Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
+  headers = [HTTP.Header(name: "Content-Type", value: "application/x-www-form-urlencoded")]
   response = Testing.request(app, "POST", "/signup", headers, body)
   puts("#{response.status} #{Testing.text(response).unwrap!}")
 end

@@ -1,9 +1,10 @@
+import HTTP from "std/http"
 import Conns from "../src/conn"
 import Files from "../src/files"
 
-def request(headers: List[Header]) -> Conns.Conn
+def request(headers: List[HTTP.Header]) -> Conns.Conn
   Conns.from_request(
-    HttpRequest(method: "GET", target: "/", path: "/", headers: headers, body: "".bytes, remote_addr: "127.0.0.1"),
+    HTTP.Request(method: "GET", target: "/", path: "/", headers: headers, body: "".bytes, remote_addr: "127.0.0.1"),
   )
 end
 
@@ -55,7 +56,7 @@ def main() -> Void
       Test.eq(pairs(answer).size, 9)
     end,
     Test.test("a 304 has the validators and the policy, and no more") do
-      matching = request([Header(name: "if-none-match", value: rep().etag)])
+      matching = request([HTTP.Header(name: "if-none-match", value: rep().etag)])
       answer = Files.respond(matching, rep(), "x.css", some("body".bytes)).unwrap!
       try Test.eq(answer.status, 304)
       Test.eq(
@@ -77,7 +78,7 @@ def main() -> Void
       Test.assert(pairs(answer).include?("content-disposition=attachment; filename=\"a.css\""), "the name")
     end,
     Test.test("a range still has its Content-Range") do
-      ranged = request([Header(name: "range", value: "bytes=1-2")])
+      ranged = request([HTTP.Header(name: "range", value: "bytes=1-2")])
       answer = Files.respond(ranged, rep(), "x.css", some("body".bytes)).unwrap!
       try Test.eq(answer.status, 206)
       Test.assert(pairs(answer).include?("content-range=bytes 1-2/4"), "content-range")

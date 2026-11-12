@@ -10,6 +10,7 @@
 ## `answer` is the text that came back and `close_code` the code of a close frame of the server, which comes first
 ## when the handler of the route crashed (`answer` is "" then).
 
+import HTTP from "std/http"
 import WebSocket from "pkg/websocket-client/websocket"
 
 READ_MS = 5_000
@@ -17,15 +18,15 @@ READ_MS = 5_000
 # What the program prints: the one shape of `Talk` in `specs/steps.agc`.
 struct Talk
   status: Int
-  fields: List[Header]
+  fields: List[HTTP.Header]
   body: String
   answer: String = ""
   close_code: Int = 0
 end
 
-def header_of(text: String) -> Header
+def header_of(text: String) -> HTTP.Header
   at = text.index_of(":").unwrap!
-  Header(name: text.slice(0, at), value: text.slice(at + 1, text.length - at - 1).strip)
+  HTTP.Header(name: text.slice(0, at), value: text.slice(at + 1, text.length - at - 1).strip)
 end
 
 # The first message after the handshake: its text, or the code of the close frame that the server sent instead.
@@ -46,7 +47,7 @@ def converse(ws: WebSocket.Client, mode: String, text: String) -> Result[Talk]
   end
 end
 
-def talk(port: Int, path: String, mode: String, text: String, headers: List[Header]) -> Result[Talk]
+def talk(port: Int, path: String, mode: String, text: String, headers: List[HTTP.Header]) -> Result[Talk]
   options = WebSocket.Options(headers: headers, read_timeout_ms: READ_MS)
   case try WebSocket.handshake("ws://127.0.0.1:#{port}#{path}", options)
     WebSocket.Handshake.Refused(status, fields, body) -> ok(Talk(status: status, fields: fields, body: body))

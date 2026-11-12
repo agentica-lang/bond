@@ -85,7 +85,7 @@ export type Receiver = Fn[Conn, Result[Form]]
 ## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
 ## and is not halted (`accepted_upgrade`). `form` is the `multipart/form-data` body that `Bond.uploads` read (then
 ## `body` is empty). `remote_addr` is the IP address of the peer that opened the connection, with no port
-## (`"127.0.0.1"`, `"::1"`; `HttpRequest.remote_addr`), and `""` for a `Conn` built by hand. Behind a proxy or a load
+## (`"127.0.0.1"`, `"::1"`; `HTTP.Request.remote_addr`), and `""` for a `Conn` built by hand. Behind a proxy or a load
 ## balancer it is the address of the proxy: Bond does not read `X-Forwarded-For` or `Forwarded`, since any client can
 ## send them. `assigns` holds the values that a filter gave for the handler (`assign` and `assigned`, `assigns.agc`),
 ## as `Json`. A new `Conn` answers 200 with no body, has an empty session, no assigns, no upgrade and no form.
@@ -94,10 +94,10 @@ export struct Conn
   path: String
   query: String
   params: Map[String, String]
-  headers: List[Header]
+  headers: List[HTTP.Header]
   body: Bytes
   status: Int
-  response_headers: List[Header]
+  response_headers: List[HTTP.Header]
   response_body: Bytes
   response_stream: Optional[Channel[Bytes]]
   response_length: Optional[Int]
@@ -130,7 +130,7 @@ export struct Form
 end
 
 ## The `Conn` of a request, before any route or filter.
-export def from_request(request: HttpRequest) -> Conn
+export def from_request(request: HTTP.Request) -> Conn
   query = ""
   case request.target.index_of("?")
     some(at) -> query = request.target.slice(at + 1, request.target.length - at - 1)
@@ -274,7 +274,7 @@ export def halt(conn: Conn, status: Int, body: String) -> Conn = text(conn, stat
 ## Adds a response header after the ones of the same name, as `Set-Cookie` needs: each is a header of its own and
 ## they are never joined.
 export def add_header(conn: Conn, name: String, value: String) -> Conn
-  conn.with(response_headers: conn.response_headers.push(Header(name: name, value: value)))
+  conn.with(response_headers: conn.response_headers.push(HTTP.Header(name: name, value: value)))
 end
 
 ## Sets a response header, replacing the one of the same name (the case does not matter). `Set-Cookie` is the
@@ -290,14 +290,14 @@ export def header(conn: Conn, name: String, value: String) -> Conn
     other.name != lower and (other.name.length != lower.length or other.name.downcase != lower)
   end
 
-  conn.with(response_headers: kept.push(Header(name: name, value: value)))
+  conn.with(response_headers: kept.push(HTTP.Header(name: name, value: value)))
 end
 
 ## Internal, for the headers that Bond writes itself. Sets several response headers at once, as `header` would one after
 ## the other: each replaces the headers of the same name that the conn has, and they follow the others in their order.
 ## The `fields` names must be in lowercase, distinct and never `set-cookie` (use `add_header`): the names the conn
 ## already has are lowercased to compare, and none when it has none.
-export def set_headers(conn: Conn, fields: List[Header]) -> Conn
+export def set_headers(conn: Conn, fields: List[HTTP.Header]) -> Conn
   return conn.with(response_headers: fields) if conn.response_headers.empty?
 
   names = fields.map do |field| field.name end
@@ -397,7 +397,7 @@ end
 ##
 ## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
 ## `Testing.request` and `specs/steps.agc`.
-export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HttpResponse
+export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HTTP.Response
   return switching() if accepted_upgrade(conn).some?
 
   problem = refusal(conn)
@@ -405,20 +405,20 @@ export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000
 
   if conn.status == 204 or conn.status == 304
     close_stream(conn)
-    return HttpResponse(status: conn.status, headers: conn.response_headers, body: NO_BODY)
+    return HTTP.Response(status: conn.status, headers: conn.response_headers, body: NO_BODY)
   end
 
   if conn.method == "HEAD" and conn.response_stream.some?
     close_stream(conn)
-    return HttpResponse(status: conn.status, headers: sized_headers(conn), body: NO_BODY)
+    return HTTP.Response(status: conn.status, headers: sized_headers(conn), body: NO_BODY)
   end
 
   case conn.response_stream
     some(body) ->
       pieces = collect(conn, body, max_pieces, timeout_ms)
-      HttpResponse(status: conn.status, headers: sized_headers(conn), body: pieces)
+      HTTP.Response(status: conn.status, headers: sized_headers(conn), body: pieces)
 
-    none -> HttpResponse(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
+    none -> HTTP.Response(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
   end
 end
 
@@ -461,22 +461,22 @@ end
 
 # The answer of an accepted upgrade for a test: the head of the server's 101, without the `Sec-WebSocket-Accept` that
 # the server computes from the key.
-def switching() -> HttpResponse
-  headers = [Header(name: "upgrade", value: "websocket"), Header(name: "connection", value: "Upgrade")]
-  HttpResponse(status: 101, headers: headers, body: NO_BODY)
+def switching() -> HTTP.Response
+  headers = [HTTP.Header(name: "upgrade", value: "websocket"), HTTP.Header(name: "connection", value: "Upgrade")]
+  HTTP.Response(status: 101, headers: headers, body: NO_BODY)
 end
 
 # The headers of the answer for a test: the `Content-Length` of a stream with a length is added, as the server does.
-def sized_headers(conn: Conn) -> List[Header]
+def sized_headers(conn: Conn) -> List[HTTP.Header]
   case conn.response_length
-    some(length) -> conn.response_headers.push(Header(name: "content-length", value: length.to_s))
+    some(length) -> conn.response_headers.push(HTTP.Header(name: "content-length", value: length.to_s))
     none -> conn.response_headers
   end
 end
 
 # The headers of an answer with a whole body, for a test: the `Content-Length` that `send_file` noted, when it still is
 # the size of the body (a filter that replaced the body makes it stale, and the server counts the body anyway).
-def whole_headers(conn: Conn) -> List[Header]
+def whole_headers(conn: Conn) -> List[HTTP.Header]
   case conn.response_length
     some(length) ->
       return sized_headers(conn) if length == conn.response_body.size
@@ -494,15 +494,15 @@ def release(conn: Conn) -> Conn
 end
 
 # The plain 500 for a response the server would refuse. A stream that will not be sent is closed.
-def refused(conn: Conn, problem: String) -> HttpResponse
+def refused(conn: Conn, problem: String) -> HTTP.Response
   IO.warn("bond: #{conn.method} #{conn.path}: invalid response: #{problem}")
   close_stream(conn)
   plain_500(INTERNAL_ERROR)
 end
 
-def plain_500(body: String) -> HttpResponse
-  headers = [Header(name: "content-type", value: "text/plain; charset=utf-8")]
-  HttpResponse(status: 500, headers: headers, body: body.bytes)
+def plain_500(body: String) -> HTTP.Response
+  headers = [HTTP.Header(name: "content-type", value: "text/plain; charset=utf-8")]
+  HTTP.Response(status: 500, headers: headers, body: body.bytes)
 end
 
 # The pieces of a stream until the producer closes it, as one `Bytes`. It stops at `max_pieces` pieces (when it is
@@ -575,7 +575,7 @@ def location_refusal(conn: Conn) -> String
   ""
 end
 
-def location_problem(field: Header, lower: String) -> String
+def location_problem(field: HTTP.Header, lower: String) -> String
   if lower == "location" and not field.value.split("").all? do |ch| ch.code <= ASCII_LIMIT end
     return "the Location header must be ASCII: percent-encode it"
   end
@@ -588,7 +588,7 @@ end
 # `SAFE_VALUES`, so a plain answer costs no check of each character; anything else is checked a character at a time
 # against a set. `SAFE_NAMES` has no name that has a rule of its own (`Content-Length`, `Transfer-Encoding`,
 # `Location`).
-def header_problem(field: Header) -> String
+def header_problem(field: HTTP.Header) -> String
   name = field.name
   if not SAFE_NAMES.include?(name)
     lower = name.downcase

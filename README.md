@@ -6,7 +6,7 @@ Documentation: https://agentica-lang.github.io/bond/
 
 ## Install
 
-Bond needs Agentica 0.30.0 or later; the [changelog](CHANGELOG.md) has the version each release needs. In your `agentica.toml`:
+Bond needs Agentica 0.31.0-alpha.1 or later; the [changelog](CHANGELOG.md) has the version each release needs. In your `agentica.toml`:
 
 ```toml
 [dependencies]
@@ -40,7 +40,7 @@ agentica fmt --check    # `agentica fmt` rewrites them
 agentica test --jobs 4  # up to 4 files at once
 ```
 
-`make check`, `make fmt-check` and `make test` run them, and `agentica test --only TEXT` runs the scenarios whose name contains `TEXT`. Developing Bond needs Agentica 0.30.0 or later; CI pins its release in `.github/workflows/ci.yml`.
+`make check`, `make fmt-check` and `make test` run them, and `agentica test --only TEXT` runs the scenarios whose name contains `TEXT`. Developing Bond needs Agentica 0.31.0-alpha.1 or later; CI pins its release in `.github/workflows/ci.yml`.
 
 ## License
 

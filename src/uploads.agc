@@ -14,7 +14,7 @@ MULTIPART_TYPE = "multipart/form-data"
 DEFAULT_TYPE = "application/octet-stream"
 BODY_METHODS = ["POST", "PUT", "PATCH"]
 
-# The most bytes the server takes in one body (`HttpServerOptions.max_body_bytes`).
+# The most bytes the server takes in one body (`HTTP.ServerOptions.max_body_bytes`).
 SERVER_MAX_BODY = 268_435_456
 
 # How long to wait for the next piece: the server's own timeouts end a body that stalls, so this is only a bound.
@@ -104,7 +104,7 @@ end
 
 ## The upload options when they apply to the request: the app has uploads, the method is one that sends a form body
 ## (POST, PUT, PATCH; a DELETE or a GET with a body is no upload) and the body is `multipart/form-data`.
-export def applies(app: App, request: HttpRequest) -> Optional[UploadOptions]
+export def applies(app: App, request: HTTP.Request) -> Optional[UploadOptions]
   return none if not BODY_METHODS.any? do |method| method == request.method end
 
   types = HTTP.header_values(request.headers, "content-type")
@@ -127,7 +127,7 @@ end
 
 ## The answer of `HTTP.serve` for a request that `applies`: the app runs with a `Receiver` that reads the body when
 ## the request reaches its route, and the folder of the files is removed after.
-export def answer(app: App, options: UploadOptions, request: HttpRequest, body: HTTP.RequestBody) -> HTTP.Answer
+export def answer(app: App, options: UploadOptions, request: HTTP.Request, body: HTTP.RequestBody) -> HTTP.Answer
   dir = folder(options)
   answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |_conn|
     receive(options, dir, request, body)
@@ -141,10 +141,10 @@ end
 export def handle(
   app: App,
   options: UploadOptions,
-  request: HttpRequest,
+  request: HTTP.Request,
   max_pieces: Int,
   timeout_ms: Int,
-) -> HttpResponse
+) -> HTTP.Response
   pieces: Channel[Bytes] = Channel.new(request.body.size / TEST_PIECE + 1)
   at = 0
   while at < request.body.size
@@ -153,7 +153,7 @@ export def handle(
   end
 
   pieces.close
-  done = Task.spawn() do arrived() end
+  done = Task.spawn do arrived() end
   body = HTTP.RequestBody(pieces: pieces, done: done)
   dir = folder(options)
   response = Apps.handle_with(app, request.with(body: "".bytes), max_pieces, timeout_ms) do |_conn|
@@ -172,7 +172,7 @@ def arrived() -> Result[Void] = ok()
 # was saved, is removed after the answer by the caller (`answer`, `handle`), in one place for every outcome. A body cut
 # by the server (`done` is an error) is the server's refusal (413 over its limit, 431 or 400 for a bad chunk or a
 # client that left).
-def receive(options: UploadOptions, dir: String, request: HttpRequest, body: HTTP.RequestBody) -> Result[Form]
+def receive(options: UploadOptions, dir: String, request: HTTP.Request, body: HTTP.RequestBody) -> Result[Form]
   content_type = HTTP.header_values(request.headers, "content-type")[0]
   boundary = Multipart.boundary(content_type)
   return error(BAD) if not boundary.ok?
@@ -268,7 +268,7 @@ end
 
 # A new part. A file gets a file of its own, named by its number among the files (1, 2, 3), in the folder of the
 # request, which the first file makes.
-def begin_part(reading: Reading, headers: List[Header]) -> Result[Reading]
+def begin_part(reading: Reading, headers: List[HTTP.Header]) -> Result[Reading]
   disposition = Multipart.disposition(headers)
   return error(BAD) if not disposition.ok?
 

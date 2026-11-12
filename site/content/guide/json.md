@@ -13,6 +13,7 @@ The request must have exactly one `Content-Type`, and it must say it is JSON: `a
 A body that is not one JSON document that fits the struct is a 400 with `invalid body: ` and what is wrong, such as `age: expected required field`. Extra keys are ignored. The message names the struct field and never repeats the text the client sent: the path of the codec stops at its first `[`, so an error inside a map or a list says `scores: ...` or `tags: ...`, and not the key or the index. The size of the body is limited by the server: a body over `max_body_bytes` is a 413 and never reaches the app (see [Running and options](/guide/server/)).
 
 ```agentica
+import HTTP from "std/http"
 import Bond from "pkg/bond/bond"
 import Testing from "pkg/bond/testing"
 
@@ -27,7 +28,7 @@ def create_user(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def post(app: Bond.App, type: String, body: String) -> Void
-  headers = [Header(name: "Content-Type", value: type)]
+  headers = [HTTP.Header(name: "Content-Type", value: type)]
   response = Testing.request(app, "POST", "/users", headers, body)
   puts("#{response.status} #{Testing.text(response).unwrap!}")
 end

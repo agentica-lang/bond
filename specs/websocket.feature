@@ -1,10 +1,12 @@
 Feature: WebSocket routes
   `Bond.websocket` adds a route whose handshake is upgraded on the server of the app, so a page, a stream and a
   WebSocket share one port. The program of `specs/fixtures/websocket_server.agc` listens on 127.0.0.1 and a free port;
-  the steps speak the WebSocket protocol by hand over a socket. The framing itself (masks, fragments, pings) is the
-  contract of `std/http`: the client masks every frame, so the echo proves the unmasking, and nothing more is checked
-  here.
+  the client is the package `websocket-client` (`specs/fixtures/ws_client/peer.agc`, independent of Bond and
+  `std/http`), which masks every frame, so the echo proves the unmasking. Only the peer that never answers a ping writes
+  its bytes by hand. The framing itself (masks, fragments, pings) is the contract of `std/http`, and nothing more is
+  checked here.
 
+  # The client checks `Sec-WebSocket-Accept` against its own random key, and an upgrade with a wrong one is no handshake.
   Scenario: A page, a stream and a WebSocket on one port, and the WebSocket echoes with the param of the route
     Given the WebSocket server listens on a free port
     When I get "/hello" over the socket
@@ -13,9 +15,9 @@ Feature: WebSocket routes
     Then the body is "one two"
     When I open a WebSocket to "/chat/lobby" from the origin "http://127.0.0.1:PORT" and send "hi"
     Then the status is 101
-    And the header "sec-websocket-accept" is "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+    And the header "upgrade" is "websocket"
     And the WebSocket answers "lobby: hi"
-    And the WebSocket closes with the code 1000
+    And the server prints "closed lobby 1000"
 
   Scenario Outline: The origin of a handshake decides (<case>)
     Given the WebSocket server listens on a free port

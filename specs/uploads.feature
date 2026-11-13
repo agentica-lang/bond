@@ -22,6 +22,14 @@ Feature: Uploads
     When I get "/hello" over the socket
     Then the body is "hello"
 
+  Scenario: A chunked upload with a bad chunk is a 400 that closes the connection, and the server goes on
+    Given the upload server listens on a free port
+    When I post the multipart chunks "zz~aaaaa~0~~" to "/upload" over a raw socket
+    Then the status is 400
+    And the header "connection" is "close"
+    When I get "/hello" over the socket
+    Then the body is "hello"
+
   Scenario: A text field over the limit is a 413 that closes the connection
     Given the upload server listens on a free port
     When I post a text field of 300 bytes and a file to "/upload" over the socket

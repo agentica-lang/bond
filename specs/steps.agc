@@ -189,6 +189,7 @@ def main() -> Void
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
     BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
+    BDD.step("I post the multipart chunks {string} to {string} over a raw socket", &post_multipart_chunks_over_socket),
     BDD.step("I send a head with a header of {int} bytes over a raw socket", &send_wide_head),
     BDD.step("I send {int} bytes of a body of {int} bytes to {string} and wait over a raw socket", &send_part_of_body),
     BDD.step("the upload server listens on a free port", &start_upload_server),
@@ -804,9 +805,16 @@ end
 # A chunked `POST` written by hand, since the client of `std/http` always sends a `Content-Length`. In the chunks a `~`
 # is a CRLF, so `5~hello~0~~` is one chunk of five bytes and the end of the body. The answer is read as far as its
 # `Content-Length`, and the connection is not asked to close, so the `Connection: close` of a refusal is the server's.
-def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context = post_chunks(ctx, args, "")
+
+# The same with a `multipart/form-data` content type, for the server of the uploads.
+def post_multipart_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  post_chunks(ctx, args, "Content-Type: multipart/form-data; boundary=#{UPLOAD_BOUNDARY}\r\n")
+end
+
+def post_chunks(ctx: BDD.Context, args: List[String], extra_headers: String) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  head = "POST #{args[1]} HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n"
+  head = "POST #{args[1]} HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n#{extra_headers}\r\n"
   socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
   TCP.send(socket, head + args[0].replace("~", "\r\n"), SOCKET_MS).unwrap!
   response = read_raw_answer(socket)
@@ -843,12 +851,21 @@ def read_raw_answer(socket: TCP.Socket) -> HTTP.Response
   answer_after(socket, TCP.read_line(socket, SOCKET_MS).unwrap!)
 end
 
-# The answer of a server that may close the connection with nothing written: status 0 stands for that.
+# The answer of a server that may close the connection with nothing written: status 0 stands for that, and -1 for a
+# read that failed for another reason.
 def read_raw_answer_or_closed(socket: TCP.Socket) -> HTTP.Response
   case TCP.read_line(socket, SOCKET_MS)
     ok(line) -> answer_after(socket, line)
-    error(_) -> HTTP.Response(status: 0, headers: [], body: "".bytes)
+    error(e) -> HTTP.Response(status: closed_status(e), headers: [], body: "".bytes)
   end
+end
+
+# 0 for a connection that the server closed, -1 for any other failure of the read (a silent server is a `net.timeout`
+# here, which must not pass for a closed connection).
+def closed_status(e: Error) -> Int
+  return 0 if e.is_a?("net.eof") or e.is_a?("net.closed")
+
+  -1
 end
 
 def answer_after(socket: TCP.Socket, status_line: String) -> HTTP.Response

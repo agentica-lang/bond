@@ -9,6 +9,7 @@ Needs Agentica 0.31.0 or later.
 ### Changed
 
 - **Breaking:** needs Agentica 0.31.0 or later: the sources use `private` (a file is public above a `private` line, so `export` before a declaration is gone), the nested builtin names (`JSON.Value` is the type that `Bond.json` takes and that `Conn.assigns` holds; `File.Info`, `File.Handle`, `TCP.Socket`) and the errors with kinds. The public names of Bond do not change. CI tests with Agentica 0.31.0.
+- `agentica.toml` says `agentica = "0.31.0"`, so an older Agentica stops with `PKG-AGENTICA-TOO-OLD` and not with a parse error at the first `private`.
 - `Bond.set_cookie_with` and `Bond.assigned` keep the kind, the code and the cause of the error they pass on (`argument` for a refused cookie), and still put their own text in front of the message.
 - The handler of `Bond.on_error` still gets the message as a `String`. An upload body that the server cuts is still answered 413, 431 or 400, now from the kind and the code of the error (`http.too_large`) and not from its text.
 

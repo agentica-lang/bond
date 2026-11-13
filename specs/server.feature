@@ -139,7 +139,7 @@ Feature: Server
     When I get "/hello" over the socket
     Then the body is "hello"
 
-  # The request timeout of the server (one second here) cuts the connection: no status is written, and the handler of
+  # The request timeout of the server (two seconds here) cuts the connection: no status is written, and the handler of
   # the route never runs.
   Scenario: A client that stalls in the middle of a body gets no answer, and the server goes on
     Given the server with a small body limit listens on a free port

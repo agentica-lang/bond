@@ -223,7 +223,7 @@ end
 # The status for a body the server cut: `http.too_large` has it as its code (413 over the limit, 431 for a chunk line
 # or a trailer section over the head limits); any other (a bad chunk, a client that left or stalled) is a 400.
 def refusal_status(e: Error) -> String
-  return e.code.unwrap!.to_s if e.kind == "http.too_large" and e.code.some?
+  return e.code.unwrap!.to_s if e.kind == "http.too_large" and (e.code == some(413) or e.code == some(431))
 
   BAD
 end

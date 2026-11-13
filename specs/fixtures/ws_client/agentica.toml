@@ -1,4 +1,5 @@
 name = "ws-client"
+agentica = "0.31.0"
 
 [style]
 blank_line_after_end = true

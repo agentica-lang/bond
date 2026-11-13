@@ -3,6 +3,8 @@ import Bond from "../bond"
 import Testing from "../testing"
 import WebSockets from "../src/websocket"
 
+private
+
 HANDSHAKE = [
   HTTP.Header(name: "upgrade", value: "websocket"),
   HTTP.Header(name: "connection", value: "Upgrade"),

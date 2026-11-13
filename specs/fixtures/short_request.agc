@@ -4,6 +4,8 @@ import HTTP from "std/http"
 import Bond from "../../bond"
 import Testing from "../../testing"
 
+private
+
 def hello(conn: Bond.Conn) -> Result[Bond.Conn]
   agent = Bond.request_header(conn, "x-agent").unwrap_or("none")
   ok(Bond.text(conn, 200, "hello #{agent} #{conn.body.size}"))

@@ -1,34 +1,7 @@
 ## The date of `Last-Modified` and `If-Modified-Since` (RFC 9110 section 5.6.7), as Unix seconds.
 
-SECONDS_PER_DAY = 86_400
-
-# Day 0 of the Unix epoch was a Thursday.
-WEEKDAYS = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
-
-MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-MONTH_NUMBERS = {
-  "Jan": 1,
-  "Feb": 2,
-  "Mar": 3,
-  "Apr": 4,
-  "May": 5,
-  "Jun": 6,
-  "Jul": 7,
-  "Aug": 8,
-  "Sep": 9,
-  "Oct": 10,
-  "Nov": 11,
-  "Dec": 12,
-}
-
-# The days from 0000-03-01 to 1970-01-01, the shift of the civil calendar algorithms below.
-EPOCH_SHIFT = 719_468
-
-DAYS_PER_ERA = 146_097
-
 ## `Sun, 06 Nov 1994 08:49:37 GMT` for the Unix time `seconds`. A time before 1970 is written as 1970.
-export def format(seconds: Int) -> String
+def format(seconds: Int) -> String
   clamped = seconds
   if clamped < 0
     clamped = 0
@@ -58,7 +31,7 @@ end
 ## `format` writes (`Sun, 06 Nov 1994 08:49:37 GMT`), the old `Sunday, 06-Nov-94 08:49:37 GMT` (a year of two digits
 ## that is more than 50 years ahead is read as the last past year with those digits) and `Sun Nov  6 08:49:37 1994`. Any other text is `none`, and a
 ## header with one is ignored. The name of the weekday is not checked.
-export def parse(text: String) -> Optional[Int]
+def parse(text: String) -> Optional[Int]
   parts = text.strip.replace("  ", " ").split(" ")
   if parts.size == 6 and parts[5] == "GMT" and parts[0].end_with?(",")
     return assemble(parts[1], parts[2], parts[3], parts[4])
@@ -76,12 +49,41 @@ end
 
 ### The year of the digits `year` (0 to 99) of the old form, by RFC 9110 section 5.6.7: the one of this century, unless
 ## that is more than 50 years after `current_year`, and then the one of the century before.
-export def full_year(year: Int, current_year: Int) -> Int
+def full_year(year: Int, current_year: Int) -> Int
   candidate = (current_year / 100) * 100 + year
   return candidate - 100 if candidate > current_year + 50
 
   candidate
 end
+
+private
+
+SECONDS_PER_DAY = 86_400
+
+# Day 0 of the Unix epoch was a Thursday.
+WEEKDAYS = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
+
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+MONTH_NUMBERS = {
+  "Jan": 1,
+  "Feb": 2,
+  "Mar": 3,
+  "Apr": 4,
+  "May": 5,
+  "Jun": 6,
+  "Jul": 7,
+  "Aug": 8,
+  "Sep": 9,
+  "Oct": 10,
+  "Nov": 11,
+  "Dec": 12,
+}
+
+# The days from 0000-03-01 to 1970-01-01, the shift of the civil calendar algorithms below.
+EPOCH_SHIFT = 719_468
+
+DAYS_PER_ERA = 146_097
 
 # The seconds of the date made of the text of its parts, or `none` when one is not what it must be.
 def assemble(day_text: String, month_text: String, year_text: String, clock_text: String) -> Optional[Int]

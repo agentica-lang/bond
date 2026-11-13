@@ -6,6 +6,8 @@
 
 import Bond from "../../bond"
 
+private
+
 LIMITS = Bond.UploadOptions(
   max_file_bytes: 1_024,
   max_field_bytes: 256,

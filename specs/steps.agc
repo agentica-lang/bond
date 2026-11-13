@@ -10,23 +10,40 @@ import Bond from "../bond"
 import Fixture from "fixtures/app"
 import Testing from "../testing"
 
+private
+
 APP = "app"
+
 REPLY = "reply"
+
 PORT = "port"
+
 SOCKET_MS = 5_000
+
 # Relative to the working directory of the run, which is the folder of the repository (`make test`).
 PEER = "specs/fixtures/ws_client/peer.agc"
+
 PEER_MS = 15_000
+
 PRODUCERS = 16
+
 PRODUCER_MS = 5_000
+
 PATTERN = 251
+
 UPLOAD_BOUNDARY = "bond-spec-boundary"
+
 WEBSOCKET = "websocket"
+
 # The key of RFC 6455 section 1.3, for the one step that writes its handshake by hand.
 WEBSOCKET_KEY = "dGhlIHNhbXBsZSBub25jZQ=="
+
 PING_FRAME = 9
+
 LENGTH_BITS = 127
+
 TWO_BYTE_LENGTH = 126
+
 BYTE = 256
 
 struct Ask
@@ -157,6 +174,7 @@ def main() -> Void
     BDD.step("the header {string} starts with {string}", &header_starts_with),
     BDD.step("the header {string} ends with {string}", &header_ends_with),
     BDD.step("the status is {int}", &status_is),
+    BDD.step("the connection is closed with no answer", &closed_with_no_answer),
     BDD.step("the body is {string}", &body_is),
     BDD.step("the body bytes are {string}", &body_bytes_are),
     BDD.step("the body is the text {string}", &body_is_text),
@@ -171,6 +189,9 @@ def main() -> Void
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
     BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
+    BDD.step("I post the multipart chunks {string} to {string} over a raw socket", &post_multipart_chunks_over_socket),
+    BDD.step("I send a head with a header of {int} bytes over a raw socket", &send_wide_head),
+    BDD.step("I send {int} bytes of a body of {int} bytes to {string} and wait over a raw socket", &send_part_of_body),
     BDD.step("the upload server listens on a free port", &start_upload_server),
     BDD.step(
       "I post the fields {string} and the file {string} holding {string} to {string} over the socket",
@@ -379,6 +400,11 @@ def status_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
 end
 
+def closed_with_no_answer(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  BDD.assert(ctx, reply.status == 0, "the status is #{reply.status}")
+end
+
 def body_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
   reply = last_reply(ctx)
   BDD.assert(ctx, reply.body == args[0], "the body is #{reply.body}")
@@ -478,7 +504,7 @@ def keep_links_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.keep(ctx, APP) do |request| serve_links(base, request) end
 end
 
-def serve_links(base: String, request: Json) -> Result[Json]
+def serve_links(base: String, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   try make_folder(base)
   app = Bond.app() |> Bond.static("/files", "#{base}/root")
@@ -519,7 +545,7 @@ def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.C
   BDD.keep(ctx, APP) do |request| serve(app, producers, request) end
 end
 
-def serve(app: Bond.App, producers: Fixture.Producers, request: Json) -> Result[Json]
+def serve(app: Bond.App, producers: Fixture.Producers, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   before = Task.pending_count()
   response = ask_request(app, ask, ask.max_pieces, ask.timeout_ms)
@@ -552,7 +578,7 @@ end
 # a chain after the `end` of a block).
 def handler(f: Bond.Handler) -> Bond.Handler = f
 
-def serve_big(base: String, size: Int, request: Json) -> Result[Json]
+def serve_big(base: String, size: Int, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   try Dir.mkdir(base)
   try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
@@ -604,7 +630,7 @@ end
 
 def edit_folder() -> String = "edit_files_#{System.pid()}"
 
-def serve_edited(app: Bond.App, request: Json) -> Result[Json]
+def serve_edited(app: Bond.App, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   before = Task.pending_count()
   response = ask_request(app, ask, 0, 10_000)
@@ -779,9 +805,16 @@ end
 # A chunked `POST` written by hand, since the client of `std/http` always sends a `Content-Length`. In the chunks a `~`
 # is a CRLF, so `5~hello~0~~` is one chunk of five bytes and the end of the body. The answer is read as far as its
 # `Content-Length`, and the connection is not asked to close, so the `Connection: close` of a refusal is the server's.
-def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context = post_chunks(ctx, args, "")
+
+# The same with a `multipart/form-data` content type, for the server of the uploads.
+def post_multipart_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  post_chunks(ctx, args, "Content-Type: multipart/form-data; boundary=#{UPLOAD_BOUNDARY}\r\n")
+end
+
+def post_chunks(ctx: BDD.Context, args: List[String], extra_headers: String) -> BDD.Context
   port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
-  head = "POST #{args[1]} HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n"
+  head = "POST #{args[1]} HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n#{extra_headers}\r\n"
   socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
   TCP.send(socket, head + args[0].replace("~", "\r\n"), SOCKET_MS).unwrap!
   response = read_raw_answer(socket)
@@ -789,8 +822,54 @@ def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
 end
 
-def read_raw_answer(socket: Socket) -> HTTP.Response
-  status = TCP.read_line(socket, SOCKET_MS).unwrap!.strip.split(" ")[1].to_i!
+# A `GET` whose head is written by hand, with one header of `args[0]` bytes. The server may answer before it has read
+# all of it, so a write that fails is no error here: the answer is what counts.
+def send_wide_head(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  wide = List.repeat("a", args[0].to_i!).join("")
+  head = "GET /hello HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Wide: #{wide}\r\n\r\n"
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  _ = TCP.send(socket, head, SOCKET_MS)
+  response = read_raw_answer(socket)
+  TCP.close(socket)
+  BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+end
+
+# A `POST` that announces a body of `args[1]` bytes and sends `args[0]` of them, then stops: the request timeout of
+# the server ends the wait.
+def send_part_of_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  head = "POST #{args[2]} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: #{args[1]}\r\n\r\n"
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  TCP.send(socket, head + List.repeat("a", args[0].to_i!).join(""), SOCKET_MS).unwrap!
+  response = read_raw_answer_or_closed(socket)
+  TCP.close(socket)
+  BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+end
+
+def read_raw_answer(socket: TCP.Socket) -> HTTP.Response
+  answer_after(socket, TCP.read_line(socket, SOCKET_MS).unwrap!)
+end
+
+# The answer of a server that may close the connection with nothing written: status 0 stands for that, and -1 for a
+# read that failed for another reason.
+def read_raw_answer_or_closed(socket: TCP.Socket) -> HTTP.Response
+  case TCP.read_line(socket, SOCKET_MS)
+    ok(line) -> answer_after(socket, line)
+    error(e) -> HTTP.Response(status: closed_status(e), headers: [], body: "".bytes)
+  end
+end
+
+# 0 for a connection that the server closed, -1 for any other failure of the read (a silent server is a `net.timeout`
+# here, which must not pass for a closed connection).
+def closed_status(e: Error) -> Int
+  return 0 if e.is_a?("net.eof") or e.is_a?("net.closed")
+
+  -1
+end
+
+def answer_after(socket: TCP.Socket, status_line: String) -> HTTP.Response
+  status = status_line.strip.split(" ")[1].to_i!
   headers: List[HTTP.Header] = []
   line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
   while not line.empty?
@@ -871,7 +950,7 @@ def handshake(path: String, port: Int, headers: List[HTTP.Header]) -> String
 end
 
 # A frame from the server, which is never masked: a length of up to 125, or 126 and two bytes of length.
-def read_frame(socket: Socket) -> Frame
+def read_frame(socket: TCP.Socket) -> Frame
   head = read_exactly(socket, 2).to_a
   size = Int.bit_and(head[1], LENGTH_BITS)
   if size == TWO_BYTE_LENGTH
@@ -882,7 +961,7 @@ def read_frame(socket: Socket) -> Frame
   Frame(opcode: Int.bit_and(head[0], 15), payload: read_exactly(socket, size))
 end
 
-def read_exactly(socket: Socket, size: Int) -> Bytes
+def read_exactly(socket: TCP.Socket, size: Int) -> Bytes
   got = "".bytes
   while got.size < size
     got = Bytes.concat([got, TCP.recv_bytes(socket, size - got.size, SOCKET_MS).unwrap!])

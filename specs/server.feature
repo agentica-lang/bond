@@ -131,6 +131,23 @@ Feature: Server
       | two chunks over 8 bytes  | 5~aaaaa~5~bbbbb~0~~ | 413    |
       | a bad chunk size         | zz~aaaaa~0~~        | 400    |
 
+  Scenario: A header block over the limit of the server is a 431 that closes the connection, and the server goes on
+    Given the server with a small body limit listens on a free port
+    When I send a head with a header of 100000 bytes over a raw socket
+    Then the status is 431
+    And the header "connection" is "close"
+    When I get "/hello" over the socket
+    Then the body is "hello"
+
+  # The request timeout of the server (two seconds here) cuts the connection: no status is written, and the handler of
+  # the route never runs.
+  Scenario: A client that stalls in the middle of a body gets no answer, and the server goes on
+    Given the server with a small body limit listens on a free port
+    When I send 4 bytes of a body of 8 bytes to "/todos" and wait over a raw socket
+    Then the connection is closed with no answer
+    When I get "/todos" over the socket
+    Then the body is "[]"
+
   Scenario: A chunked body within the limit reaches the app and keeps the connection
     Given the server with a small body limit listens on a free port
     When I post the chunks "3~abc~0~~" to "/todos" over a raw socket

@@ -1,5 +1,7 @@
 import Dates from "../src/dates"
 
+private
+
 def main() -> Void
   Test.run([
     Test.test("a date is written in the form of RFC 9110") do

@@ -8,16 +8,14 @@ import Csrf from "csrf"
 import {App} from "app"
 import {Conn} from "conn"
 
-UPGRADE_REQUIRED = 426
-
 ## The options of a route that sets none: `std/http`'s, with a ping after 30 s with nothing to send and a peer that is
 ## silent for 120 s dropped (see `websocket`).
-export WEBSOCKET_OPTIONS = HTTP.WebSocketOptions(idle_ms: 120_000, ping_ms: 30_000)
+WEBSOCKET_OPTIONS = HTTP.WebSocketOptions(idle_ms: 120_000, ping_ms: 30_000)
 
 ## The function that runs one WebSocket of a `Bond.websocket` route: it gets the `Conn` of the handshake (after the
 ## `before` filters, with the params of the route and the session) and the `WebSocket` (`std/http`), and returns when
 ## the WebSocket is done.
-export type WebSocketHandler = Fn[Conn, HTTP.WebSocket, Result[Void]]
+type WebSocketHandler = Fn[Conn, HTTP.WebSocket, Result[Void]]
 
 ## Adds a WebSocket route: a `GET` of `pattern` that is a WebSocket handshake is upgraded on the server of the app (a
 ## page, a stream and a WebSocket share one port), and `handler` runs the WebSocket in a task of its own.
@@ -45,7 +43,7 @@ export type WebSocketHandler = Fn[Conn, HTTP.WebSocket, Result[Void]]
 ## `HTTP.WebSocketOptions()` of `std/http` has no such limit. To change one option keep the others:
 ## `some(Bond.WEBSOCKET_OPTIONS.with(max_message_bytes: 65_536))`.
 ## The program stops when `pattern` or an allowed origin is bad, or when `options` is out of range.
-export def websocket(
+def websocket(
   app: App,
   pattern: String,
   handler: WebSocketHandler,
@@ -72,9 +70,13 @@ end
 
 ## The options of a route: the ones it was given, or `WEBSOCKET_OPTIONS` for `none`. For `websocket` and its test; it
 ## is not part of `Bond`.
-export def chosen_options(options: Optional[HTTP.WebSocketOptions]) -> HTTP.WebSocketOptions
+def chosen_options(options: Optional[HTTP.WebSocketOptions]) -> HTTP.WebSocketOptions
   options.unwrap_or(WEBSOCKET_OPTIONS)
 end
+
+private
+
+UPGRADE_REQUIRED = 426
 
 def handshake(
   conn: Conn,
@@ -141,9 +143,9 @@ def run(conn: Conn, handler: WebSocketHandler, socket: HTTP.WebSocket) -> Result
   task = Task.spawn do handler.call(conn, socket) end
   case Task.await(task)
     ok(_) -> ok()
-    error(message) ->
-      IO.warn("bond: #{conn.method} #{conn.path}: the WebSocket ended with an error: #{message}")
-      error(message)
+    error(e) ->
+      IO.warn("bond: #{conn.method} #{conn.path}: the WebSocket ended with an error: #{e.message}")
+      error(e)
   end
 end
 

@@ -57,7 +57,7 @@ end
 
 `Bond.json_as(conn, status, User.codec, user)` answers a struct as JSON and encodes it once, with `Content-Type: application/json`. Bond takes the codec, as `json_body` does, because a function of your own that is generic over `T` cannot call `JSON.encode` on `T`.
 
-`Bond.json(conn, status, value)` takes a `Json`, which is the way for a list or a map (`JSON.from(scores)`), since a codec is for a struct.
+`Bond.json(conn, status, value)` takes a `JSON.Value`, which is the way for a list or a map (`JSON.from(scores)`), since a codec is for a struct.
 
 ```agentica
 import Bond from "pkg/bond/bond"

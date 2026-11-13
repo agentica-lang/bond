@@ -2,6 +2,8 @@
 
 import Bond from "../../bond"
 
+private
+
 def main() -> Void
   app = Bond.app() |> Bond.csrf(["https://admin.example.net?x=1"])
   puts("built #{app.before_filters.size}")

@@ -6,59 +6,11 @@ import EAG from "std/eag"
 import HTML from "std/html"
 import Bond from "../../bond"
 
-TOKEN = "letmein"
-
-# The secrets of the session app: the first is the one it signs with at first, the second the one after a rotation.
-FIRST_SECRET = "first-secret-first-secret-first-secret"
-SECOND_SECRET = "second-secret-second-secret-second-sec"
-
-struct Person
-  id: Int
-  name: String
-  email: Optional[String] = none
-end
-
-# Needs a field that Person does not have, so the person that the filter assigned is not one of these.
-struct Team
-  members: List[String]
-end
-
-struct Todo
-  id: Int
-  title: String
-end
-
-export type Producers = Channel[Task[Void]]
-
-struct NewUser
-  name: String
-  age: Int
-end
-
-struct Address
-  zip: String
-end
-
-struct Account
-  address: Address
-  scores: Map[String, Int]
-  tags: List[String]
-end
-
-# A comment of the room view below.
-struct RoomComment
-  author: String
-  text: String
-end
-
-struct Store
-  todos: ATS[Int, Todo]
-  next_id: ATS[String, Int]
-end
+type Producers = Channel[Task[Void]]
 
 # The same app with custom handlers for a path with no route and for a failure. The error handler answers by path so
 # that one app shows each case: it gives an error for /filter-error and crashes for /boom-again.
-export def build_custom(producers: Producers) -> Bond.App
+def build_custom(producers: Producers) -> Bond.App
   (
     build(producers)
     |> Bond.get("/boom-again", &boom)
@@ -69,7 +21,7 @@ end
 
 ## A small app with `Bond.csrf`: `GET /balance` is safe, and `/transfer` answers every unsafe method. The app with
 ## `allowed` also lets the origin `https://admin.example.net` through.
-export def build_csrf(allowed: Bool) -> Bond.App
+def build_csrf(allowed: Bool) -> Bond.App
   origins: List[String] = []
   if allowed
     origins = ["https://admin.example.net"]
@@ -88,17 +40,17 @@ end
 
 ## The options of the session app. `rotated` is the app after the secret changed: it signs with the second secret and
 ## still reads what the first signed.
-export def session_options(rotated: Bool) -> Bond.SessionOptions
+def session_options(rotated: Bool) -> Bond.SessionOptions
   return Bond.SessionOptions(secret: SECOND_SECRET, old_secrets: [FIRST_SECRET]) if rotated
 
   Bond.SessionOptions(secret: FIRST_SECRET)
 end
 
 ## The options of a visitor whose session ended a minute ago: `Testing.session_cookie` signs it with the first secret.
-export def expired_options() -> Bond.SessionOptions = Bond.SessionOptions(secret: FIRST_SECRET, max_age: -60)
+def expired_options() -> Bond.SessionOptions = Bond.SessionOptions(secret: FIRST_SECRET, max_age: -60)
 
 ## A small app with the signed cookie sessions (`Bond.sessions`) and a few routes that read and change the session.
-export def build_sessions(rotated: Bool) -> Bond.App
+def build_sessions(rotated: Bool) -> Bond.App
   (
     Bond.app()
     |> Bond.sessions(session_options(rotated))
@@ -114,7 +66,7 @@ end
 
 ## A small app whose `before` filter assigns the person of the `x-user` header (a sign-in check that looked them up
 ## once) and whose handlers read it back with `Bond.assigned`.
-export def build_assigns() -> Bond.App
+def build_assigns() -> Bond.App
   (
     Bond.app()
     |> Bond.before(&load_person)
@@ -125,7 +77,7 @@ export def build_assigns() -> Bond.App
   )
 end
 
-export def build(producers: Producers) -> Bond.App = build_in("specs/fixtures/public", producers)
+def build(producers: Producers) -> Bond.App = build_in("specs/fixtures/public", producers)
 
 ## The folder of the static files is relative to the working directory: `agentica test` runs the app in process from the
 ## project folder, while the program of a socket scenario runs from the folder of its feature (`specs/`).
@@ -133,7 +85,7 @@ export def build(producers: Producers) -> Bond.App = build_in("specs/fixtures/pu
 ## `producers` is where the routes of the streams put the task of each producer they start, so that a step can wait
 ## for them to end (a BDD handler must not return with a task pending). A program that serves forever gives a channel
 ## nobody reads: a send that cannot be made is dropped.
-export def build_in(public: String, producers: Producers) -> Bond.App
+def build_in(public: String, producers: Producers) -> Bond.App
   store = Store(todos: ATS.new(), next_id: ATS.new())
   stopped: ATS[String, Bool] = ATS.new()
   on_get_todos = handler do |conn| list_todos(store, conn) end
@@ -262,6 +214,57 @@ export def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/endless", on_get_endless)
     |> Bond.get("/endless-stopped") do |conn| endless_stopped(stopped, conn) end
   )
+end
+
+private
+
+TOKEN = "letmein"
+
+# The secrets of the session app: the first is the one it signs with at first, the second the one after a rotation.
+FIRST_SECRET = "first-secret-first-secret-first-secret"
+
+SECOND_SECRET = "second-secret-second-secret-second-sec"
+
+struct Person
+  id: Int
+  name: String
+  email: Optional[String] = none
+end
+
+# Needs a field that Person does not have, so the person that the filter assigned is not one of these.
+struct Team
+  members: List[String]
+end
+
+struct Todo
+  id: Int
+  title: String
+end
+
+struct NewUser
+  name: String
+  age: Int
+end
+
+struct Address
+  zip: String
+end
+
+struct Account
+  address: Address
+  scores: Map[String, Int]
+  tags: List[String]
+end
+
+# A comment of the room view below.
+struct RoomComment
+  author: String
+  text: String
+end
+
+struct Store
+  todos: ATS[Int, Todo]
+  next_id: ATS[String, Int]
 end
 
 # Gives a `do` block the type of a handler, so that a name can hold it before the pipeline that uses it (master refuses

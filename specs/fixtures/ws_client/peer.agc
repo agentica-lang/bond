@@ -13,6 +13,8 @@
 import HTTP from "std/http"
 import WebSocket from "pkg/websocket-client/websocket"
 
+private
+
 READ_MS = 5_000
 
 # What the program prints: the one shape of `Talk` in `specs/steps.agc`.
@@ -60,7 +62,7 @@ def main() -> Void
   headers = args.drop(4).map do |text| header_of(text) end
   case talk(args[0].to_i!, args[1], args[2], args[3], headers)
     ok(done) -> puts(JSON.encode(done))
-    error(reason) -> puts(JSON.encode({"error": reason}))
+    error(reason) -> puts(JSON.encode({"error": reason.message}))
   end
 
   IO.flush()

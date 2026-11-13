@@ -1,5 +1,7 @@
 import Pattern from "../src/pattern"
 
+private
+
 def main() -> Void
   Test.run([
     Test.test("empty segments are ignored") do

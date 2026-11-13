@@ -16,7 +16,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.html(conn, status, text)` | answers HTML; sets `Content-Type`; does not escape the text |
 | `Bond.escape(text)` | escapes `&`, `<`, `>`, `"` and `'` for HTML; see [HTML and escaping](/guide/escaping/) |
 | `Bond.bytes(conn, status, body)` | answers `Bytes` as they are; sets `Content-Type` to `application/octet-stream`, so call `header` after it for the real type |
-| `Bond.json(conn, status, value)` | answers a `Json` (`JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
+| `Bond.json(conn, status, value)` | answers a `JSON.Value` (`JSON.from(todos)` for a list or a map) as JSON; sets `Content-Type` |
 | `Bond.json_as(conn, status, codec, value)` | answers a struct as JSON with its codec; sets `Content-Type`; see [JSON bodies](/guide/json/) |
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 (or the status of a third argument) with `Location` and halts; see [Redirects](#redirects) |
@@ -42,7 +42,7 @@ Behind a proxy or a load balancer, it is the address of the proxy, not of the vi
 
 A filter often looks something up that the handler needs too, such as the signed-in person. `Bond.assign(conn, key, value)` keeps a value in the `Conn` under a name, and `Bond.assigned(conn, key, codec)` reads it back as a `Result` of the type of the codec, so the handler does not look it up again. The values live as long as the request and are never sent to the client.
 
-`Conn` has no type parameter: a value is kept as the `Json` of `JSON.from(value)`, and the reader names its type with a codec, as in [JSON bodies](/guide/json/). A codec is made from a struct, so assign a struct (its fields may be lists, maps with `String` keys, `Optional`s, numbers and text) and wrap a bare number or list in one. A value whose type `JSON.encode` refuses (a `Fn`, `Bytes`, a `Task`, a user enum, or a struct holding one) is a `CHECK-NOT-ENCODABLE` error at the `Bond.assign` call. The value goes through JSON, so the reader decodes it as `JSON.decode` does.
+`Conn` has no type parameter: a value is kept as the `JSON.Value` of `JSON.from(value)`, and the reader names its type with a codec, as in [JSON bodies](/guide/json/). A codec is made from a struct, so assign a struct (its fields may be lists, maps with `String` keys, `Optional`s, numbers and text) and wrap a bare number or list in one. A value whose type `JSON.encode` refuses (a `Fn`, `Bytes`, a `Task`, a user enum, or a struct holding one) is a `CHECK-NOT-ENCODABLE` error at the `Bond.assign` call. The value goes through JSON, so the reader decodes it as `JSON.decode` does.
 
 `Bond.assigned` is an `error` when nothing was assigned under the key and when the value does not decode as the codec's type. Both are mistakes of the program, not of the client, so a handler that uses `try` answers a 500. A handler that allows both cases asks with `Bond.assigned?` first.
 

@@ -16,9 +16,7 @@ import {App} from "src/app"
 import {SessionOptions} from "src/session"
 
 ## The client address of a request that does not choose one: `Conn.remote_addr` of the requests of `request`.
-export LOOPBACK = "127.0.0.1"
-
-TIMEOUT_MS = 10_000 # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
+LOOPBACK = "127.0.0.1"
 
 ## Sends the request to `app` and gives the response. `target` is the path with its query, as a client sends it
 ## (`/todos?done=1`); header names are lowercased, as the server does. `headers` default to none and `body` to an
@@ -35,7 +33,7 @@ TIMEOUT_MS = 10_000 # keep in sync with Conns.to_response, Apps.handle and specs
 ##
 ## `remote_addr` is the client address the handler sees in `conn.remote_addr` (`LOOPBACK` by default); to choose one,
 ## `request_from` is shorter.
-export def request(
+def request(
   app: App,
   method: String,
   target: String,
@@ -51,7 +49,7 @@ end
 ## Like `request`, as the client at `remote_addr` (what the handler reads in `conn.remote_addr`, as the server fills it
 ## from the peer of the socket): `Testing.request_from(app, "203.0.113.9", "GET", "/")`. The address comes first and
 ## the stream bounds keep their defaults; a test that needs other bounds uses `request`.
-export def request_from(
+def request_from(
   app: App,
   remote_addr: String,
   method: String,
@@ -63,11 +61,11 @@ export def request_from(
 end
 
 ## The body of `response` as text: UTF-8 only, and a `charset` other than `utf-8` is an error, as `HTTP.text` has it.
-export def text(response: HTTP.Response) -> Result[String] = HTTP.text(response.body, response.headers)
+def text(response: HTTP.Response) -> Result[String] = HTTP.text(response.body, response.headers)
 
 ## Like `request`, with the body as `Bytes` (so `headers` come before it and have no default). The rules and the
 ## response are those of `request`.
-export def request_bytes(
+def request_bytes(
   app: App,
   method: String,
   target: String,
@@ -85,10 +83,14 @@ end
 ## visitor who is logged in, with no round trip to a login route. The options are not checked as `sessions` checks
 ## them (a short secret and a negative `max_age` are accepted, so a test can make an expired cookie). An `error` when
 ## the session is over the size of a cookie.
-export def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
+def session_cookie(options: SessionOptions, data: Map[String, String]) -> Result[String]
   value = try Sessions.seal(options, data)
   ok("#{options.name}=#{value}")
 end
+
+private
+
+TIMEOUT_MS = 10_000 # keep in sync with Conns.to_response, Apps.handle and specs/steps.agc
 
 # The core of every request: the filters and routes of `Apps.handle`, or the reading of `Uploads.handle`.
 def send(

@@ -3,6 +3,8 @@
 import Bond from "../../bond"
 import Fixture from "app"
 
+private
+
 def main() -> Void
   producers: Fixture.Producers = Channel.new(1)
   server = Bond.start(Fixture.build_in("fixtures/public", producers), "127.0.0.1", 0).unwrap!

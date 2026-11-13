@@ -6,11 +6,6 @@ import Conns from "conn"
 import {App} from "app"
 import {Conn} from "conn"
 
-# The methods that must not change anything (RFC 9110 section 9.2.1, minus TRACE, which Bond does not route).
-SAFE_METHODS = ["GET", "HEAD", "OPTIONS"]
-
-DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
-
 ## Adds a `before` filter that answers 403 to a `POST`, `PUT`, `PATCH` or `DELETE` (any method that is not `GET`,
 ## `HEAD` or `OPTIONS`) that a page of another site sent, so a form on `evil.test` cannot act for a visitor of your
 ## site. The rule is the one of Go's `http.CrossOriginProtection`:
@@ -33,14 +28,14 @@ DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 ##
 ## This replaces tokens in forms, but it only protects what a browser sends: `GET` must stay free of side effects.
 ## Filters run in the order they were added, so add it before any filter that does work for a request.
-export def csrf(app: App, allowed_origins: List[String] = []) -> App
+def csrf(app: App, allowed_origins: List[String] = []) -> App
   origins = checked_origins(allowed_origins)
   Apps.before(app) do |conn| check(origins, conn) end
 end
 
 ## The allowed origins of `csrf` and `Bond.websocket` in lowercase, as a browser writes them. The program stops when
 ## one can never be the `Origin` of a browser (see `csrf`), since that is a mistake of the program.
-export def checked_origins(allowed_origins: List[String]) -> List[String]
+def checked_origins(allowed_origins: List[String]) -> List[String]
   origins = allowed_origins.map do |origin| origin.downcase end
   for origin in origins
     problem = origin_problem(origin)
@@ -55,17 +50,24 @@ end
 
 ## True when `origin` (in lowercase) names the host of the request: its part after `://` is the `Host` header. The
 ## scheme is not compared, since the server may sit behind a proxy that ends TLS.
-export def host_origin?(origin: String, conn: Conn) -> Bool
+def host_origin?(origin: String, conn: Conn) -> Bool
   host = Conns.request_header(conn, "host").unwrap_or("").downcase
   parts = origin.split("://")
   host != "" and parts.size == 2 and parts[1] == host
 end
 
 ## True when the request has more than one header `name` (in lowercase), which a browser never sends for `Origin`.
-export def repeated?(conn: Conn, name: String) -> Bool
+def repeated?(conn: Conn, name: String) -> Bool
   same = conn.headers.select do |field| field.name.downcase == name end
   same.size > 1
 end
+
+private
+
+# The methods that must not change anything (RFC 9110 section 9.2.1, minus TRACE, which Bond does not route).
+SAFE_METHODS = ["GET", "HEAD", "OPTIONS"]
+
+DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
 
 # Why `origin` can never be the `Origin` header of a browser, or "" when it can: it is `scheme://host` or
 # `scheme://host:port` with nothing else (a browser leaves the port out when it is the default of the scheme).

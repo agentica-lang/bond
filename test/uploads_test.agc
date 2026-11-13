@@ -2,8 +2,12 @@ import HTTP from "std/http"
 import Bond from "../bond"
 import Testing from "../testing"
 
+private
+
 BOUNDARY = "bond-test-boundary"
+
 CONTENT_TYPE = [HTTP.Header(name: "content-type", value: "multipart/form-data; boundary=bond-test-boundary")]
+
 LIMITS = Bond.UploadOptions(max_file_bytes: 16, max_field_bytes: 64, max_fields_bytes: 256, max_total_bytes: 1_024)
 
 # What a handler saw of a form: the text fields, then each file with its content, and whether its file is there.

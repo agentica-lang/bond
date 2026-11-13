@@ -8,7 +8,7 @@ import Pattern from "pattern"
 import {Handler} from "conn"
 
 ## A step of the tree. `name` is the param name of a param child (the node itself has none: it is the child's).
-export struct Node
+struct Node
   literals: Map[String, Node]
   params: List[Node]
   name: String
@@ -16,10 +16,27 @@ export struct Node
 end
 
 ## The node that a route found, with the params on the way to it.
-export struct Found
+struct Found
   node: Node
   params: Map[String, String]
 end
+
+## A tree with no route.
+def empty() -> Node = Node(literals: {}, params: [], name: "", handlers: {})
+
+## Adds the route to the tree. It is an `error` when the same method and pattern are already there (a trailing or a
+## double slash does not make another pattern), or when the pattern has another param name than the routes already in
+## the tree at the same place: `/users/:id` and `/users/:name/posts` cannot both be.
+def add(root: Node, method: String, pattern: String, handler: Handler) -> Result[Node]
+  insert(root, Pattern.segments(pattern), Route(method: method, pattern: pattern, handler: handler))
+end
+
+## The node that holds the route of `path`, with the params. A literal segment is tried before the param of the same
+## place, and when the literal branch has no route to the end the walk goes back to the param. `error` when no route
+## has this path (the method is not looked at here).
+def find(root: Node, path: String) -> Result[Found] = walk(root, Pattern.segments(path), 0, {})
+
+private
 
 # The route being added, so that its parts travel together down the tree.
 struct Route
@@ -27,21 +44,6 @@ struct Route
   pattern: String
   handler: Handler
 end
-
-## A tree with no route.
-export def empty() -> Node = Node(literals: {}, params: [], name: "", handlers: {})
-
-## Adds the route to the tree. It is an `error` when the same method and pattern are already there (a trailing or a
-## double slash does not make another pattern), or when the pattern has another param name than the routes already in
-## the tree at the same place: `/users/:id` and `/users/:name/posts` cannot both be.
-export def add(root: Node, method: String, pattern: String, handler: Handler) -> Result[Node]
-  insert(root, Pattern.segments(pattern), Route(method: method, pattern: pattern, handler: handler))
-end
-
-## The node that holds the route of `path`, with the params. A literal segment is tried before the param of the same
-## place, and when the literal branch has no route to the end the walk goes back to the param. `error` when no route
-## has this path (the method is not looked at here).
-export def find(root: Node, path: String) -> Result[Found] = walk(root, Pattern.segments(path), 0, {})
 
 def insert(node: Node, parts: List[String], route: Route) -> Result[Node]
   if parts.empty?

@@ -174,6 +174,7 @@ def main() -> Void
     BDD.step("the header {string} starts with {string}", &header_starts_with),
     BDD.step("the header {string} ends with {string}", &header_ends_with),
     BDD.step("the status is {int}", &status_is),
+    BDD.step("the connection is closed with no answer", &closed_with_no_answer),
     BDD.step("the body is {string}", &body_is),
     BDD.step("the body bytes are {string}", &body_bytes_are),
     BDD.step("the body is the text {string}", &body_is_text),
@@ -188,6 +189,8 @@ def main() -> Void
     BDD.step("I get {string} over the socket with the header {string} set to {string}", &get_over_socket_with),
     BDD.step("I post {string} to {string} over the socket", &post_over_socket),
     BDD.step("I post the chunks {string} to {string} over a raw socket", &post_chunks_over_socket),
+    BDD.step("I send a head with a header of {int} bytes over a raw socket", &send_wide_head),
+    BDD.step("I send {int} bytes of a body of {int} bytes to {string} and wait over a raw socket", &send_part_of_body),
     BDD.step("the upload server listens on a free port", &start_upload_server),
     BDD.step(
       "I post the fields {string} and the file {string} holding {string} to {string} over the socket",
@@ -394,6 +397,11 @@ end
 def status_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
   reply = last_reply(ctx)
   BDD.assert(ctx, reply.status == args[0].to_i!, "the status is #{reply.status}")
+end
+
+def closed_with_no_answer(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = last_reply(ctx)
+  BDD.assert(ctx, reply.status == 0, "the status is #{reply.status}")
 end
 
 def body_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -806,8 +814,45 @@ def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
 end
 
+# A `GET` whose head is written by hand, with one header of `args[0]` bytes. The server may answer before it has read
+# all of it, so a write that fails is no error here: the answer is what counts.
+def send_wide_head(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  wide = List.repeat("a", args[0].to_i!).join("")
+  head = "GET /hello HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Wide: #{wide}\r\n\r\n"
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  _ = TCP.send(socket, head, SOCKET_MS)
+  response = read_raw_answer(socket)
+  TCP.close(socket)
+  BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+end
+
+# A `POST` that announces a body of `args[1]` bytes and sends `args[0]` of them, then stops: the request timeout of
+# the server ends the wait.
+def send_part_of_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  port = JSON.int(BDD.get(ctx, PORT).unwrap!).unwrap!
+  head = "POST #{args[2]} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: #{args[1]}\r\n\r\n"
+  socket = TCP.connect("127.0.0.1", port, SOCKET_MS).unwrap!
+  TCP.send(socket, head + List.repeat("a", args[0].to_i!).join(""), SOCKET_MS).unwrap!
+  response = read_raw_answer_or_closed(socket)
+  TCP.close(socket)
+  BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
+end
+
 def read_raw_answer(socket: TCP.Socket) -> HTTP.Response
-  status = TCP.read_line(socket, SOCKET_MS).unwrap!.strip.split(" ")[1].to_i!
+  answer_after(socket, TCP.read_line(socket, SOCKET_MS).unwrap!)
+end
+
+# The answer of a server that may close the connection with nothing written: status 0 stands for that.
+def read_raw_answer_or_closed(socket: TCP.Socket) -> HTTP.Response
+  case TCP.read_line(socket, SOCKET_MS)
+    ok(line) -> answer_after(socket, line)
+    error(_) -> HTTP.Response(status: 0, headers: [], body: "".bytes)
+  end
+end
+
+def answer_after(socket: TCP.Socket, status_line: String) -> HTTP.Response
+  status = status_line.strip.split(" ")[1].to_i!
   headers: List[HTTP.Header] = []
   line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
   while not line.empty?

@@ -289,7 +289,7 @@ def json_body[T](conn: Conn, codec: Codec[T]) -> Result[T]
     ok(text) ->
       case codec.decode(text)
         ok(value) -> ok(value)
-        error(message) -> bad_request("invalid body: #{decode_problem(message)}")
+        error(e) -> bad_request("invalid body: #{decode_problem(e.message)}")
       end
 
     error(_) -> bad_request(NOT_UTF8)

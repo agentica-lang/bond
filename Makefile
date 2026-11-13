@@ -1,4 +1,4 @@
-# Developing Bond needs Agentica 0.31.0-alpha.1 or later (the HTTP types of std/http and the Ruby names of the builtins), and so does a project that uses Bond.
+# Developing Bond needs Agentica 0.31.0 or later (`private` for the declarations of a module, the nested builtin names and the errors with kinds), and so does a project that uses Bond.
 # The check, the format check, the tests of the sources, the documentation site (Hugo), the check of its samples and
 # the site of every release (site-versions).
 

@@ -55,7 +55,7 @@ def answer(app: App, limit: Int, request: HTTP.Request, body: HTTP.RequestBody) 
 
   case HTTP.read_all(body, limit)
     ok(data) -> ok(Apps.handle_answer(app, request.with(body: data)))
-    error(message) -> ok(HTTP.body_refusal(message))
+    error(e) -> ok(HTTP.body_refusal(e.message))
   end
 end
 

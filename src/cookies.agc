@@ -40,7 +40,7 @@ end
 def set_cookie_with(conn: Conn, cookie: C.Cookie) -> Result[Conn]
   case C.set_header(cookie)
     ok(line) -> ok(Conns.add_header(conn, "set-cookie", line))
-    error(message) -> error("cookie: #{message}")
+    error(e) -> error(e.with(message: "cookie: #{e.message}"))
   end
 end
 

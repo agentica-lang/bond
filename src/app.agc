@@ -205,10 +205,10 @@ def answer(app: App, request: HTTP.Request, receive: Optional[Receiver]) -> Conn
   task = Task.spawn do serve(app, conn, receive) end
   case Task.await(task)
     ok(done) -> done
-    error(message) ->
+    error(e) ->
       # The VM has printed the stack trace of the crash; the message is not logged a second time.
       IO.warn("bond: #{conn.method} #{conn.path}: crashed, the stack trace is above")
-      answer_error(app, conn, message)
+      answer_error(app, conn, e.message)
   end
 end
 
@@ -246,7 +246,7 @@ def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
   if not found.ok?
     case Statics.serve(app.statics, conn)
       ok(answer) -> return answer
-      error(reason) -> return unserved(app, conn, reason)
+      error(e) -> return unserved(app, conn, e.message)
     end
   end
 
@@ -265,7 +265,7 @@ def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
     some(read) ->
       case read.call(routed)
         ok(form) -> apply(app, routed.with(form: some(form)), hit.node.handlers[wanted])
-        error(status) -> refused(routed, status.to_i!)
+        error(e) -> refused(routed, e.message.to_i!)
       end
 
     none -> apply(app, routed, hit.node.handlers[wanted])
@@ -310,7 +310,7 @@ end
 def run(app: App, conn: Conn, handler: Handler) -> Conn
   case handler.call(conn)
     ok(next_conn) -> next_conn
-    error(message) -> failure(app, conn, message)
+    error(e) -> failure(app, conn, e.message)
   end
 end
 
@@ -342,8 +342,8 @@ def answer_error(app: App, conn: Conn, message: String) -> Conn
   task = Task.spawn do app.on_error.call(failing, message) end
   case Task.await(task)
     ok(answer) -> answer.with(halted: true)
-    error(reason) ->
-      IO.warn("bond: #{conn.method} #{conn.path}: the error handler failed: #{reason}")
+    error(e) ->
+      IO.warn("bond: #{conn.method} #{conn.path}: the error handler failed: #{e.message}")
       Conns.halt(failing, 500, Conns.INTERNAL_ERROR)
   end
 end

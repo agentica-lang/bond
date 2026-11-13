@@ -143,9 +143,9 @@ def run(conn: Conn, handler: WebSocketHandler, socket: HTTP.WebSocket) -> Result
   task = Task.spawn do handler.call(conn, socket) end
   case Task.await(task)
     ok(_) -> ok()
-    error(message) ->
-      IO.warn("bond: #{conn.method} #{conn.path}: the WebSocket ended with an error: #{message}")
-      error(message)
+    error(e) ->
+      IO.warn("bond: #{conn.method} #{conn.path}: the WebSocket ended with an error: #{e.message}")
+      error(e)
   end
 end
 

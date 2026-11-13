@@ -193,22 +193,20 @@ def receive(options: UploadOptions, dir: String, request: HTTP.Request, body: HT
       ok(piece) ->
         case take(options, reading, piece)
           ok(next) -> reading = next
-          error(status) ->
+          error(e) ->
             close_part(reading.part)
-            return error(status)
+            return error(e)
         end
 
       error(_) -> break
     end
   end
 
-  done = Task.await(body.done)
-  if not done.ok?
-    close_part(reading.part)
-    case HTTP.body_refusal(done.message)
-      HTTP.Answer.Whole(response) -> return error(response.status.to_s)
-      _ -> return error(BAD)
-    end
+  case Task.await(body.done)
+    ok(_) -> nil
+    error(e) ->
+      close_part(reading.part)
+      return error(refusal_status(e))
   end
 
   finished = Multipart.finish(reading.parser)
@@ -220,6 +218,14 @@ def receive(options: UploadOptions, dir: String, request: HTTP.Request, body: HT
 
   form = ended.unwrap!
   ok(Form(fields: form.fields, files: form.files))
+end
+
+# The status for a body the server cut: `http.too_large` has it as its code (413 over the limit, 431 for a chunk line
+# or a trailer section over the head limits); any other (a bad chunk, a client that left or stalled) is a 400.
+def refusal_status(e: Error) -> String
+  return e.code.unwrap!.to_s if e.kind == "http.too_large" and e.code.some?
+
+  BAD
 end
 
 # One piece: its bytes count toward the total, then each event of the parser. The error is the status to answer; a
@@ -239,9 +245,9 @@ def take(options: UploadOptions, reading: Reading, piece: Bytes) -> Result[Readi
   for event in step.unwrap!.events
     case event_of(options, current, event)
       ok(next) -> current = next
-      error(status) ->
+      error(e) ->
         close_part(current.part)
-        return error(status)
+        return error(e)
     end
   end
 

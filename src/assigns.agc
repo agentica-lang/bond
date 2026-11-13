@@ -25,7 +25,7 @@ def assigned[T](conn: Conn, key: String, codec: Codec[T]) -> Result[T]
   json = try conn.assigns.get(key).to_result("nothing assigned under #{key}")
   case codec.decode(json)
     ok(value) -> ok(value)
-    error(message) -> error("assigned #{key}: #{message}")
+    error(e) -> error(e.with(message: "assigned #{key}: #{e.message}"))
   end
 end
 

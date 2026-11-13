@@ -13,6 +13,8 @@
 import HTTP from "std/http"
 import WebSocket from "pkg/websocket-client/websocket"
 
+private
+
 READ_MS = 5_000
 
 # What the program prints: the one shape of `Talk` in `specs/steps.agc`.

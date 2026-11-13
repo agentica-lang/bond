@@ -1,5 +1,7 @@
 import Conns from "../src/conn"
 
+private
+
 def main() -> Void
   Test.run([
     Test.test("escape replaces the five characters of HTML") do

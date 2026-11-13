@@ -8,37 +8,37 @@ import {App} from "app"
 ## Serves `app` in the background and returns at once. The server belongs to the task that calls this, so call it
 ## from the task that keeps it, such as `main`. Port 0 picks a free port (`local_port`). It uses the default
 ## options of `std/http`; `start_with` takes others.
-export def start(app: App, host: String, port: Int) -> Result[HTTP.Server]
-  start_with(app, host, port, HTTP.ServerOptions())
-end
+def start(app: App, host: String, port: Int) -> Result[HTTP.Server] = start_with(app, host, port, HTTP.ServerOptions())
 
 ## Like `start`, with the options of the server of `std/http` (`HTTP.ServerOptions`: the timeouts, the connections
 ## at once and the body limit), such as `HTTP.ServerOptions(max_body_bytes: 4_194_304)`.
 ## With `Bond.uploads`, the server takes a `multipart/form-data` body up to the `max_total_bytes` of the uploads, and
 ## the other bodies keep `max_body_bytes`.
-export def start_with(app: App, host: String, port: Int, options: HTTP.ServerOptions) -> Result[HTTP.Server]
+def start_with(app: App, host: String, port: Int, options: HTTP.ServerOptions) -> Result[HTTP.Server]
   limit = options.max_body_bytes
   served = serving do |request, body| answer(app, limit, request, body) end
   HTTP.serve(host, port, served, options.with(max_body_bytes: Uploads.server_limit(app, limit)))
 end
 
-export def local_port(server: HTTP.Server) -> Int = HTTP.local_port(server)
+def local_port(server: HTTP.Server) -> Int = HTTP.local_port(server)
 
 ## Waits until the server is closed.
-export def wait(server: HTTP.Server) -> Result[Void] = HTTP.wait(server)
+def wait(server: HTTP.Server) -> Result[Void] = HTTP.wait(server)
 
-export def stop(server: HTTP.Server) -> Void
+def stop(server: HTTP.Server) -> Void
   HTTP.close_server(server)
 end
 
 ## Serves `app` and waits: it returns only when the server closes or fails to start.
-export def run(app: App, host: String, port: Int) -> Result[Void] = run_with(app, host, port, HTTP.ServerOptions())
+def run(app: App, host: String, port: Int) -> Result[Void] = run_with(app, host, port, HTTP.ServerOptions())
 
 ## Like `run`, with the options of `start_with`.
-export def run_with(app: App, host: String, port: Int, options: HTTP.ServerOptions) -> Result[Void]
+def run_with(app: App, host: String, port: Int, options: HTTP.ServerOptions) -> Result[Void]
   server = try start_with(app, host, port, options)
   wait(server)
 end
+
+private
 
 # The body is read whole before the app runs, as the app of Bond takes the request whole (`Conn` has the body as
 # bytes). A body that is over `limit`, or that did not arrive whole, is answered by `HTTP.body_refusal` (413, 431 or

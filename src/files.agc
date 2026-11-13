@@ -13,47 +13,19 @@ import {Conn} from "conn"
 ## The range of `piece_bytes`: 4 KiB, below which every piece costs more than the bytes it carries, and 16 MiB, above
 ## which a slow client holds a lot of memory for one answer (the queue holds a few pieces). The default, 64 KiB, is a
 ## literal in `send_file`, `Rep` and `Bond.static` (a default must be one): keep them in sync.
-export MIN_PIECE_BYTES = 4_096
-export MAX_PIECE_BYTES = 16_777_216
+MIN_PIECE_BYTES = 4_096
+
+MAX_PIECE_BYTES = 16_777_216
 
 ## The longest `max_age` that a cache is told to keep a file, one year in seconds (RFC 9111 section 1.2.2).
-export MAX_AGE_SECONDS = 31_536_000
-
-# The bytes before the part that a range starts at are read and dropped: `File` has no seek. A read is at most 1 MiB.
-SKIP_BYTES = 1_048_576
-
-# The most that one call of `File.read_bytes` gives.
-READ_BYTES = 1_048_576
-
-# One read waits on a file that blocks (a FIFO that no one writes to), so the wait is short.
-READ_MS = 5_000
-
-# One send waits for the client to take a piece. A client that stops reading for this long loses the download.
-SEND_MS = 60_000
-
-# The pieces that wait in the channel, so the file is read ahead a little and the memory is bounded.
-QUEUE_PIECES = 4
-
-# A number of digits too long for an `Int` is this: beyond the end of any file.
-HUGE = 1_000_000_000_000_000_000
-
-# The most digits of a number that is converted as it is.
-MAX_DIGITS = 18
-
-# Which bytes of the file the request wants: `status` is 200 (all of it), 206 (the `size` bytes from `first`) or 416
-# (the range starts beyond the end of the file).
-struct Slice
-  status: Int
-  first: Int
-  size: Int
-end
+MAX_AGE_SECONDS = 31_536_000
 
 ## What an answer says about the bytes it sends: the headers that come from the file and the policy, and the size.
 ## `type` is the whole `Content-Type`. `size` is that of the bytes sent (of the compressed file when `encoding` is
 ## `gzip`), and `modified` the Unix seconds of the last change, with `last_modified` as the header says it.
 ## `cache_control` and `encoding` are not sent when empty, `Vary: Accept-Encoding` is sent when `vary` is on, and a
 ## file of at most `piece_bytes` is answered whole.
-export struct Rep
+struct Rep
   type: String
   etag: String
   modified: Int
@@ -64,16 +36,6 @@ export struct Rep
   vary: Bool = false
   attachment: Optional[String] = none
   piece_bytes: Int = 65_536
-end
-
-# What the producer task owns: the file, the channel of the body and the part to send. Both handles close when the task
-# ends, whether it returns or crashes, and the closing of the channel is the end of the body.
-struct Job
-  file: FileHandle
-  body: Channel[Bytes]
-  skip: Int
-  length: Int
-  piece_bytes: Int
 end
 
 ## Answers with the file at `path`: its type from `std/mime` (a text type with `; charset=utf-8`), `Content-Length`,
@@ -98,7 +60,7 @@ end
 ##
 ## The status is always set: 200, 206, 304 or 416, whatever it was before. So a custom `not_found` page that sends a
 ## file answers 200 unless `Bond.status` comes after, and a client that sends a `Range` to such a page can get a 206.
-export def send_file(
+def send_file(
   conn: Conn,
   path: String,
   attachment: Optional[String] = none,
@@ -129,7 +91,7 @@ export def send_file(
 end
 
 ## The `Rep` of the file with the `info` of `stat`, typed by `type_name` (a file name or an extension).
-export def describe(type_name: String, attachment: Optional[String], info: FileInfo, cache: String) -> Rep
+def describe(type_name: String, attachment: Optional[String], info: File.Info, cache: String) -> Rep
   type = MIME.mime_type(type_name)
   label = type
   if MIME.text?(type)
@@ -148,12 +110,12 @@ export def describe(type_name: String, attachment: Optional[String], info: FileI
 end
 
 ## Whether the request asks for a part of the file, which a compressed answer cannot give.
-export def ranged?(conn: Conn) -> Bool = not request_range(conn).empty?
+def ranged?(conn: Conn) -> Bool = not request_range(conn).empty?
 
 ## Answers with the bytes described by `rep`: a 304 for a conditional request that the validators satisfy, else a 200,
 ## 206 or 416 for the range. The bytes are `loaded` when the caller has them, else the file at `path` (the one that
 ## `rep` describes, for `Rep.size` bytes), read whole when it fits in one piece and in pieces when it does not.
-export def respond(conn: Conn, rep: Rep, path: String, loaded: Optional[Bytes]) -> Result[Conn]
+def respond(conn: Conn, rep: Rep, path: String, loaded: Optional[Bytes]) -> Result[Conn]
   Conns.close_stream(conn)
   bare = conn.with(response_stream: none, response_length: none)
   if (conn.method == "GET" or conn.method == "HEAD") and not_modified?(bare, rep)
@@ -189,7 +151,7 @@ export def respond(conn: Conn, rep: Rep, path: String, loaded: Optional[Bytes]) 
 end
 
 ## The bytes of the file at `path`, which has `size` bytes, read in one go.
-export def read_whole(path: String, size: Int) -> Result[Bytes]
+def read_whole(path: String, size: Int) -> Result[Bytes]
   return ok("".bytes) if size == 0
 
   file = try File.open(path, "read", READ_MS)
@@ -200,9 +162,50 @@ export def read_whole(path: String, size: Int) -> Result[Bytes]
   read
 end
 
+private
+
+# The bytes before the part that a range starts at are read and dropped: `File` has no seek. A read is at most 1 MiB.
+SKIP_BYTES = 1_048_576
+
+# The most that one call of `File.read_bytes` gives.
+READ_BYTES = 1_048_576
+
+# One read waits on a file that blocks (a FIFO that no one writes to), so the wait is short.
+READ_MS = 5_000
+
+# One send waits for the client to take a piece. A client that stops reading for this long loses the download.
+SEND_MS = 60_000
+
+# The pieces that wait in the channel, so the file is read ahead a little and the memory is bounded.
+QUEUE_PIECES = 4
+
+# A number of digits too long for an `Int` is this: beyond the end of any file.
+HUGE = 1_000_000_000_000_000_000
+
+# The most digits of a number that is converted as it is.
+MAX_DIGITS = 18
+
+# Which bytes of the file the request wants: `status` is 200 (all of it), 206 (the `size` bytes from `first`) or 416
+# (the range starts beyond the end of the file).
+struct Slice
+  status: Int
+  first: Int
+  size: Int
+end
+
+# What the producer task owns: the file, the channel of the body and the part to send. Both handles close when the task
+# ends, whether it returns or crashes, and the closing of the channel is the end of the body.
+struct Job
+  file: File.Handle
+  body: Channel[Bytes]
+  skip: Int
+  length: Int
+  piece_bytes: Int
+end
+
 # A strong validator from what `stat` gives, with no read of the file: the size and the time of the last change in
 # seconds. An edit that keeps the size and happens in the same second as the last one is not seen.
-def etag_of(info: FileInfo) -> String = "\"#{info.size_bytes.to_s}-#{info.modified_seconds.to_s}\""
+def etag_of(info: File.Info) -> String = "\"#{info.size_bytes.to_s}-#{info.modified_seconds.to_s}\""
 
 # The `Cache-Control` of `max_age` seconds: for one person's cache unless `public`.
 def max_age_text(seconds: Int, public: Bool) -> String
@@ -411,7 +414,7 @@ end
 # `count` bytes (at least 1), or fewer at the end of the file, as one `Bytes`: a piece can be bigger than the 1
 # MiB that
 # one read gives.
-def read_up_to(file: FileHandle, count: Int) -> Result[Bytes]
+def read_up_to(file: File.Handle, count: Int) -> Result[Bytes]
   got = try File.read_bytes(file, smaller(READ_BYTES, count), READ_MS)
   while not got.empty? and got.size < count
     more = try File.read_bytes(file, smaller(READ_BYTES, count - got.size), READ_MS)
@@ -423,7 +426,7 @@ def read_up_to(file: FileHandle, count: Int) -> Result[Bytes]
   ok(got)
 end
 
-def skip_bytes(file: FileHandle, count: Int) -> Bool
+def skip_bytes(file: File.Handle, count: Int) -> Bool
   left = count
   while left > 0
     piece = File.read_bytes(file, smaller(SKIP_BYTES, left), READ_MS)

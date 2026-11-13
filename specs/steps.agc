@@ -10,23 +10,40 @@ import Bond from "../bond"
 import Fixture from "fixtures/app"
 import Testing from "../testing"
 
+private
+
 APP = "app"
+
 REPLY = "reply"
+
 PORT = "port"
+
 SOCKET_MS = 5_000
+
 # Relative to the working directory of the run, which is the folder of the repository (`make test`).
 PEER = "specs/fixtures/ws_client/peer.agc"
+
 PEER_MS = 15_000
+
 PRODUCERS = 16
+
 PRODUCER_MS = 5_000
+
 PATTERN = 251
+
 UPLOAD_BOUNDARY = "bond-spec-boundary"
+
 WEBSOCKET = "websocket"
+
 # The key of RFC 6455 section 1.3, for the one step that writes its handshake by hand.
 WEBSOCKET_KEY = "dGhlIHNhbXBsZSBub25jZQ=="
+
 PING_FRAME = 9
+
 LENGTH_BITS = 127
+
 TWO_BYTE_LENGTH = 126
+
 BYTE = 256
 
 struct Ask
@@ -478,7 +495,7 @@ def keep_links_app(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.keep(ctx, APP) do |request| serve_links(base, request) end
 end
 
-def serve_links(base: String, request: Json) -> Result[Json]
+def serve_links(base: String, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   try make_folder(base)
   app = Bond.app() |> Bond.static("/files", "#{base}/root")
@@ -519,7 +536,7 @@ def keep(ctx: BDD.Context, app: Bond.App, producers: Fixture.Producers) -> BDD.C
   BDD.keep(ctx, APP) do |request| serve(app, producers, request) end
 end
 
-def serve(app: Bond.App, producers: Fixture.Producers, request: Json) -> Result[Json]
+def serve(app: Bond.App, producers: Fixture.Producers, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   before = Task.pending_count()
   response = ask_request(app, ask, ask.max_pieces, ask.timeout_ms)
@@ -552,7 +569,7 @@ end
 # a chain after the `end` of a block).
 def handler(f: Bond.Handler) -> Bond.Handler = f
 
-def serve_big(base: String, size: Int, request: Json) -> Result[Json]
+def serve_big(base: String, size: Int, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   try Dir.mkdir(base)
   try File.write_bytes(File.open("#{base}/big.bin", "write", SOCKET_MS).unwrap!, pattern(size), SOCKET_MS)
@@ -604,7 +621,7 @@ end
 
 def edit_folder() -> String = "edit_files_#{System.pid()}"
 
-def serve_edited(app: Bond.App, request: Json) -> Result[Json]
+def serve_edited(app: Bond.App, request: JSON.Value) -> Result[JSON.Value]
   ask = try JSON.decode(request, Ask)
   before = Task.pending_count()
   response = ask_request(app, ask, 0, 10_000)
@@ -789,7 +806,7 @@ def post_chunks_over_socket(ctx: BDD.Context, args: List[String]) -> BDD.Context
   BDD.set(ctx, REPLY, JSON.from(reply_of(response)))
 end
 
-def read_raw_answer(socket: Socket) -> HTTP.Response
+def read_raw_answer(socket: TCP.Socket) -> HTTP.Response
   status = TCP.read_line(socket, SOCKET_MS).unwrap!.strip.split(" ")[1].to_i!
   headers: List[HTTP.Header] = []
   line = TCP.read_line(socket, SOCKET_MS).unwrap!.strip
@@ -871,7 +888,7 @@ def handshake(path: String, port: Int, headers: List[HTTP.Header]) -> String
 end
 
 # A frame from the server, which is never masked: a length of up to 125, or 126 and two bytes of length.
-def read_frame(socket: Socket) -> Frame
+def read_frame(socket: TCP.Socket) -> Frame
   head = read_exactly(socket, 2).to_a
   size = Int.bit_and(head[1], LENGTH_BITS)
   if size == TWO_BYTE_LENGTH
@@ -882,7 +899,7 @@ def read_frame(socket: Socket) -> Frame
   Frame(opcode: Int.bit_and(head[0], 15), payload: read_exactly(socket, size))
 end
 
-def read_exactly(socket: Socket, size: Int) -> Bytes
+def read_exactly(socket: TCP.Socket, size: Int) -> Bytes
   got = "".bytes
   while got.size < size
     got = Bytes.concat([got, TCP.recv_bytes(socket, size - got.size, SOCKET_MS).unwrap!])

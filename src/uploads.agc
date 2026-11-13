@@ -10,48 +10,6 @@ import Multipart from "multipart"
 import {App, UploadOptions} from "app"
 import {Conn, Form, UploadedFile} from "conn"
 
-MULTIPART_TYPE = "multipart/form-data"
-DEFAULT_TYPE = "application/octet-stream"
-BODY_METHODS = ["POST", "PUT", "PATCH"]
-
-# The most bytes the server takes in one body (`HTTP.ServerOptions.max_body_bytes`).
-SERVER_MAX_BODY = 268_435_456
-
-# How long to wait for the next piece: the server's own timeouts end a body that stalls, so this is only a bound.
-PIECE_WAIT_MS = 3_600_000
-
-# The pieces of a body that a test gives as one `Bytes`.
-TEST_PIECE = 65_536
-
-# The errors of the reading: the status of the refusal, as `Receiver` asks.
-TOO_LARGE = "413"
-BAD = "400"
-FAILED = "500"
-
-# The part being read: its field, the file it goes to (none for a text field) and what it holds so far.
-struct Part
-  name: String
-  filename: Optional[String]
-  content_type: String
-  handle: Optional[FileHandle]
-  path: String
-  size: Int
-  text: List[Bytes]
-end
-
-# The form so far, while the body arrives. `dir` is made on the first file (`made`); `fields_size` is the size of
-# every text field so far.
-struct Reading
-  dir: String
-  made: Bool
-  parser: Multipart.Parser
-  part: Optional[Part]
-  fields: List[URI.Pair]
-  files: List[UploadedFile]
-  fields_size: Int
-  total: Int
-end
-
 ## Turns on uploads: a request whose `Content-Type` is `multipart/form-data` has its body read as it arrives, once the
 ## `before` filters passed it and its route was found. A filter that halts (`Bond.csrf`, a login check), a path with no
 ## route (404) or with no route for the method (405) is answered without reading the body. Each file goes to a private
@@ -66,7 +24,7 @@ end
 ## server's limit and its body stays in `conn.body`. The program stops when a limit is below 1, when `max_file_bytes`
 ## is above `max_total_bytes`, when `max_field_bytes` is above `max_fields_bytes`, or when `max_total_bytes` is above
 ## 256 MiB.
-export def uploads(app: App, options: UploadOptions = UploadOptions()) -> App
+def uploads(app: App, options: UploadOptions = UploadOptions()) -> App
   fields_ok = options.max_field_bytes >= 1 and options.max_field_bytes <= options.max_fields_bytes
   if options.max_file_bytes < 1 or options.max_file_bytes > options.max_total_bytes or not fields_ok
     bad: Result[App] = error(
@@ -87,7 +45,7 @@ end
 
 ## The first file of the field `name`, or an error that makes a 400 when there is none (so `try Bond.file(...)`
 ## answers it). A field that came as text is no file.
-export def file(conn: Conn, name: String) -> Result[UploadedFile]
+def file(conn: Conn, name: String) -> Result[UploadedFile]
   found = file_all(conn, name)
   return Conns.bad_request("file #{name} is missing") if found.empty?
 
@@ -95,7 +53,7 @@ export def file(conn: Conn, name: String) -> Result[UploadedFile]
 end
 
 ## Every file of the field `name`, in order (`<input type="file" multiple>`): an empty list when there is none.
-export def file_all(conn: Conn, name: String) -> List[UploadedFile]
+def file_all(conn: Conn, name: String) -> List[UploadedFile]
   case conn.form
     some(parts) -> parts.files.select do |upload| upload.name == name end
     none -> []
@@ -104,7 +62,7 @@ end
 
 ## The upload options when they apply to the request: the app has uploads, the method is one that sends a form body
 ## (POST, PUT, PATCH; a DELETE or a GET with a body is no upload) and the body is `multipart/form-data`.
-export def applies(app: App, request: HTTP.Request) -> Optional[UploadOptions]
+def applies(app: App, request: HTTP.Request) -> Optional[UploadOptions]
   return none if not BODY_METHODS.any? do |method| method == request.method end
 
   types = HTTP.header_values(request.headers, "content-type")
@@ -114,7 +72,7 @@ export def applies(app: App, request: HTTP.Request) -> Optional[UploadOptions]
 end
 
 ## The body limit of the server: the larger of the one of the other requests and the uploads' total.
-export def server_limit(app: App, limit: Int) -> Int
+def server_limit(app: App, limit: Int) -> Int
   case app.uploads
     some(options) ->
       return options.max_total_bytes if options.max_total_bytes > limit
@@ -127,7 +85,7 @@ end
 
 ## The answer of `HTTP.serve` for a request that `applies`: the app runs with a `Receiver` that reads the body when
 ## the request reaches its route, and the folder of the files is removed after.
-export def answer(app: App, options: UploadOptions, request: HTTP.Request, body: HTTP.RequestBody) -> HTTP.Answer
+def answer(app: App, options: UploadOptions, request: HTTP.Request, body: HTTP.RequestBody) -> HTTP.Answer
   dir = folder(options)
   answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |_conn|
     receive(options, dir, request, body)
@@ -138,13 +96,7 @@ export def answer(app: App, options: UploadOptions, request: HTTP.Request, body:
 end
 
 ## Like `answer`, for `Testing.request`: the body is given whole, in pieces of 64 KiB, and the answer is whole.
-export def handle(
-  app: App,
-  options: UploadOptions,
-  request: HTTP.Request,
-  max_pieces: Int,
-  timeout_ms: Int,
-) -> HTTP.Response
+def handle(app: App, options: UploadOptions, request: HTTP.Request, max_pieces: Int, timeout_ms: Int) -> HTTP.Response
   pieces: Channel[Bytes] = Channel.new(request.body.size / TEST_PIECE + 1)
   at = 0
   while at < request.body.size
@@ -164,6 +116,54 @@ export def handle(
   _ = Task.await(done)
   remove(dir)
   response
+end
+
+private
+
+MULTIPART_TYPE = "multipart/form-data"
+
+DEFAULT_TYPE = "application/octet-stream"
+
+BODY_METHODS = ["POST", "PUT", "PATCH"]
+
+# The most bytes the server takes in one body (`HTTP.ServerOptions.max_body_bytes`).
+SERVER_MAX_BODY = 268_435_456
+
+# How long to wait for the next piece: the server's own timeouts end a body that stalls, so this is only a bound.
+PIECE_WAIT_MS = 3_600_000
+
+# The pieces of a body that a test gives as one `Bytes`.
+TEST_PIECE = 65_536
+
+# The errors of the reading: the status of the refusal, as `Receiver` asks.
+TOO_LARGE = "413"
+
+BAD = "400"
+
+FAILED = "500"
+
+# The part being read: its field, the file it goes to (none for a text field) and what it holds so far.
+struct Part
+  name: String
+  filename: Optional[String]
+  content_type: String
+  handle: Optional[File.Handle]
+  path: String
+  size: Int
+  text: List[Bytes]
+end
+
+# The form so far, while the body arrives. `dir` is made on the first file (`made`); `fields_size` is the size of
+# every text field so far.
+struct Reading
+  dir: String
+  made: Bool
+  parser: Multipart.Parser
+  part: Optional[Part]
+  fields: List[URI.Pair]
+  files: List[UploadedFile]
+  fields_size: Int
+  total: Int
 end
 
 def arrived() -> Result[Void] = ok()

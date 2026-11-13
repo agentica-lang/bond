@@ -9,15 +9,6 @@ import Cookies from "cookies"
 import {App} from "app"
 import {Conn} from "conn"
 
-# The shortest secret: 32 bytes, the size of the SHA-256 digest that signs with it.
-MIN_SECRET_BYTES = 32
-
-# The most bytes of a session cookie (its name and its value). Browsers keep 4096 bytes for a cookie with its
-# attributes, and a cookie that is over the limit is dropped without a word.
-MAX_COOKIE_BYTES = 3800
-
-SAME_SITE_VALUES = ["Strict", "Lax", "None"]
-
 ## How a session cookie is signed and sent. `secret` signs the cookie and must have at least 32 bytes (draw it from
 ## `OpenSSL.Random.hex(32)` once and keep it out of the source). `old_secrets` are the secrets that signed cookies
 ## before: a cookie with one of them is read, and written again with `secret` and a new `max_age` from that moment (so
@@ -29,7 +20,7 @@ SAME_SITE_VALUES = ["Strict", "Lax", "None"]
 ## `HttpOnly`. `path` and `domain` are those of the cookie. In production use `name: "__Host-session"` with
 ## `secure: true` (and the default `path` and no `domain`): a browser then refuses a cookie of that name from a sibling
 ## subdomain, which could otherwise plant a cookie that is signed, but is its own.
-export struct SessionOptions
+struct SessionOptions
   secret: String
   old_secrets: List[String] = []
   name: String = "_bond_session"
@@ -38,18 +29,6 @@ export struct SessionOptions
   same_site: String = "Lax"
   path: String = "/"
   domain: String = ""
-end
-
-# What the cookie holds: the end of the session in milliseconds, and the data.
-struct Envelope
-  exp: Int
-  data: Map[String, String]
-end
-
-# A session read from a cookie, and the place of the secret that signed it in `keys` (0 is the current one).
-struct Opened
-  data: Map[String, String]
-  key: Int
 end
 
 ## Adds the filters of the sessions to `app`: a `before` filter that reads the cookie, and an `after` filter that
@@ -63,7 +42,7 @@ end
 ## The cookie is signed, not encrypted: anyone who has it can read what it holds, so keep there an id, never a
 ## secret. A `Set-Cookie` that is over 3800 bytes is a failure of the answer (a 500 through the error handler), since a
 ## browser drops a bigger cookie.
-export def sessions(app: App, options: SessionOptions) -> App
+def sessions(app: App, options: SessionOptions) -> App
   problem = check(options)
   if problem != ""
     bad: Result[App] = error("bond: #{problem}")
@@ -76,11 +55,11 @@ end
 
 ## The session of the request: a map from name to value, empty for a visitor with no valid session (and when
 ## `sessions` was not called). It holds what the handlers of this request set so far.
-export def session(conn: Conn) -> Map[String, String] = conn.session
+def session(conn: Conn) -> Map[String, String] = conn.session
 
 ## One value of the session, or an `error` when it is not there. A missing value is not a mistake of the client, so it
 ## is a plain `error`, like `cookie`: use `unwrap_or` or `case`.
-export def get_session(conn: Conn, name: String) -> Result[String]
+def get_session(conn: Conn, name: String) -> Result[String]
   case conn.session.get(name)
     some(value) -> ok(value)
     none -> error("no session value #{name}")
@@ -89,12 +68,12 @@ end
 
 ## A `Conn` whose session has `name` set to `value`; the answer carries the new session in its cookie. The session is
 ## text only: encode a number or a list (`to_s`, `JSON.encode`) before, and decode it after.
-export def set_session(conn: Conn, name: String, value: String) -> Conn
+def set_session(conn: Conn, name: String, value: String) -> Conn
   conn.with(session: conn.session.put(name, value), session_changed: true)
 end
 
 ## A `Conn` whose session no longer has `name`. When it was not there, the `Conn` is the same.
-export def delete_session(conn: Conn, name: String) -> Conn
+def delete_session(conn: Conn, name: String) -> Conn
   return conn if not conn.session.key?(name)
 
   conn.with(session: conn.session.delete(name), session_changed: true)
@@ -102,13 +81,13 @@ end
 
 ## A `Conn` with an empty session: the answer deletes the cookie. Call it at logout, and before you set the user at
 ## login, so that nothing of a session the visitor had before is kept.
-export def clear_session(conn: Conn) -> Conn = conn.with(session: {}, session_changed: true)
+def clear_session(conn: Conn) -> Conn = conn.with(session: {}, session_changed: true)
 
 ## The value of the session cookie for `data`, signed with `options.secret` and valid for `options.max_age` seconds
 ## from now: what `sessions` would send. `Testing.session_cookie` uses it to make the `Cookie` header of a request
 ## that has a session. It does not check the options (a short secret or a negative `max_age` are accepted, which is how
 ## a test makes an expired cookie). An `error` when the value would be over the size of a cookie.
-export def seal(options: SessionOptions, data: Map[String, String]) -> Result[String]
+def seal(options: SessionOptions, data: Map[String, String]) -> Result[String]
   envelope = Envelope(exp: Time.now_ms() + options.max_age * 1000, data: data)
   payload = Base64.urlsafe_encode64(Envelope.codec.encode(envelope).bytes, false)
   mac = Base64.urlsafe_encode64(signature(options.secret, options.name, payload), false)
@@ -118,6 +97,29 @@ export def seal(options: SessionOptions, data: Map[String, String]) -> Result[St
   end
 
   ok(value)
+end
+
+private
+
+# The shortest secret: 32 bytes, the size of the SHA-256 digest that signs with it.
+MIN_SECRET_BYTES = 32
+
+# The most bytes of a session cookie (its name and its value). Browsers keep 4096 bytes for a cookie with its
+# attributes, and a cookie that is over the limit is dropped without a word.
+MAX_COOKIE_BYTES = 3800
+
+SAME_SITE_VALUES = ["Strict", "Lax", "None"]
+
+# What the cookie holds: the end of the session in milliseconds, and the data.
+struct Envelope
+  exp: Int
+  data: Map[String, String]
+end
+
+# A session read from a cookie, and the place of the secret that signed it in `keys` (0 is the current one).
+struct Opened
+  data: Map[String, String]
+  key: Int
 end
 
 def check(options: SessionOptions) -> String

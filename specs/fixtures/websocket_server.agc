@@ -7,7 +7,10 @@
 import HTTP from "std/http"
 import Bond from "../../bond"
 
+private
+
 SEND_MS = 5_000
+
 IDLE_MS = 10_000
 
 def hello(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "hello"))

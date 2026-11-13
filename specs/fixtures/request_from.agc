@@ -4,6 +4,8 @@ import HTTP from "std/http"
 import Bond from "../../bond"
 import Testing from "../../testing"
 
+private
+
 def who(conn: Bond.Conn) -> Result[Bond.Conn]
   agent = Bond.request_header(conn, "x-agent").unwrap_or("none")
   ok(Bond.text(conn, 200, "#{conn.remote_addr} #{agent} #{conn.body.size}"))

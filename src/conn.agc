@@ -8,14 +8,412 @@ import URI from "std/uri"
 # An `error` whose message starts with this text is a 400, and the rest is the body. `bad_request` is the way to
 # make one; the text is not part of the API. No error message may start with it unless it is meant for the client:
 # `json_body` cuts the client's text out of the codec messages, and a decoded value is never put in an error.
-export BAD_REQUEST = "bad request: "
+BAD_REQUEST = "bad request: "
 
-export INTERNAL_ERROR = "Internal Server Error"
-
-PARSE_PREFIX = "JSON.parse: "
+INTERNAL_ERROR = "Internal Server Error"
 
 # The 400 of a body that is not UTF-8 text, the same for `body_text`, `json_body` and the form readers.
-export NOT_UTF8 = "the body is not UTF-8 text"
+NOT_UTF8 = "the body is not UTF-8 text"
+
+# The status of an accepted WebSocket upgrade (Switching Protocols).
+SWITCHING = 101
+
+type Handler = Fn[Conn, Result[Conn]]
+
+type ErrorHandler = Fn[Conn, String, Result[Conn]]
+
+## Reads the `multipart/form-data` body of a request that passed the `before` filters and found its route
+## (`Bond.uploads`). Its error is the status of the refusal, such as "413" or "400".
+type Receiver = Fn[Conn, Result[Form]]
+
+## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
+## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
+## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed
+## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. `response_length` is
+## the size of the body when it is known (`stream` with a `length`, `send_file`, which also sets it for a file that it
+## answers whole, so `Testing.request` shows the `Content-Length` the server will send). `session` is the session of the
+## request that `Bond.sessions` loaded, and `session_changed` says that a handler changed it, so the answer has to
+## carry it (`session.agc`). `upgrade` is the WebSocket handshake that a route of `Bond.websocket` accepted
+## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
+## and is not halted (`accepted_upgrade`). `form` is the `multipart/form-data` body that `Bond.uploads` read (then
+## `body` is empty). `remote_addr` is the IP address of the peer that opened the connection, with no port
+## (`"127.0.0.1"`, `"::1"`; `HTTP.Request.remote_addr`), and `""` for a `Conn` built by hand. Behind a proxy or a load
+## balancer it is the address of the proxy: Bond does not read `X-Forwarded-For` or `Forwarded`, since any client can
+## send them. `assigns` holds the values that a filter gave for the handler (`assign` and `assigned`, `assigns.agc`),
+## as `JSON.Value`. A new `Conn` answers 200 with no body, has an empty session, no assigns, no upgrade and no form.
+struct Conn
+  method: String
+  path: String
+  query: String
+  params: Map[String, String]
+  headers: List[HTTP.Header]
+  body: Bytes
+  status: Int
+  response_headers: List[HTTP.Header]
+  response_body: Bytes
+  response_stream: Optional[Channel[Bytes]]
+  response_length: Optional[Int]
+  halted: Bool
+  session: Map[String, String]
+  session_changed: Bool
+  upgrade: Optional[HTTP.Upgrade] = none
+  form: Optional[Form] = none
+  remote_addr: String = ""
+  assigns: Map[String, JSON.Value] = {}
+end
+
+## A file of a `multipart/form-data` request, saved by `Bond.uploads`. `name` is the name of the form field. `filename`
+## is the name the client gave, made safe to show (`Multipart.safe_filename`): never use it as a path. `content_type`
+## is the type the client said (`application/octet-stream` when it said none), so check the content before you trust
+## it. `path` is where Bond saved the file, under a name of its own in a private folder, and `size` its size in bytes.
+## The file is removed after the answer: move it (`Path.rename`) or copy it to keep it.
+struct UploadedFile
+  name: String
+  filename: String
+  content_type: String
+  path: String
+  size: Int
+end
+
+## The parts of a `multipart/form-data` body, in order: the text fields and the files.
+struct Form
+  fields: List[URI.Pair]
+  files: List[UploadedFile]
+end
+
+## The `Conn` of a request, before any route or filter.
+def from_request(request: HTTP.Request) -> Conn
+  query = ""
+  case request.target.index_of("?")
+    some(at) -> query = request.target.slice(at + 1, request.target.length - at - 1)
+    none -> query = ""
+  end
+
+  Conn(
+    method: request.method,
+    path: request.path,
+    query: query,
+    params: {},
+    headers: request.headers,
+    body: request.body,
+    status: 200,
+    response_headers: [],
+    response_body: NO_BODY,
+    response_stream: none,
+    response_length: none,
+    halted: false,
+    session: {},
+    session_changed: false,
+    remote_addr: request.remote_addr,
+  )
+end
+
+## Answers `body` as plain text. It sets `Content-Type`; call `header` after it to use another.
+def text(conn: Conn, status: Int, body: String) -> Conn
+  typed = header(release(conn), "content-type", "text/plain; charset=utf-8")
+  typed.with(status: status, response_body: body.bytes)
+end
+
+## Answers `body` as HTML. It sets `Content-Type`; call `header` after it to use another. The text is sent as it is,
+## with no escaping: escape what comes from a client before you put it in `body`, with `escape`.
+def html(conn: Conn, status: Int, body: String) -> Conn
+  typed = header(release(conn), "content-type", "text/html; charset=utf-8")
+  typed.with(status: status, response_body: body.bytes)
+end
+
+## The text for HTML: `&`, `<`, `>`, `"` and `'` become `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, which is right
+## between tags and inside a quoted attribute. It is `HTML.escape` of `std/html` under a short name, beside `html` in
+## the module that a handler already imports; an EAG template can use it as `<%@ escape &Bond.escape %>`, which
+## escapes every `<%= %>` (`<%== %>` stays raw).
+def escape(text: String) -> String = HTML.escape(text)
+
+## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets `Content-Type` to
+## `application/octet-stream`; call `header` after it to use the real type.
+def bytes(conn: Conn, status: Int, body: Bytes) -> Conn
+  typed = header(release(conn), "content-type", "application/octet-stream")
+  typed.with(status: status, response_body: body)
+end
+
+## Sets the status of the answer and nothing else.
+def status(conn: Conn, code: Int) -> Conn = conn.with(status: code)
+
+## Answers with a redirect to `location`: a 302, or `code` when it is 301, 303, 307 or 308. It sets `Location`,
+## clears the body and the content type and halts, so a `before` filter can use it. Another `code` is a runtime
+## error in the handler, so a 500. `location` must be ASCII (percent-encode anything else): the answer is a 500
+## otherwise. Do not build it from text a client sent without checking it, or the redirect is open to any site.
+def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
+  if not REDIRECT_STATUSES.any? do |allowed| allowed == code end
+    bad: Result[Conn] = error("bond: #{code} is not a redirect status (301, 302, 303, 307 or 308)")
+    return bad.unwrap!
+  end
+
+  kept = conn.response_headers.select do |field| field.name.downcase != "content-type" end
+  untyped = release(conn).with(response_headers: kept)
+  header(untyped, "location", location).with(status: code, response_body: NO_BODY, halted: true)
+end
+
+## Answers `value` (a `JSON.Value`, such as `JSON.from(scores)` for a list or a map) as JSON. It sets `Content-Type`; call
+## `header` after it to use another. For a struct, `json_as` encodes it once, with no `JSON.Value` in between.
+def json(conn: Conn, status: Int, value: JSON.Value) -> Conn
+  header(release(conn), "content-type", "application/json").with(
+    status: status,
+    response_body: JSON.encode(value).bytes,
+  )
+end
+
+## Answers a struct encoded as JSON with its `codec` (`Todo.codec`), like `json` but with no `JSON.Value` value in
+## between: the struct is written once. A generic function cannot call `JSON.encode` on its type parameter, so the
+## codec comes from the caller, as in `json_body`. A non-finite `Float` stops the handler with a runtime error
+## (a 500), as `JSON.encode` does.
+def json_as[T](conn: Conn, status: Int, codec: Codec[T], value: T) -> Conn
+  header(release(conn), "content-type", "application/json").with(
+    status: status,
+    response_body: codec.encode(value).bytes,
+  )
+end
+
+## Answers with the pieces that a task sends on `body`, as they come: the head goes out at once and each piece is one
+## chunk, until the producer closes the channel. The producer is a task that the handler starts (`Task.spawn`), and it
+## must close the channel on every path, or the response never ends. Its `send` is `error("channel: closed")` once the
+## client has left, which is the signal to stop. Set the type with `header` (`sse` does it for an event stream). The
+## `Content-Length` is the server's, so the headers cannot set it. A stream replaces the body set before it, and a
+## body helper after it (`text`, `html`, `json`, `json_as`, `redirect`, `halt`) replaces the stream and closes its
+## channel, so its producer stops. `stream` itself does not close the stream it replaces, so a filter can wrap the
+## stream of the conn (read `conn.response_stream`, pump it into a new channel and call `stream` with that one): closing
+## the old channel is then up to the caller. A 204 or a 304 has no body, so its channel is closed. `Testing.request`
+## collects the pieces into the body.
+##
+## With a `length` (the size of the whole body, which a big file has before it is read) the server sends
+## `Content-Length` and the pieces as they are, with no chunks. The producer must send exactly `length` bytes: a body
+## that ends short, or goes over, closes the connection, so the client sees an incomplete body. `Testing.request` shows
+## the `Content-Length` header of such a stream, since it has no socket.
+def stream(conn: Conn, status: Int, body: Channel[Bytes], length: Optional[Int] = none) -> Conn
+  conn.with(status: status, response_body: NO_BODY, response_stream: some(body), response_length: length)
+end
+
+## Answers a 200 stream of server-sent events (`text/event-stream`, no caching) from `events`: the producer sends the
+## `Bytes` of `sse_event` and closes the channel. See `stream`.
+def sse(conn: Conn, events: Channel[Bytes]) -> Conn
+  typed = header(header(conn, "content-type", "text/event-stream; charset=utf-8"), "cache-control", "no-cache")
+  stream(typed, 200, events)
+end
+
+## One server-sent event, ready to send on the channel of `sse`: an optional `event:` line, a `data:` line for each
+## line of `data` and the empty line that ends the event. A line break of `data` (`\n`, `\r` or `\r\n`) starts a new
+## `data:` line. A line break in `event` is replaced by a space, since it would start a field the caller did not write.
+def sse_event(data: String, event: String = "") -> Bytes
+  lines = data.replace("\r\n", "\n").replace("\r", "\n").split("\n").map do |line| "data: #{line}\n" end
+  name = ""
+  if not event.empty?
+    name = "event: #{event.replace("\r", " ").replace("\n", " ")}\n"
+  end
+
+  "#{name}#{lines.join("")}\n".bytes
+end
+
+## Closes the stream of the conn, if it has one: for a stream that is not going to be sent, so its producer's next
+## `send` fails and it stops.
+def close_stream(conn: Conn) -> Void
+  case conn.response_stream
+    some(body) -> body.close
+    none -> return
+  end
+end
+
+## Answers `body` as plain text and stops the filters and the handler that come after.
+def halt(conn: Conn, status: Int, body: String) -> Conn = text(conn, status, body).with(halted: true)
+
+## Adds a response header after the ones of the same name, as `Set-Cookie` needs: each is a header of its own and
+## they are never joined.
+def add_header(conn: Conn, name: String, value: String) -> Conn
+  conn.with(response_headers: conn.response_headers.push(HTTP.Header(name: name, value: value)))
+end
+
+## Sets a response header, replacing the one of the same name (the case does not matter). `Set-Cookie` is the
+## exception: it adds a header, so it never wipes the cookies set before it (see `set_cookie`).
+def header(conn: Conn, name: String, value: String) -> Conn
+  lower = name.downcase
+  return add_header(conn, name, value) if lower == "set-cookie"
+
+  # A name of another length is not `name`, so the usual miss costs no lowercase copy of it: an answer with ten headers
+  # would otherwise lowercase fifty names. This assumes token (ASCII) names, which `header_problem` enforces when the
+  # answer is sent.
+  kept = conn.response_headers.select do |other|
+    other.name != lower and (other.name.length != lower.length or other.name.downcase != lower)
+  end
+
+  conn.with(response_headers: kept.push(HTTP.Header(name: name, value: value)))
+end
+
+## Internal, for the headers that Bond writes itself. Sets several response headers at once, as `header` would one after
+## the other: each replaces the headers of the same name that the conn has, and they follow the others in their order.
+## The `fields` names must be in lowercase, distinct and never `set-cookie` (use `add_header`): the names the conn
+## already has are lowercased to compare, and none when it has none.
+def set_headers(conn: Conn, fields: List[HTTP.Header]) -> Conn
+  return conn.with(response_headers: fields) if conn.response_headers.empty?
+
+  names = fields.map do |field| field.name end
+  kept = conn.response_headers.select do |other| not names.include?(other.name.downcase) end
+  conn.with(response_headers: List.concat(kept, fields))
+end
+
+## The first value of a request header (the case of the name does not matter), or an error when there is none.
+def request_header(conn: Conn, name: String) -> Result[String]
+  lower = name.downcase
+  # The length shortcut assumes token (ASCII) names, as in `header`.
+  for other in conn.headers
+    if other.name == lower or (other.name.length == lower.length and other.name.downcase == lower)
+      return ok(other.value)
+    end
+  end
+
+  error("no header #{name}")
+end
+
+## The text of the `:name` segment of the route, or an error when the route has no such segment.
+def param(conn: Conn, name: String) -> Result[String] = conn.params.get(name).to_result("no param #{name}")
+
+## Decodes the body of the request with `codec` (`User.codec`). The request must have one `Content-Type`, and
+## it must be `application/json` or a `type/name+json`, with any parameters (the body is read as UTF-8 whatever the
+## charset says). A missing, repeated or other content type, an empty body, and a body that is not one JSON
+## document that fits the struct, are an error that makes a 400 (see `bad_request`) with a short message, so
+## `try Bond.json_body(...)` answers them. The message names the struct field up to the first `[` of the codec's
+## path, so the key of a map and the index of a list that the client sent are not in it. The size of the body is
+## limited by the server (`max_body_bytes`).
+def json_body[T](conn: Conn, codec: Codec[T]) -> Result[T]
+  return bad_request("content type must be application/json") if not json_content_type?(conn)
+
+  return bad_request("the body is empty") if conn.body.empty?
+
+  case String.from_bytes(conn.body)
+    ok(text) ->
+      case codec.decode(text)
+        ok(value) -> ok(value)
+        error(message) -> bad_request("invalid body: #{decode_problem(message)}")
+      end
+
+    error(_) -> bad_request(NOT_UTF8)
+  end
+end
+
+## The body of the request as text, decoded as `HTTP.text` does: in the `charset` of `Content-Type` (UTF-8 when it has
+## none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 are read too), and any other `charset` is refused.
+## A body that does not decode is an error that makes a 400 (see `bad_request`), with a fixed message, so
+## `try Bond.body_text(conn)` answers it. Read `conn.body` for the bytes as they came. The size of the body is limited
+## by the server (`max_body_bytes`).
+def body_text(conn: Conn) -> Result[String]
+  case HTTP.text(conn.body, conn.headers)
+    ok(text) -> ok(text)
+    error(_) -> bad_request(NOT_UTF8)
+  end
+end
+
+## The media type of the request in lowercase, without its parameters (`; charset=utf-8`), or "" when the request
+## has no `Content-Type` or more than one.
+def media_type(conn: Conn) -> String
+  values = conn.headers.select do |field| field.name.downcase == "content-type" end
+  return "" if values.size != 1
+
+  values[0].value.split(";")[0].strip().downcase
+end
+
+## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
+## with `try`).
+def bad_request[T](message: String) -> Result[T] = error("#{BAD_REQUEST}#{message}")
+
+## Like `param`, for a whole number. Text that is not one is a 400 (see `bad_request`).
+def param_int(conn: Conn, name: String) -> Result[Int]
+  text = try param(conn, name)
+  case text.to_i
+    ok(number) -> ok(number)
+    error(_) -> bad_request("#{name} must be an integer")
+  end
+end
+
+## The response of the `Conn`, as `std/http` sends it. The server refuses a status outside 200 to 599, a
+## `Content-Length` or `Transfer-Encoding` header, a header name that is not a token, a value that is not Latin-1
+## text without control characters, and a body with a 204 or 304, so this checks the same (and that `Location` is
+## ASCII, since a Latin-1 byte there is not a URL): a 204 or
+## 304 loses its body, and the other cases are a 500 with a warning on stderr. `Testing.request` comes through here,
+## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees the same status as a client.
+## The body differs: over a socket the server answers its own 500 with no body and closes the connection. A value
+## with a byte above 127 passes here but is refused over a socket today, a VM limit (agentica#1184).
+##
+## An accepted WebSocket upgrade is a 101 with `Upgrade: websocket` and no body, since a test has no socket for the
+## WebSocket to run on.
+##
+## A streamed body is read here to its end, as one `Bytes`, for a test. It is read until the producer closes the
+## channel, `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body (one gap between pieces may take all
+## of it), and then the channel is closed so the producer stops; a body cut by the time limit says so on stderr. A
+## `HEAD` gets no body and its channel is closed, as over a socket.
+##
+## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
+## `Testing.request` and `specs/steps.agc`.
+def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HTTP.Response
+  return switching() if accepted_upgrade(conn).some?
+
+  problem = refusal(conn)
+  return refused(conn, problem) if not problem.empty?
+
+  if conn.status == 204 or conn.status == 304
+    close_stream(conn)
+    return HTTP.Response(status: conn.status, headers: conn.response_headers, body: NO_BODY)
+  end
+
+  if conn.method == "HEAD" and conn.response_stream.some?
+    close_stream(conn)
+    return HTTP.Response(status: conn.status, headers: sized_headers(conn), body: NO_BODY)
+  end
+
+  case conn.response_stream
+    some(body) ->
+      pieces = collect(conn, body, max_pieces, timeout_ms)
+      HTTP.Response(status: conn.status, headers: sized_headers(conn), body: pieces)
+
+    none -> HTTP.Response(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
+  end
+end
+
+## The response of the `Conn` for the `Answer.Stream` of `HTTP.serve`: the rules of `to_response`, with the channel
+## of a stream sent as it is and any other body as one closed piece (`HTTP.whole`), which the server sends with
+## `Content-Length`. The server checks the status, the length, the names and the values of the headers when it writes
+## the head, in C: it answers a 500 with no body and closes the connection, with the reason on stderr, before any byte
+## of the answer or of a stream is sent. Only the rule that the server does not have, `Location` in ASCII, is checked here.
+def to_stream_response(conn: Conn) -> HTTP.StreamResponse
+  problem = location_refusal(conn)
+  if not problem.empty?
+    plain = refused(conn, problem)
+    return HTTP.StreamResponse(status: plain.status, headers: plain.headers, body: HTTP.whole(plain.body))
+  end
+
+  if conn.status == 204 or conn.status == 304
+    close_stream(conn)
+    return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: HTTP.whole(NO_BODY))
+  end
+
+  case conn.response_stream
+    some(body) ->
+      headers = conn.response_headers
+      HTTP.StreamResponse(status: conn.status, headers: headers, body: body, length: conn.response_length)
+
+    none ->
+      whole = HTTP.whole(conn.response_body)
+      HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
+  end
+end
+
+## The upgrade that the conn answers with: the one a WebSocket route accepted, while the conn still has its status 101
+## and is not halted. An `after` filter that answers something else (`text`, `html`, `status`, `halt`, `redirect`)
+## changes the status or halts, so its answer is sent and the WebSocket never starts.
+def accepted_upgrade(conn: Conn) -> Optional[HTTP.Upgrade]
+  return none if conn.status != SWITCHING or conn.halted
+
+  conn.upgrade
+end
+
+private
+
+PARSE_PREFIX = "JSON.parse: "
 
 NO_BODY = "".bytes
 
@@ -61,403 +459,7 @@ SAFE_VALUES = Set.new([
   "image/jpeg",
 ])
 
-# The status of an accepted WebSocket upgrade (Switching Protocols).
-export SWITCHING = 101
-
 ASCII_LIMIT = 127
-
-export type Handler = Fn[Conn, Result[Conn]]
-
-export type ErrorHandler = Fn[Conn, String, Result[Conn]]
-
-## Reads the `multipart/form-data` body of a request that passed the `before` filters and found its route
-## (`Bond.uploads`). Its error is the status of the refusal, such as "413" or "400".
-export type Receiver = Fn[Conn, Result[Form]]
-
-## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
-## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads
-## it as text). `response_body` is the body of the answer, also `Bytes`. `response_stream` is the channel of a streamed
-## body (`stream`, `sse`); when it is set, the answer is that body and `response_body` is empty. `response_length` is
-## the size of the body when it is known (`stream` with a `length`, `send_file`, which also sets it for a file that it
-## answers whole, so `Testing.request` shows the `Content-Length` the server will send). `session` is the session of the
-## request that `Bond.sessions` loaded, and `session_changed` says that a handler changed it, so the answer has to
-## carry it (`session.agc`). `upgrade` is the WebSocket handshake that a route of `Bond.websocket` accepted
-## (`websocket.agc`), with status 101: the answer is that upgrade and not a response while the conn keeps that status
-## and is not halted (`accepted_upgrade`). `form` is the `multipart/form-data` body that `Bond.uploads` read (then
-## `body` is empty). `remote_addr` is the IP address of the peer that opened the connection, with no port
-## (`"127.0.0.1"`, `"::1"`; `HTTP.Request.remote_addr`), and `""` for a `Conn` built by hand. Behind a proxy or a load
-## balancer it is the address of the proxy: Bond does not read `X-Forwarded-For` or `Forwarded`, since any client can
-## send them. `assigns` holds the values that a filter gave for the handler (`assign` and `assigned`, `assigns.agc`),
-## as `Json`. A new `Conn` answers 200 with no body, has an empty session, no assigns, no upgrade and no form.
-export struct Conn
-  method: String
-  path: String
-  query: String
-  params: Map[String, String]
-  headers: List[HTTP.Header]
-  body: Bytes
-  status: Int
-  response_headers: List[HTTP.Header]
-  response_body: Bytes
-  response_stream: Optional[Channel[Bytes]]
-  response_length: Optional[Int]
-  halted: Bool
-  session: Map[String, String]
-  session_changed: Bool
-  upgrade: Optional[HTTP.Upgrade] = none
-  form: Optional[Form] = none
-  remote_addr: String = ""
-  assigns: Map[String, Json] = {}
-end
-
-## A file of a `multipart/form-data` request, saved by `Bond.uploads`. `name` is the name of the form field. `filename`
-## is the name the client gave, made safe to show (`Multipart.safe_filename`): never use it as a path. `content_type`
-## is the type the client said (`application/octet-stream` when it said none), so check the content before you trust
-## it. `path` is where Bond saved the file, under a name of its own in a private folder, and `size` its size in bytes.
-## The file is removed after the answer: move it (`Path.rename`) or copy it to keep it.
-export struct UploadedFile
-  name: String
-  filename: String
-  content_type: String
-  path: String
-  size: Int
-end
-
-## The parts of a `multipart/form-data` body, in order: the text fields and the files.
-export struct Form
-  fields: List[URI.Pair]
-  files: List[UploadedFile]
-end
-
-## The `Conn` of a request, before any route or filter.
-export def from_request(request: HTTP.Request) -> Conn
-  query = ""
-  case request.target.index_of("?")
-    some(at) -> query = request.target.slice(at + 1, request.target.length - at - 1)
-    none -> query = ""
-  end
-
-  Conn(
-    method: request.method,
-    path: request.path,
-    query: query,
-    params: {},
-    headers: request.headers,
-    body: request.body,
-    status: 200,
-    response_headers: [],
-    response_body: NO_BODY,
-    response_stream: none,
-    response_length: none,
-    halted: false,
-    session: {},
-    session_changed: false,
-    remote_addr: request.remote_addr,
-  )
-end
-
-## Answers `body` as plain text. It sets `Content-Type`; call `header` after it to use another.
-export def text(conn: Conn, status: Int, body: String) -> Conn
-  typed = header(release(conn), "content-type", "text/plain; charset=utf-8")
-  typed.with(status: status, response_body: body.bytes)
-end
-
-## Answers `body` as HTML. It sets `Content-Type`; call `header` after it to use another. The text is sent as it is,
-## with no escaping: escape what comes from a client before you put it in `body`, with `escape`.
-export def html(conn: Conn, status: Int, body: String) -> Conn
-  typed = header(release(conn), "content-type", "text/html; charset=utf-8")
-  typed.with(status: status, response_body: body.bytes)
-end
-
-## The text for HTML: `&`, `<`, `>`, `"` and `'` become `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, which is right
-## between tags and inside a quoted attribute. It is `HTML.escape` of `std/html` under a short name, beside `html` in
-## the module that a handler already imports; an EAG template can use it as `<%@ escape &Bond.escape %>`, which
-## escapes every `<%= %>` (`<%== %>` stays raw).
-export def escape(text: String) -> String = HTML.escape(text)
-
-## Answers `body` as it is, `Bytes` of any content (an image, a file). It sets `Content-Type` to
-## `application/octet-stream`; call `header` after it to use the real type.
-export def bytes(conn: Conn, status: Int, body: Bytes) -> Conn
-  typed = header(release(conn), "content-type", "application/octet-stream")
-  typed.with(status: status, response_body: body)
-end
-
-## Sets the status of the answer and nothing else.
-export def status(conn: Conn, code: Int) -> Conn = conn.with(status: code)
-
-## Answers with a redirect to `location`: a 302, or `code` when it is 301, 303, 307 or 308. It sets `Location`,
-## clears the body and the content type and halts, so a `before` filter can use it. Another `code` is a runtime
-## error in the handler, so a 500. `location` must be ASCII (percent-encode anything else): the answer is a 500
-## otherwise. Do not build it from text a client sent without checking it, or the redirect is open to any site.
-export def redirect(conn: Conn, location: String, code: Int = 302) -> Conn
-  if not REDIRECT_STATUSES.any? do |allowed| allowed == code end
-    bad: Result[Conn] = error("bond: #{code} is not a redirect status (301, 302, 303, 307 or 308)")
-    return bad.unwrap!
-  end
-
-  kept = conn.response_headers.select do |field| field.name.downcase != "content-type" end
-  untyped = release(conn).with(response_headers: kept)
-  header(untyped, "location", location).with(status: code, response_body: NO_BODY, halted: true)
-end
-
-## Answers `value` (a `Json`, such as `JSON.from(scores)` for a list or a map) as JSON. It sets `Content-Type`; call
-## `header` after it to use another. For a struct, `json_as` encodes it once, with no `Json` in between.
-export def json(conn: Conn, status: Int, value: Json) -> Conn
-  header(release(conn), "content-type", "application/json").with(
-    status: status,
-    response_body: JSON.encode(value).bytes,
-  )
-end
-
-## Answers a struct encoded as JSON with its `codec` (`Todo.codec`), like `json` but with no `Json` value in
-## between: the struct is written once. A generic function cannot call `JSON.encode` on its type parameter, so the
-## codec comes from the caller, as in `json_body`. A non-finite `Float` stops the handler with a runtime error
-## (a 500), as `JSON.encode` does.
-export def json_as[T](conn: Conn, status: Int, codec: Codec[T], value: T) -> Conn
-  header(release(conn), "content-type", "application/json").with(
-    status: status,
-    response_body: codec.encode(value).bytes,
-  )
-end
-
-## Answers with the pieces that a task sends on `body`, as they come: the head goes out at once and each piece is one
-## chunk, until the producer closes the channel. The producer is a task that the handler starts (`Task.spawn`), and it
-## must close the channel on every path, or the response never ends. Its `send` is `error("channel: closed")` once the
-## client has left, which is the signal to stop. Set the type with `header` (`sse` does it for an event stream). The
-## `Content-Length` is the server's, so the headers cannot set it. A stream replaces the body set before it, and a
-## body helper after it (`text`, `html`, `json`, `json_as`, `redirect`, `halt`) replaces the stream and closes its
-## channel, so its producer stops. `stream` itself does not close the stream it replaces, so a filter can wrap the
-## stream of the conn (read `conn.response_stream`, pump it into a new channel and call `stream` with that one): closing
-## the old channel is then up to the caller. A 204 or a 304 has no body, so its channel is closed. `Testing.request`
-## collects the pieces into the body.
-##
-## With a `length` (the size of the whole body, which a big file has before it is read) the server sends
-## `Content-Length` and the pieces as they are, with no chunks. The producer must send exactly `length` bytes: a body
-## that ends short, or goes over, closes the connection, so the client sees an incomplete body. `Testing.request` shows
-## the `Content-Length` header of such a stream, since it has no socket.
-export def stream(conn: Conn, status: Int, body: Channel[Bytes], length: Optional[Int] = none) -> Conn
-  conn.with(status: status, response_body: NO_BODY, response_stream: some(body), response_length: length)
-end
-
-## Answers a 200 stream of server-sent events (`text/event-stream`, no caching) from `events`: the producer sends the
-## `Bytes` of `sse_event` and closes the channel. See `stream`.
-export def sse(conn: Conn, events: Channel[Bytes]) -> Conn
-  typed = header(header(conn, "content-type", "text/event-stream; charset=utf-8"), "cache-control", "no-cache")
-  stream(typed, 200, events)
-end
-
-## One server-sent event, ready to send on the channel of `sse`: an optional `event:` line, a `data:` line for each
-## line of `data` and the empty line that ends the event. A line break of `data` (`\n`, `\r` or `\r\n`) starts a new
-## `data:` line. A line break in `event` is replaced by a space, since it would start a field the caller did not write.
-export def sse_event(data: String, event: String = "") -> Bytes
-  lines = data.replace("\r\n", "\n").replace("\r", "\n").split("\n").map do |line| "data: #{line}\n" end
-  name = ""
-  if not event.empty?
-    name = "event: #{event.replace("\r", " ").replace("\n", " ")}\n"
-  end
-
-  "#{name}#{lines.join("")}\n".bytes
-end
-
-## Closes the stream of the conn, if it has one: for a stream that is not going to be sent, so its producer's next
-## `send` fails and it stops.
-export def close_stream(conn: Conn) -> Void
-  case conn.response_stream
-    some(body) -> body.close
-    none -> return
-  end
-end
-
-## Answers `body` as plain text and stops the filters and the handler that come after.
-export def halt(conn: Conn, status: Int, body: String) -> Conn = text(conn, status, body).with(halted: true)
-
-## Adds a response header after the ones of the same name, as `Set-Cookie` needs: each is a header of its own and
-## they are never joined.
-export def add_header(conn: Conn, name: String, value: String) -> Conn
-  conn.with(response_headers: conn.response_headers.push(HTTP.Header(name: name, value: value)))
-end
-
-## Sets a response header, replacing the one of the same name (the case does not matter). `Set-Cookie` is the
-## exception: it adds a header, so it never wipes the cookies set before it (see `set_cookie`).
-export def header(conn: Conn, name: String, value: String) -> Conn
-  lower = name.downcase
-  return add_header(conn, name, value) if lower == "set-cookie"
-
-  # A name of another length is not `name`, so the usual miss costs no lowercase copy of it: an answer with ten headers
-  # would otherwise lowercase fifty names. This assumes token (ASCII) names, which `header_problem` enforces when the
-  # answer is sent.
-  kept = conn.response_headers.select do |other|
-    other.name != lower and (other.name.length != lower.length or other.name.downcase != lower)
-  end
-
-  conn.with(response_headers: kept.push(HTTP.Header(name: name, value: value)))
-end
-
-## Internal, for the headers that Bond writes itself. Sets several response headers at once, as `header` would one after
-## the other: each replaces the headers of the same name that the conn has, and they follow the others in their order.
-## The `fields` names must be in lowercase, distinct and never `set-cookie` (use `add_header`): the names the conn
-## already has are lowercased to compare, and none when it has none.
-export def set_headers(conn: Conn, fields: List[HTTP.Header]) -> Conn
-  return conn.with(response_headers: fields) if conn.response_headers.empty?
-
-  names = fields.map do |field| field.name end
-  kept = conn.response_headers.select do |other| not names.include?(other.name.downcase) end
-  conn.with(response_headers: List.concat(kept, fields))
-end
-
-## The first value of a request header (the case of the name does not matter), or an error when there is none.
-export def request_header(conn: Conn, name: String) -> Result[String]
-  lower = name.downcase
-  # The length shortcut assumes token (ASCII) names, as in `header`.
-  for other in conn.headers
-    if other.name == lower or (other.name.length == lower.length and other.name.downcase == lower)
-      return ok(other.value)
-    end
-  end
-
-  error("no header #{name}")
-end
-
-## The text of the `:name` segment of the route, or an error when the route has no such segment.
-export def param(conn: Conn, name: String) -> Result[String] = conn.params.get(name).to_result("no param #{name}")
-
-## Decodes the body of the request with `codec` (`User.codec`). The request must have one `Content-Type`, and
-## it must be `application/json` or a `type/name+json`, with any parameters (the body is read as UTF-8 whatever the
-## charset says). A missing, repeated or other content type, an empty body, and a body that is not one JSON
-## document that fits the struct, are an error that makes a 400 (see `bad_request`) with a short message, so
-## `try Bond.json_body(...)` answers them. The message names the struct field up to the first `[` of the codec's
-## path, so the key of a map and the index of a list that the client sent are not in it. The size of the body is
-## limited by the server (`max_body_bytes`).
-export def json_body[T](conn: Conn, codec: Codec[T]) -> Result[T]
-  return bad_request("content type must be application/json") if not json_content_type?(conn)
-
-  return bad_request("the body is empty") if conn.body.empty?
-
-  case String.from_bytes(conn.body)
-    ok(text) ->
-      case codec.decode(text)
-        ok(value) -> ok(value)
-        error(message) -> bad_request("invalid body: #{decode_problem(message)}")
-      end
-
-    error(_) -> bad_request(NOT_UTF8)
-  end
-end
-
-## The body of the request as text, decoded as `HTTP.text` does: in the `charset` of `Content-Type` (UTF-8 when it has
-## none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 are read too), and any other `charset` is refused.
-## A body that does not decode is an error that makes a 400 (see `bad_request`), with a fixed message, so
-## `try Bond.body_text(conn)` answers it. Read `conn.body` for the bytes as they came. The size of the body is limited
-## by the server (`max_body_bytes`).
-export def body_text(conn: Conn) -> Result[String]
-  case HTTP.text(conn.body, conn.headers)
-    ok(text) -> ok(text)
-    error(_) -> bad_request(NOT_UTF8)
-  end
-end
-
-## The media type of the request in lowercase, without its parameters (`; charset=utf-8`), or "" when the request
-## has no `Content-Type` or more than one.
-export def media_type(conn: Conn) -> String
-  values = conn.headers.select do |field| field.name.downcase == "content-type" end
-  return "" if values.size != 1
-
-  values[0].value.split(";")[0].strip().downcase
-end
-
-## Gives an error that makes a 400 with `message` as its body, when a handler or filter returns it (or passes it on
-## with `try`).
-export def bad_request[T](message: String) -> Result[T] = error("#{BAD_REQUEST}#{message}")
-
-## Like `param`, for a whole number. Text that is not one is a 400 (see `bad_request`).
-export def param_int(conn: Conn, name: String) -> Result[Int]
-  text = try param(conn, name)
-  case text.to_i
-    ok(number) -> ok(number)
-    error(_) -> bad_request("#{name} must be an integer")
-  end
-end
-
-## The response of the `Conn`, as `std/http` sends it. The server refuses a status outside 200 to 599, a
-## `Content-Length` or `Transfer-Encoding` header, a header name that is not a token, a value that is not Latin-1
-## text without control characters, and a body with a 204 or 304, so this checks the same (and that `Location` is
-## ASCII, since a Latin-1 byte there is not a URL): a 204 or
-## 304 loses its body, and the other cases are a 500 with a warning on stderr. `Testing.request` comes through here,
-## and `Bond.run` through `to_stream_response`, which has the same rules, so a test sees the same status as a client.
-## The body differs: over a socket the server answers its own 500 with no body and closes the connection. A value
-## with a byte above 127 passes here but is refused over a socket today, a VM limit (agentica#1184).
-##
-## An accepted WebSocket upgrade is a 101 with `Upgrade: websocket` and no body, since a test has no socket for the
-## WebSocket to run on.
-##
-## A streamed body is read here to its end, as one `Bytes`, for a test. It is read until the producer closes the
-## channel, `max_pieces` pieces (0 is no limit) or `timeout_ms` for the whole body (one gap between pieces may take all
-## of it), and then the channel is closed so the producer stops; a body cut by the time limit says so on stderr. A
-## `HEAD` gets no body and its channel is closed, as over a socket.
-##
-## The 10_000 default of `timeout_ms` is a literal (a default must be one): keep it in sync with `Apps.handle`,
-## `Testing.request` and `specs/steps.agc`.
-export def to_response(conn: Conn, max_pieces: Int = 0, timeout_ms: Int = 10_000) -> HTTP.Response
-  return switching() if accepted_upgrade(conn).some?
-
-  problem = refusal(conn)
-  return refused(conn, problem) if not problem.empty?
-
-  if conn.status == 204 or conn.status == 304
-    close_stream(conn)
-    return HTTP.Response(status: conn.status, headers: conn.response_headers, body: NO_BODY)
-  end
-
-  if conn.method == "HEAD" and conn.response_stream.some?
-    close_stream(conn)
-    return HTTP.Response(status: conn.status, headers: sized_headers(conn), body: NO_BODY)
-  end
-
-  case conn.response_stream
-    some(body) ->
-      pieces = collect(conn, body, max_pieces, timeout_ms)
-      HTTP.Response(status: conn.status, headers: sized_headers(conn), body: pieces)
-
-    none -> HTTP.Response(status: conn.status, headers: whole_headers(conn), body: conn.response_body)
-  end
-end
-
-## The response of the `Conn` for the `Answer.Stream` of `HTTP.serve`: the rules of `to_response`, with the channel
-## of a stream sent as it is and any other body as one closed piece (`HTTP.whole`), which the server sends with
-## `Content-Length`. The server checks the status, the length, the names and the values of the headers when it writes
-## the head, in C: it answers a 500 with no body and closes the connection, with the reason on stderr, before any byte
-## of the answer or of a stream is sent. Only the rule that the server does not have, `Location` in ASCII, is checked here.
-export def to_stream_response(conn: Conn) -> HTTP.StreamResponse
-  problem = location_refusal(conn)
-  if not problem.empty?
-    plain = refused(conn, problem)
-    return HTTP.StreamResponse(status: plain.status, headers: plain.headers, body: HTTP.whole(plain.body))
-  end
-
-  if conn.status == 204 or conn.status == 304
-    close_stream(conn)
-    return HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: HTTP.whole(NO_BODY))
-  end
-
-  case conn.response_stream
-    some(body) ->
-      headers = conn.response_headers
-      HTTP.StreamResponse(status: conn.status, headers: headers, body: body, length: conn.response_length)
-
-    none ->
-      whole = HTTP.whole(conn.response_body)
-      HTTP.StreamResponse(status: conn.status, headers: conn.response_headers, body: whole)
-  end
-end
-
-## The upgrade that the conn answers with: the one a WebSocket route accepted, while the conn still has its status 101
-## and is not halted. An `after` filter that answers something else (`text`, `html`, `status`, `halt`, `redirect`)
-## changes the status or halts, so its answer is sent and the WebSocket never starts.
-export def accepted_upgrade(conn: Conn) -> Optional[HTTP.Upgrade]
-  return none if conn.status != SWITCHING or conn.halted
-
-  conn.upgrade
-end
 
 # The answer of an accepted upgrade for a test: the head of the server's 101, without the `Sec-WebSocket-Accept` that
 # the server computes from the key.

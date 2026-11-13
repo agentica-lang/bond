@@ -5,6 +5,8 @@
 
 import Bond from "../bond"
 
+private
+
 PORT = 4567
 
 struct Todo

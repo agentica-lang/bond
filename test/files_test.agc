@@ -2,6 +2,8 @@ import HTTP from "std/http"
 import Conns from "../src/conn"
 import Files from "../src/files"
 
+private
+
 def request(headers: List[HTTP.Header]) -> Conns.Conn
   Conns.from_request(
     HTTP.Request(method: "GET", target: "/", path: "/", headers: headers, body: "".bytes, remote_addr: "127.0.0.1"),

@@ -1,7 +1,10 @@
 import HTTP from "std/http"
 import Multipart from "../src/multipart"
 
+private
+
 BOUNDARY = "XyZ"
+
 BODY = [
   "--XyZ\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nbuy milk\r\n",
   "--XyZ\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\n",

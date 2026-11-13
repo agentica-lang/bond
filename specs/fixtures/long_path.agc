@@ -3,6 +3,8 @@
 import Bond from "../../bond"
 import Testing from "../../testing"
 
+private
+
 def one(conn: Bond.Conn) -> Result[Bond.Conn] = ok(Bond.text(conn, 200, "one"))
 
 def main() -> Void

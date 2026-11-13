@@ -2,6 +2,8 @@
 
 import Bond from "../../bond"
 
+private
+
 def main() -> Void
   app = Bond.app() |> Bond.static("/assets", "no_such_folder")
   puts("built #{app.statics.size}")

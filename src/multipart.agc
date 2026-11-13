@@ -9,37 +9,14 @@
 
 import HTTP from "std/http"
 
-# Where the parser is: before the first delimiter, right after a delimiter (the rest of its line, or `--` for the
-# last one), in the headers of a part, in its data, or after the last delimiter (the epilogue, which is ignored).
-PREAMBLE = 0
-AFTER_DELIMITER = 1
-HEADERS = 2
-DATA = 3
-DONE = 4
-
-CRLF = "\r\n"
-HEAD_END = "\r\n\r\n"
-LAST = "--"
-
-# The longest header section of a part, and the longest rest of a delimiter line (transport padding).
-MAX_HEAD_BYTES = 16_384
-MAX_PADDING_BYTES = 256
-
-# The characters of a boundary (RFC 2046 `bchars`): letters, digits and these, a space only inside.
-BOUNDARY_SYMBOLS = "'()+_,-./:=? "
-MAX_BOUNDARY = 70
-MAX_FILENAME = 255
-
-# The first window of a search; each next one is 4 times larger.
-SEARCH_WINDOW = 4096
-
 ## The most parts of a body, and the error of `feed` for a body with more.
-export MAX_PARTS = 1000
-export TOO_MANY_PARTS = "the multipart body has more than 1000 parts"
+MAX_PARTS = 1000
+
+TOO_MANY_PARTS = "the multipart body has more than 1000 parts"
 
 ## The state between two pieces. `delimiter` is CRLF, `--` and the boundary; `buffer` holds what is not decided yet;
 ## `parts` counts the parts so far.
-export struct Parser
+struct Parser
   delimiter: String
   phase: Int
   buffer: Bytes
@@ -48,39 +25,26 @@ end
 
 ## What a piece told: a new part with its headers (names in lowercase), a piece of the data of the current part, or
 ## the last delimiter.
-export enum Event
+enum Event
   Part(List[HTTP.Header])
   Data(Bytes)
   Finished
 end
 
-export struct Step
+struct Step
   parser: Parser
   events: List[Event]
 end
 
-# Where one step of `feed` left the piece: the phase, the offset of the bytes not used yet, and what it found.
-struct Move
-  phase: Int
-  at: Int
-  events: List[Event]
-end
-
-# A parameter of a header and the index where it ended (its `;` or the end).
-struct Item
-  header: HTTP.Header
-  next: Int
-end
-
 ## The `Content-Disposition` of a part: the field `name`, and the `filename` of a file (`none` for a text field).
-export struct Disposition
+struct Disposition
   name: String
   filename: Optional[String]
 end
 
 ## The boundary of a `Content-Type` of `multipart/form-data` (the type in any case, the boundary quoted or not), or an
 ## error when the type is another or the boundary is missing or not 1 to 70 characters of RFC 2046.
-export def boundary(content_type: String) -> Result[String]
+def boundary(content_type: String) -> Result[String]
   params = parameters(content_type)
   if params.empty? or params[0].name.downcase != "multipart/form-data" or params[0].value != ""
     return error("the content type is not multipart/form-data")
@@ -103,14 +67,12 @@ end
 
 ## A parser for a body with this boundary (from `boundary`). The body may start with the first delimiter or with a
 ## preamble before it: the parser reads it as if a line break came first.
-export def start(boundary: String) -> Parser
-  Parser(delimiter: "#{CRLF}--#{boundary}", phase: PREAMBLE, buffer: CRLF.bytes)
-end
+def start(boundary: String) -> Parser = Parser(delimiter: "#{CRLF}--#{boundary}", phase: PREAMBLE, buffer: CRLF.bytes)
 
 ## The events of the next piece of the body. An error when the body is not `multipart/form-data` as RFC 2046 frames
 ## it: a delimiter line with other text after it, or the headers of a part over 16 KiB or not `Name: value` lines; and
 ## `TOO_MANY_PARTS` when it has more than `MAX_PARTS` parts.
-export def feed(parser: Parser, piece: Bytes) -> Result[Step]
+def feed(parser: Parser, piece: Bytes) -> Result[Step]
   buffer = parser.buffer + piece
   current = Move(phase: parser.phase, at: 0, events: [])
   events: List[Event] = []
@@ -143,7 +105,7 @@ export def feed(parser: Parser, piece: Bytes) -> Result[Step]
 end
 
 ## An error when the body ended before its last delimiter, so a part may be cut.
-export def finish(parser: Parser) -> Result[Void]
+def finish(parser: Parser) -> Result[Void]
   return error("the multipart body ends before its last boundary") if parser.phase != DONE
 
   ok()
@@ -151,7 +113,7 @@ end
 
 ## The `Content-Disposition` of the headers of a part: `form-data` with a `name` (it may be empty) and maybe a
 ## `filename`. An error when there is none, two, another type, or no `name`.
-export def disposition(headers: List[HTTP.Header]) -> Result[Disposition]
+def disposition(headers: List[HTTP.Header]) -> Result[Disposition]
   values = headers.select do |field| field.name == "content-disposition" end
   return error("a part must have one Content-Disposition") if values.size != 1
 
@@ -179,7 +141,7 @@ end
 ## the whole path), with no control character (C0, DEL, C1) and no mark that turns the direction of the text (so
 ## `\u202Egpj.exe` cannot show as `exe.jpg`), at most 255 characters, and `file` for a name that is empty, `.` or
 ## `..`. It is never a path on the server: Bond saves a file under a name of its own.
-export def safe_filename(raw: String) -> String
+def safe_filename(raw: String) -> String
   last = raw.split("/").last.split("\\").last
   chars = last.split("").select do |ch| shown?(ch.code) end
   kept = chars.join("").strip
@@ -188,6 +150,54 @@ export def safe_filename(raw: String) -> String
   return kept.slice(0, MAX_FILENAME) if kept.length > MAX_FILENAME
 
   kept
+end
+
+private
+
+# Where the parser is: before the first delimiter, right after a delimiter (the rest of its line, or `--` for the
+# last one), in the headers of a part, in its data, or after the last delimiter (the epilogue, which is ignored).
+PREAMBLE = 0
+
+AFTER_DELIMITER = 1
+
+HEADERS = 2
+
+DATA = 3
+
+DONE = 4
+
+CRLF = "\r\n"
+
+HEAD_END = "\r\n\r\n"
+
+LAST = "--"
+
+# The longest header section of a part, and the longest rest of a delimiter line (transport padding).
+MAX_HEAD_BYTES = 16_384
+
+MAX_PADDING_BYTES = 256
+
+# The characters of a boundary (RFC 2046 `bchars`): letters, digits and these, a space only inside.
+BOUNDARY_SYMBOLS = "'()+_,-./:=? "
+
+MAX_BOUNDARY = 70
+
+MAX_FILENAME = 255
+
+# The first window of a search; each next one is 4 times larger.
+SEARCH_WINDOW = 4096
+
+# Where one step of `feed` left the piece: the phase, the offset of the bytes not used yet, and what it found.
+struct Move
+  phase: Int
+  at: Int
+  events: List[Event]
+end
+
+# A parameter of a header and the index where it ended (its `;` or the end).
+struct Item
+  header: HTTP.Header
+  next: Int
 end
 
 # One step of the state machine from `move.at`: the buffer is used as far as the phase can go with it. A step that

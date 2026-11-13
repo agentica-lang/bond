@@ -10,38 +10,16 @@ import Pattern from "pattern"
 import {Conn} from "conn"
 
 ## The largest `max_bytes`, 1 TiB: no real file is bigger, and the number stays far from the end of an `Int`.
-export MAX_FILE_BYTES = 1_099_511_627_776
+MAX_FILE_BYTES = 1_099_511_627_776
 
 ## The reason of the `error` of `serve` for a request that is not for a file. Any other `error` is a failure.
-export MISS = "not a static file"
-
-# Names that Windows opens as a device, whatever the extension and the case.
-DEVICES = Set.new([
-  "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
-  "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-])
-
-DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
-LETTERS = Set.new(["a", "b", "c", "d", "e", "f"])
-
-# The length of the digest in a fingerprinted name: 8 hex digits (a short hash) to 64 (a SHA-256).
-FINGERPRINT_MIN = 8
-FINGERPRINT_MAX = 64
-
-# What a cached entry weighs besides its bytes: the key, the headers, the tables.
-ENTRY_OVERHEAD = 512
-
-# The keys of `Mount.used`: the byte count, the last id of an entry, and the prefix of the claim on an entry that is
-# dropped (the task that makes the claim 1 drops it and gives its bytes back, so two tasks never do it twice).
-USED = "bytes"
-IDS = "ids"
-GONE = "gone"
+MISS = "not a static file"
 
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
 ## served. `max_age` is the seconds that a cache may keep a file (0 is "ask each time"). With `fingerprint`, a name that
 ## has a fingerprint is kept for a year, whatever `max_age` is. A file of at most `piece_bytes` is read in one call,
 ## and kept in `entries` while `cache_bytes` (0: not at all) allows it, with `used` counting the bytes.
-export struct Mount
+struct Mount
   prefix: String
   root: String
   max_bytes: Int
@@ -58,7 +36,7 @@ end
 ## there was a fresh one (`zipped` and `zipped_body`). `twin` is what `stat` said of the `.gz` path when the entry was
 ## made ("" for no file, else its size and time), so a `.gz` that is rewritten, removed or added later is seen. A `trusted` entry (a fingerprinted name of a mount with
 ## `fingerprint`, which the app promises never changes) is not checked against the disk at all.
-export struct Entry
+struct Entry
   id: Int
   path: String
   size: Int
@@ -72,17 +50,8 @@ export struct Entry
   cost: Int
 end
 
-# The file that the request names: the folder joined with the names (what `stat` follows, as the cache checks it), the
-# real path that was checked and read, that path below the folder (with `/`), and its `stat`.
-struct Located
-  joined: String
-  file: String
-  relative: String
-  info: FileInfo
-end
-
 ## The mount of the folder `root` (a real path) under `prefix`, with an empty cache of `cache_bytes`.
-export def make_mount(
+def make_mount(
   prefix: String,
   root: String,
   max_bytes: Int,
@@ -107,7 +76,7 @@ export def make_mount(
 end
 
 ## The real path of the folder of a mount, when it is a folder. It is read once, when the app is built.
-export def real_root(root: String) -> Result[String]
+def real_root(root: String) -> Result[String]
   info = try File.stat(root)
   return error("not a folder") if info.kind != "directory"
 
@@ -118,13 +87,50 @@ end
 ## GET and HEAD. An `error` with the reason `MISS` means that the request is not for a file (nothing of that name, a
 ## folder, a hidden name, a way out of the folder), so the caller answers it as a path with no route. Any other
 ## `error` is a file that cannot be sent (too big, or not readable), for the error handler.
-export def serve(mounts: List[Mount], conn: Conn) -> Result[Conn]
+def serve(mounts: List[Mount], conn: Conn) -> Result[Conn]
   for mount in mounts
     inside = below(mount, conn.path)
     return answer(mount, inside.unwrap!, conn) if inside.ok?
   end
 
   error(MISS)
+end
+
+private
+
+# Names that Windows opens as a device, whatever the extension and the case.
+DEVICES = Set.new([
+  "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+  "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+])
+
+DIGITS = Set.new(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
+
+LETTERS = Set.new(["a", "b", "c", "d", "e", "f"])
+
+# The length of the digest in a fingerprinted name: 8 hex digits (a short hash) to 64 (a SHA-256).
+FINGERPRINT_MIN = 8
+
+FINGERPRINT_MAX = 64
+
+# What a cached entry weighs besides its bytes: the key, the headers, the tables.
+ENTRY_OVERHEAD = 512
+
+# The keys of `Mount.used`: the byte count, the last id of an entry, and the prefix of the claim on an entry that is
+# dropped (the task that makes the claim 1 drops it and gives its bytes back, so two tasks never do it twice).
+USED = "bytes"
+
+IDS = "ids"
+
+GONE = "gone"
+
+# The file that the request names: the folder joined with the names (what `stat` follows, as the cache checks it), the
+# real path that was checked and read, that path below the folder (with `/`), and its `stat`.
+struct Located
+  joined: String
+  file: String
+  relative: String
+  info: File.Info
 end
 
 # The segments of the path after the prefix of the mount, as the client sent them (not decoded), when there is at least
@@ -377,7 +383,7 @@ end
 
 # The `Rep` of the `.gz` file whose `stat` is `twin` as the answer for the file that `plain` describes: its own size,
 # time and tag, since the bytes differ.
-def zipped_of(plain: Files.Rep, twin: FileInfo) -> Files.Rep
+def zipped_of(plain: Files.Rep, twin: File.Info) -> Files.Rep
   tag = "\"#{twin.size_bytes}-#{twin.modified_seconds}-gz\""
   plain.with(
     etag: tag,

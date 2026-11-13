@@ -3,6 +3,8 @@
 
 import Bond from "../bond"
 
+private
+
 PORT = 4568
 
 def produce(events: Channel[Bytes]) -> Void

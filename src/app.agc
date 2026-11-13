@@ -8,12 +8,10 @@ import Router from "router"
 import Statics from "static"
 import {Conn, ErrorHandler, Handler, Receiver} from "conn"
 
-NOT_FOUND = "not found"
-
 ## Routes are kept as a tree of segments (`router.agc`): a literal segment wins over a param, whatever the order the
 ## routes were added in. Filters run in the order they were added. `not_found` answers a
 ## path with no route and `on_error` a failure; `app()` sets the plain answers.
-export struct App
+struct App
   routes: Router.Node
   before_filters: List[Handler]
   after_filters: List[Handler]
@@ -29,7 +27,7 @@ end
 ## `max_fields_bytes`; the body cap bounds the text fields too.
 ## `dir` is the folder where each request that sends a file gets a private folder for its files, and it must exist;
 ## "" is the temporary folder of the system (`TMPDIR`, `TEMP` or `TMP`, else `/tmp`).
-export struct UploadOptions
+struct UploadOptions
   max_file_bytes: Int = 10_485_760
   max_field_bytes: Int = 1_048_576
   max_fields_bytes: Int = 2_097_152
@@ -37,7 +35,7 @@ export struct UploadOptions
   dir: String = ""
 end
 
-export def app() -> App
+def app() -> App
   App(
     routes: Router.empty(),
     before_filters: [],
@@ -48,25 +46,25 @@ export def app() -> App
   )
 end
 
-export def get(app: App, pattern: String, handler: Handler) -> App = route(app, "GET", pattern, handler)
+def get(app: App, pattern: String, handler: Handler) -> App = route(app, "GET", pattern, handler)
 
-export def post(app: App, pattern: String, handler: Handler) -> App = route(app, "POST", pattern, handler)
+def post(app: App, pattern: String, handler: Handler) -> App = route(app, "POST", pattern, handler)
 
-export def put(app: App, pattern: String, handler: Handler) -> App = route(app, "PUT", pattern, handler)
+def put(app: App, pattern: String, handler: Handler) -> App = route(app, "PUT", pattern, handler)
 
-export def patch(app: App, pattern: String, handler: Handler) -> App = route(app, "PATCH", pattern, handler)
+def patch(app: App, pattern: String, handler: Handler) -> App = route(app, "PATCH", pattern, handler)
 
-export def delete(app: App, pattern: String, handler: Handler) -> App = route(app, "DELETE", pattern, handler)
+def delete(app: App, pattern: String, handler: Handler) -> App = route(app, "DELETE", pattern, handler)
 
 ## Sets the handler for a path with no route. It gets the `Conn` with status 404 and answers like any handler;
 ## the `after` filters run after it. A path with a route for other methods is a 405 and does not come here.
-export def not_found(app: App, handler: Handler) -> App = app.with(not_found: handler)
+def not_found(app: App, handler: Handler) -> App = app.with(not_found: handler)
 
 ## Sets the handler for a failure: an `error` of a handler or filter, or a runtime error in one. It gets the `Conn`
 ## with status 500 and the message, which Bond has already written to stderr and which must stay from the client.
 ## If the handler gives an error or crashes, the answer is the plain 500. A `bad_request` is a 400 and does not
 ## come here.
-export def on_error(app: App, handler: ErrorHandler) -> App = app.with(on_error: handler)
+def on_error(app: App, handler: ErrorHandler) -> App = app.with(on_error: handler)
 
 ## Serves the files of the folder `root` under the path `prefix` (`Bond.static(app, "/assets", "public")`), for `GET`
 ## and `HEAD`. A route of the app wins over a file, and a path that is not a file of the folder (missing, a folder, a
@@ -98,7 +96,7 @@ export def on_error(app: App, handler: ErrorHandler) -> App = app.with(on_error:
 ## file gets the `.gz` file next to it (`app.css.gz`) when there is one that is inside the folder by the same rules as
 ## the file and is not older than it, with `Content-Encoding: gzip` and `Vary: Accept-Encoding`. A `Range` request gets
 ## the file as it is.
-export def static(
+def static(
   app: App,
   prefix: String,
   root: String,
@@ -148,10 +146,10 @@ end
 
 ## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
 ## handler that come after it.
-export def before(app: App, filter: Handler) -> App = app.with(before_filters: app.before_filters.push(filter))
+def before(app: App, filter: Handler) -> App = app.with(before_filters: app.before_filters.push(filter))
 
 ## Adds a filter that runs after the route. It runs for every answer, a halted one and a 404 too.
-export def after(app: App, filter: Handler) -> App = app.with(after_filters: app.after_filters.push(filter))
+def after(app: App, filter: Handler) -> App = app.with(after_filters: app.after_filters.push(filter))
 
 ## The response to a request: the before filters, the route, the after filters. It does not fail: an `error` of a
 ## filter or handler, and a runtime error in one, goes to the error handler (a 400 for `bad_request`), and a
@@ -159,7 +157,7 @@ export def after(app: App, filter: Handler) -> App = app.with(after_filters: app
 ## that a runtime error ends the request and not the program; the after filters do not run for a crash. A streamed
 ## body is read into the response, as `Conns.to_response` says (`max_pieces` and `timeout_ms` bound it); the server
 ## uses `handle_stream` instead.
-export def handle(
+def handle(
   app: App,
   request: HTTP.Request,
   max_pieces: Int = 0,
@@ -171,32 +169,28 @@ end
 ## Like `handle`, with the `Receiver` of `Bond.uploads` (for `Testing`; `bond.agc` does not export it): `receive` reads
 ## the `multipart/form-data` body into `Conn.form`, after the before filters and once the route is found, so a request
 ## halted before it, or with no route, is not read.
-export def handle_with(
-  app: App,
-  request: HTTP.Request,
-  max_pieces: Int,
-  timeout_ms: Int,
-  receive: Receiver,
-) -> HTTP.Response
+def handle_with(app: App, request: HTTP.Request, max_pieces: Int, timeout_ms: Int, receive: Receiver) -> HTTP.Response
   Conns.to_response(answer(app, request, some(receive)), max_pieces, timeout_ms)
 end
 
 ## Like `handle`, for the `Answer.Stream` of `HTTP.serve`: the channel of a streamed body is sent as it is, and any
 ## other body is one closed piece.
-export def handle_stream(app: App, request: HTTP.Request) -> HTTP.StreamResponse
+def handle_stream(app: App, request: HTTP.Request) -> HTTP.StreamResponse
   Conns.to_stream_response(answer(app, request, none))
 end
 
 ## The `Answer` of `HTTP.serve` for a request: the upgrade that a route of `Bond.websocket` accepted (unless a filter
 ## answered something else after it: `Conns.accepted_upgrade`), or else the stream of `handle_stream`.
-export def handle_answer(app: App, request: HTTP.Request) -> HTTP.Answer
-  upgrade_or_stream(answer(app, request, none))
-end
+def handle_answer(app: App, request: HTTP.Request) -> HTTP.Answer = upgrade_or_stream(answer(app, request, none))
 
 ## Like `handle_answer`, with the `Receiver` of `Bond.uploads`, as for `handle_with`.
-export def handle_answer_with(app: App, request: HTTP.Request, receive: Receiver) -> HTTP.Answer
+def handle_answer_with(app: App, request: HTTP.Request, receive: Receiver) -> HTTP.Answer
   upgrade_or_stream(answer(app, request, some(receive)))
 end
+
+private
+
+NOT_FOUND = "not found"
 
 def upgrade_or_stream(conn: Conn) -> HTTP.Answer
   case Conns.accepted_upgrade(conn)

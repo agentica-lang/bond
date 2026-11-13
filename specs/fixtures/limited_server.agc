@@ -5,6 +5,8 @@ import HTTP from "std/http"
 import Bond from "../../bond"
 import Fixture from "app"
 
+private
+
 BODY_LIMIT = 8
 
 def main() -> Void

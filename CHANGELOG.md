@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `conn.path` has no empty segments (`/session/` and `//session` are `/session`), so a filter that tests the path sees the route that the router reaches.
+
 ## [0.12.0] - 2026-11-13
 
 Needs Agentica 0.31.0 or later.

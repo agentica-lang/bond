@@ -4,6 +4,7 @@
 import HTML from "std/html"
 import HTTP from "std/http"
 import URI from "std/uri"
+import Pattern from "pattern"
 
 # An `error` whose message starts with this text is a 400, and the rest is the body. `bad_request` is the way to
 # make one; the text is not part of the API. No error message may start with it unless it is meant for the client:
@@ -91,7 +92,7 @@ def from_request(request: HTTP.Request) -> Conn
 
   Conn(
     method: request.method,
-    path: request.path,
+    path: Pattern.canonical(request.path),
     query: query,
     params: {},
     headers: request.headers,

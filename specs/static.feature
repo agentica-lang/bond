@@ -29,6 +29,21 @@ Feature: Static files
       | /assets/sub/page.html | text/html; charset=utf-8        |
       | /assets/logo.svg      | image/svg+xml; charset=utf-8    |
 
+  Scenario Outline: A filter on the path of a file sees every spelling of it that the mount serves (<path>)
+    When I send "GET" to "<path>"
+    Then the status is 401
+
+    Examples:
+      | path                |
+      | /assets/secret.txt  |
+      | /assets/%73ecret.txt |
+      | /assets/secret%2Etxt |
+      | /assets//secret.txt |
+      | /assets/a!b.txt     |
+      | /assets/a%21b.txt   |
+      | /assets/%C3%A9.txt  |
+      | /assets/%c3%a9.txt  |
+
   Scenario: HEAD is answered like GET
     When I send "HEAD" to "/assets/hello.txt"
     Then the status is 200

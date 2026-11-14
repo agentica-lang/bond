@@ -12,11 +12,11 @@ description: Routes, path params and what happens when nothing matches.
 
 A segment that starts with a colon, as in `/users/:id/posts/:post_id`, matches one segment. Read it with `Bond.param(conn, "id")`, which is a `Result[String]`, or `Bond.param_int(conn, "id")`. Text that is not a number is a 400.
 
-Neither the params nor the literal segments are decoded: `%20` stays `%20`, and a `/café` route never matches `/caf%C3%A9`. The query string is decoded: see [Query and forms](/guide/query/).
+The path is decoded before the routes are tried, so the params, `conn.path` and the literal segments are text, not escapes: `%20` is a space, and a `/café` route matches `/caf%C3%A9`. A slash, a backslash, a colon, a percent sign and a control character stay escaped (in capitals: `%2F`), so `%2F` never splits a segment and `%2541` is the text `%41`. The query string is decoded too: see [Query and forms](/guide/query/).
 
 ## How routes match
 
-A trailing or a double slash does not matter: `/posts/` and `//posts` are `/posts`, also in `conn.path`, so a filter that tests the path sees the same text as the router.
+A trailing or a double slash does not matter: `/posts/` and `//posts` are `/posts`, also in `conn.path`; every other escape is decoded there too (`/%73` is `/s`), so a filter that tests the path sees the same text as the router and `Bond.static`.
 
 - A literal segment wins over a `:param` at the same place, whatever the order the routes were added in: `/posts/latest` is not taken by `/posts/:id`, even when `/posts/:id` was added first.
 - When the literal branch has no route to the end of the path, the walk goes back to the param: with `/docs/guide/intro` and `/docs/:page/edit`, the path `/docs/guide/edit` is `/docs/:page/edit` with `page` set to `guide`.

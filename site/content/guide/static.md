@@ -81,6 +81,8 @@ A path is the answer of a file only when it names a plain file of the folder. Al
 - A way out of the folder: `..`, `%2e%2e`, an encoded slash (`..%2F`), a backslash (`..%5C`), a colon, an absolute path (`%2Fetc%2Fpasswd`), a NUL or another control character, and a bad percent escape. Each segment is decoded once, then checked (`%252e` is only a name with a percent sign).
 - A symbolic link whose real path is outside the real path of the folder. A link to another file inside the folder is served.
 
+On a file system that ignores the case of names (macOS, Windows), `/assets/SECRET.txt` is the file `secret.txt`, and on Windows a trailing dot or space of a name is dropped; a filter that compares `conn.path` with the name of a file does not see those spellings.
+
 There is a short time between this check and the read of the file. Do not let untrusted users create links in the folder.
 
 ## Size limits

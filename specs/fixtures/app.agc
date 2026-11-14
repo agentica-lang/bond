@@ -218,6 +218,8 @@ end
 
 private
 
+FILTERED = Set.new(["/assets/secret.txt", "/assets/a!b.txt", "/assets/é.txt"])
+
 TOKEN = "letmein"
 
 # The secrets of the session app: the first is the one it signs with at first, the second the one after a rotation.
@@ -286,7 +288,7 @@ end
 
 def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
   if (
-    (conn.path == "/private" or conn.path == "/assets/secret.txt") and
+    (conn.path == "/private" or FILTERED.include?(conn.path)) and
     Bond.request_header(conn, "X-Token").unwrap_or("") != TOKEN
   )
     return ok(Bond.halt(conn, 401, "unauthorized"))

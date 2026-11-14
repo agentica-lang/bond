@@ -16,7 +16,7 @@ def main() -> Void
     end,
     Test.test("the canonical path has one spelling for a name") do
       try Test.eq(Pattern.canonical("//a/%73%2e/"), "/a/s.")
-      try Test.eq(Pattern.canonical("/%c3%A9/%2f/%/%4"), "/%C3%A9/%2F/%/%4")
+      try Test.eq(Pattern.canonical("/%c3%A9/%2f/%/%4/%c3/%0a/%3a"), "/é/%2F/%/%4/%C3/%0A/%3A")
       Test.eq(Pattern.canonical(""), "/")
     end,
   ])

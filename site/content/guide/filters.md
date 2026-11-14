@@ -12,6 +12,8 @@ A `before` filter that halts, or gives an error, skips the filters and the handl
 
 A filter passes a value to the handler with `Bond.assign` (see [Assigns](/guide/conn/#assigns)).
 
+A filter that compares `conn.path` sees the canonical path (see [Routing](/guide/routing/)), which is also what `Bond.static` serves. A file system that ignores the case of names (macOS, Windows) or a Windows name with a trailing dot or space reaches the same file by another spelling of the name that the path does not change, so a filter that guards a file of a static folder must not rely on the exact text of the path alone.
+
 `Bond.log_request` is a `before` filter that writes `METHOD /path` to stderr.
 
 ```agentica

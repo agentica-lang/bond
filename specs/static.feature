@@ -39,6 +39,10 @@ Feature: Static files
       | /assets/%73ecret.txt |
       | /assets/secret%2Etxt |
       | /assets//secret.txt |
+      | /assets/a!b.txt     |
+      | /assets/a%21b.txt   |
+      | /assets/%C3%A9.txt  |
+      | /assets/%c3%a9.txt  |
 
   Scenario: HEAD is answered like GET
     When I send "HEAD" to "/assets/hello.txt"

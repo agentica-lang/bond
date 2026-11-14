@@ -70,14 +70,16 @@ Feature: Routing
       | /users/7/posts/42/    |
       | //users//7///posts/42 |
 
-  Scenario Outline: A route and a path are compared as written, without decoding (<path>)
+  Scenario Outline: A route and a path are compared decoded, but for a slash, a backslash, a colon and a percent sign (<path>)
     When I send "GET" to "<path>"
     Then the status is <status>
 
     Examples:
       | path       | status |
       | /café      | 200    |
-      | /caf%C3%A9 | 404    |
+      | /caf%C3%A9 | 200    |
+      | /caf%c3%a9 | 200    |
+      | /%63af%C3%A9 | 200  |
 
   Scenario: HEAD uses the route of GET
     When I send "HEAD" to "/hello"

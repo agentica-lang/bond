@@ -11,6 +11,16 @@ Feature: Filters
     Then the status is 401
     And the body is "unauthorized"
 
+  Scenario Outline: A filter that tests the path sees the canonical path (<path>)
+    When I send "GET" to "<path>"
+    Then the status is 401
+
+    Examples:
+      | path       |
+      | /private/  |
+      | //private  |
+      | /private// |
+
   Scenario: A before filter can let the request through
     When I send "GET" to "/private" with the header "x-token" set to "letmein"
     Then the status is 200

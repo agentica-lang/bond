@@ -16,7 +16,7 @@ Neither the params nor the literal segments are decoded: `%20` stays `%20`, and 
 
 ## How routes match
 
-A trailing or a double slash does not matter: `/posts/` and `//posts` are `/posts`.
+A trailing or a double slash does not matter: `/posts/` and `//posts` are `/posts`, also in `conn.path`, so a filter that tests the path sees the same text as the router.
 
 - A literal segment wins over a `:param` at the same place, whatever the order the routes were added in: `/posts/latest` is not taken by `/posts/:id`, even when `/posts/:id` was added first.
 - When the literal branch has no route to the end of the path, the walk goes back to the param: with `/docs/guide/intro` and `/docs/:page/edit`, the path `/docs/guide/edit` is `/docs/:page/edit` with `page` set to `guide`.

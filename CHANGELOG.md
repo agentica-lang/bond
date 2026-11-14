@@ -4,9 +4,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Behavior change:** `conn.path` (and the `target` of a WebSocket upgrade) is the canonical path: no empty segments (`/session/` is `/session`), the escapes of letters, digits and `-._~` decoded (`/a/%73` is `/a/s`) and the other escapes in capitals. A filter that compares it sees the path that the router and `Bond.static` read.
+
 ### Fixed
 
-- `conn.path` has no empty segments (`/session/` and `//session` are `/session`), so a filter that tests the path sees the route that the router reaches.
+- `conn.path` has no empty segments (`/session/` and `//session` are `/session`), so a filter that tests the path sees the route that the router reaches; a filter on a file of `Bond.static` is no longer skipped by an escaped spelling such as `/assets/%73ecret.txt`.
 
 ## [0.12.0] - 2026-11-13
 

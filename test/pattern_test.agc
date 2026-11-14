@@ -14,5 +14,10 @@ def main() -> Void
       try Test.assert(not Pattern.valid?("/a/:"), "a param without a name")
       Test.assert(not Pattern.valid?("/a/:id/b/:id"), "a name twice")
     end,
+    Test.test("the canonical path has one spelling for a name") do
+      try Test.eq(Pattern.canonical("//a/%73%2e/"), "/a/s.")
+      try Test.eq(Pattern.canonical("/%c3%A9/%2f/%/%4"), "/%C3%A9/%2F/%/%4")
+      Test.eq(Pattern.canonical(""), "/")
+    end,
   ])
 end

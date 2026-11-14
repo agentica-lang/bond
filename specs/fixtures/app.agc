@@ -285,7 +285,10 @@ def redirect_legacy(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
-  if conn.path == "/private" and Bond.request_header(conn, "X-Token").unwrap_or("") != TOKEN
+  if (
+    (conn.path == "/private" or conn.path == "/assets/secret.txt") and
+    Bond.request_header(conn, "X-Token").unwrap_or("") != TOKEN
+  )
     return ok(Bond.halt(conn, 401, "unauthorized"))
   end
 

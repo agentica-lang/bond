@@ -12,7 +12,7 @@ description: Routes, path params and what happens when nothing matches.
 
 A segment that starts with a colon, as in `/users/:id/posts/:post_id`, matches one segment. Read it with `Bond.param(conn, "id")`, which is a `Result[String]`, or `Bond.param_int(conn, "id")`. Text that is not a number is a 400.
 
-The path is decoded before the routes are tried, so the params, `conn.path` and the literal segments are text, not escapes: `%20` is a space, and a `/café` route matches `/caf%C3%A9`. A slash, a backslash, a colon, a percent sign and a control character stay escaped (in capitals: `%2F`), so `%2F` never splits a segment and `%2541` is the text `%41`. The query string is decoded too: see [Query and forms](/guide/query/).
+The path is decoded before the routes are tried, so the params, `conn.path` and the literal segments are text, not escapes: `%20` is a space, and a `/café` route matches `/caf%C3%A9`. A slash, a backslash, a colon, a percent sign and a control character stay escaped (in capitals: `%2F`), so `%2F` never splits a segment and `%2541` is the text `%41`. The query string is decoded too: see [Query and forms](/guide/query/). A param can be `.` or `..` (`%2e%2e` is `..`), so a handler that joins a param into a file path refuses those first.
 
 ## How routes match
 

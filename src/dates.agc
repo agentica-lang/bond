@@ -1,7 +1,7 @@
 ## The date of `Last-Modified` and `If-Modified-Since` (RFC 9110 section 5.6.7), as Unix seconds.
 
 ## `Sun, 06 Nov 1994 08:49:37 GMT` for the Unix time `seconds`. A time before 1970 is written as 1970.
-def format(seconds: Int) -> String
+def http_date(seconds: Int) -> String
   clamped = seconds
   if clamped < 0
     clamped = 0
@@ -28,7 +28,7 @@ def format(seconds: Int) -> String
 end
 
 ## The Unix seconds of a date in one of the three forms that a recipient reads (RFC 9110 section 5.6.7): the one
-## `format` writes (`Sun, 06 Nov 1994 08:49:37 GMT`), the old `Sunday, 06-Nov-94 08:49:37 GMT` (a year of two digits
+## `http_date` writes (`Sun, 06 Nov 1994 08:49:37 GMT`), the old `Sunday, 06-Nov-94 08:49:37 GMT` (a year of two digits
 ## that is more than 50 years ahead is read as the last past year with those digits) and `Sun Nov  6 08:49:37 1994`. Any other text is `none`, and a
 ## header with one is ignored. The name of the weekday is not checked.
 def parse(text: String) -> Optional[Int]
@@ -109,7 +109,7 @@ def assemble(day_text: String, month_text: String, year_text: String, clock_text
   some(days * SECONDS_PER_DAY + hour * 3600 + numbers[3] * 60 + numbers[4])
 end
 
-def this_year() -> Int = format(Time.now_ms() / 1000).split(" ")[3].to_i!
+def this_year() -> Int = http_date(Time.now_ms() / 1000).split(" ")[3].to_i!
 
 # The civil date as days since 1970-01-01 (the proleptic Gregorian calendar).
 def days_since_epoch(year: Int, month: Int, day: Int) -> Int

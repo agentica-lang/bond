@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - The docs moved to https://www.agentica-lang.com/bond/; the old agentica-lang.github.io links redirect there.
+- The docs site takes the shared Agentica docs theme (the org icon, breadcrumbs, search tags, a sitemap with dates), and search engines index only the latest release: older versions point to it, and dev is noindex.
 
 ## [0.14.0] - 2026-11-16
 

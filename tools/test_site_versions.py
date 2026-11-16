@@ -5,7 +5,8 @@
 and pages.yml. This test runs the whole assembly on a small git repository whose `make site` writes two pages: the tags
 that become versions (and the ones that do not), the tag with no site left out, a tag that fails (or no tag built at
 all) failing the run, the latest release served at the root, the selector tags added to every page once and to nothing
-else, and a second run that builds only what is not cached.
+else, a second run that builds only what is not cached, the canonical or noindex tags of the version and dev pages,
+and a tag with the docs theme built with the current theme and pins.
 """
 import contextlib
 import importlib.util
@@ -26,6 +27,7 @@ MAKEFILE = (
     ".PHONY: site\n"
     "site:\n"
     "\t@test ! -e FAIL\n"
+    "\t@test ! -e site/themes/docs-theme/FAIL\n"
     "\t@if [ -e FLAKY ] && [ ! -e $(ONCE) ]; then touch $(ONCE); exit 1; fi\n"
     "\t@echo run >> $(RUNS)\n"
     "\tmkdir -p site/public/guide\n"
@@ -33,6 +35,13 @@ MAKEFILE = (
     " > site/public/guide/index.html\n"
     "\tprintf '<html><head></head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
     "\tprintf 'see <head></head> /bond/' > site/public/llms.txt\n"
+    "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
+    "\tmkdir -p site/public/only-$$(cat VERSION)\n"
+    "\tprintf '<html><head><link href=x REL=canonical><meta content=all name=robots><link rel=icon href=data:x></head>"
+    "<body><link rel=canonical href=body></body></html>' > site/public/only-$$(cat VERSION)/index.html\n"
+    "\tprintf '<html><head></head><body>not found</body></html>' > site/public/404.html\n"
+    "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
+    "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
 
 SELECTOR_TAGS = (
@@ -152,6 +161,103 @@ class SiteVersionsTest(unittest.TestCase):
         code, _, out, total = self.build()
         self.assertEqual((code, total - first), (0, 1))  # only dev builds again: the working tree is never cached
         self.assertTrue(all(page.read_text().count(SELECTOR_TAGS) == 1 for page in out.rglob("*.html")))
+
+    def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(self):
+        code, _, out, _ = self.build()
+        self.assertEqual(code, 0)
+        canonical = '<link rel="canonical" href="https://example.org/docs/guide/">'
+        noindex = '<meta name="robots" content="noindex,follow">'
+        for folder in ("0.9.0", "0.10.0"):
+            page = (out / folder / "guide" / "index.html").read_text()
+            self.assertEqual(page.count(canonical), 1)
+            self.assertNotIn(noindex, page)
+            self.assertEqual((out / folder / "404.html").read_text().count(noindex), 1)
+        for folder in ("0.9.0", "0.10.0", "dev"):
+            self.assertFalse((out / folder / "sitemap.xml").exists())
+        # A page the root does not have: noindex; its own head tags go (any case or order), and the body stays.
+        head, body = (out / "0.10.0" / "only-0.10.0" / "index.html").read_text().split("</head>")
+        self.assertEqual(head.count(noindex), 1)
+        self.assertNotIn("canonical", head.lower())
+        self.assertNotIn("content=all", head)
+        self.assertEqual(body, "<body><link rel=canonical href=body></body></html>")
+        # A page with an icon of its own (a tag from before the docs theme) gets the org icons instead.
+        self.assertEqual(head.count(tool.ORG_ICONS), 1)
+        self.assertNotIn("data:x", head)
+        # The root of an older tag too, and a page that has them is left as it is.
+        root_head = (out / "only-0.11.0" / "index.html").read_text().split("</head>")[0]
+        self.assertEqual(root_head.count(tool.ORG_ICONS), 1)
+        self.assertNotIn("data:x", root_head)
+        self.assertEqual(tool.use_org_icons(out), 0)
+        # dev is unreleased: every page is noindex, with no canonical, even where the root has the page.
+        for page in ("guide/index.html", "index.html", "only-0.12.0/index.html", "404.html"):
+            head = (out / "dev" / page).read_text().split("</head>")[0]
+            self.assertEqual(head.count(noindex), 1)
+            self.assertNotIn("canonical", head.lower())
+        # The root keeps its own tags and its sitemap.
+        self.assertIn("content=all", (out / "only-0.11.0" / "index.html").read_text())
+        self.assertTrue((out / "sitemap.xml").exists())
+        # Each tag ran make in a git checkout (Hugo's enableGitInfo needs one), and no worktree is left behind.
+        self.assertEqual((out / "0.10.0" / "git.txt").read_text().strip(), "true")
+        worktrees = subprocess.run(["git", "-C", str(self.repo), "worktree", "list"], capture_output=True, text=True)
+        self.assertEqual(len(worktrees.stdout.splitlines()), 1)
+
+    def tag_with_theme(self):
+        """Add the docs theme submodule (its `mark` is "theme one") and tag 0.13.0 with it; returns the theme repo."""
+        theme = self.tmp / "theme"
+        theme.mkdir()
+        git(theme, "init", "-q")
+        (theme / "mark").write_text("theme one")
+        git(theme, "add", "-A")
+        git(theme, "commit", "-q", "-m", "one")
+        git(self.repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
+        release(self.repo, "0.13.0", "0.13.0")
+        return theme
+
+    def bump_theme(self, theme, mark, version):
+        """Commit a new theme `mark` and pin it in a new commit of the checkout (not a tag)."""
+        (theme / "mark").write_text(mark)
+        git(theme, "commit", "-q", "-am", mark)
+        git(self.repo / tool.THEME, "pull", "-q")
+        release(self.repo, version)
+
+    def test_a_tag_with_the_theme_is_built_with_the_current_theme_and_pins(self):
+        theme = self.tag_with_theme()
+        workflow = self.repo / ".github" / "workflows" / "pages.yml"
+        workflow.write_text(workflow.read_text().replace("HUGO_VERSION: 1.0.0", "HUGO_VERSION: 2.0.0"))
+        self.bump_theme(theme, "theme two", "0.14.0-dev")
+        used = []
+
+        def env(text, tools):
+            used.append(tool.pins(text)["HUGO_VERSION"])
+            return dict(os.environ)
+
+        with mock.patch.object(tool, "tool_env", env):
+            code, _, out, first = self.build()
+            self.assertEqual(code, 0)
+            # The tag's content, the look of the current theme: at its folder and at the root.
+            self.assertIn("theme two", (out / "0.13.0" / "index.html").read_text())
+            self.assertIn("0.13.0", (out / "0.13.0" / "guide" / "index.html").read_text())
+            self.assertIn("theme two", (out / "index.html").read_text())
+            self.assertIn("theme two", (out / "dev" / "index.html").read_text())
+            # A tag from before the theme keeps its own Hugo pins; one with the theme takes the current ones.
+            self.assertEqual((used.count("2.0.0"), used.count("1.0.0")), (3, 3))
+            # A newer theme pin rebuilds the tags with the theme (at their folder and at the root) and dev only.
+            self.bump_theme(theme, "theme three", "0.14.0-dev2")
+            code, _, out, second = self.build()
+        self.assertEqual((code, second - first), (0, 3))
+        self.assertIn("theme three", (out / "0.13.0" / "index.html").read_text())
+
+    def test_a_tag_that_fails_with_the_current_theme_fails_the_run(self):
+        theme = self.tag_with_theme()
+        # A theme that the tag's `make site` cannot build with (the fixture fails on a FAIL file in the theme).
+        (theme / "FAIL").write_text("")
+        git(theme, "add", "-A")
+        git(theme, "commit", "-q", "-m", "breaks old tags")
+        git(self.repo / tool.THEME, "pull", "-q")
+        release(self.repo, "0.14.0-dev")
+        code, printed, _, _ = self.build()
+        self.assertEqual(code, 1)
+        self.assertIn("0.13.0", printed)
 
     def test_a_tag_that_fails_fails_the_run(self):
         release(self.repo, "0.11.1", "0.11.1", fail=True)

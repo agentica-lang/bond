@@ -54,6 +54,7 @@ export Conns.json_body
 export Conns.body_text
 export Conns.bytes
 export Conns.halt
+export Conns.halt_json
 export Conns.html
 export Conns.escape
 export Conns.status

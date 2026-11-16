@@ -224,6 +224,9 @@ end
 ## Answers `body` as plain text and stops the filters and the handler that come after.
 def halt(conn: Conn, status: Int, body: String) -> Conn = text(conn, status, body).with(halted: true)
 
+## Answers `value` as JSON, like `json`, and stops the filters and the handler that come after, like `halt`.
+def halt_json(conn: Conn, status: Int, value: JSON.Value) -> Conn = json(conn, status, value).with(halted: true)
+
 ## Adds a response header after the ones of the same name, as `Set-Cookie` needs: each is a header of its own and
 ## they are never joined.
 def add_header(conn: Conn, name: String, value: String) -> Conn

@@ -13,7 +13,7 @@ Bond needs Agentica 0.31.0 or later; with Agentica 0.30, use Bond 0.11.0. The [c
 bond = { git = "https://github.com/agentica-lang/bond", tag = "0.13.0" }
 ```
 
-Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.13.0`. Both write `agentica.lock` and `deps/bond/` (`agentica install` does it for a manifest you edited).
+Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.13.0`, which writes that line, `agentica.lock` and `deps/bond/`. After you write or edit the dependencies by hand, run `agentica update` to write `agentica.lock` and `deps/`. `agentica install` does not write the lock: it puts back `deps/` from the `agentica.lock` you have, as in a fresh clone.
 
 ## Example
 

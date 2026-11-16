@@ -11,6 +11,12 @@ Feature: Filters
     Then the status is 401
     And the body is "unauthorized"
 
+  Scenario: A before filter that halts with JSON stops the handler
+    When I send "GET" to "/api/private"
+    Then the status is 401
+    And the header "content-type" is "application/json"
+    And the body is "{\"error\":\"unauthorized\"}"
+
   Scenario Outline: A filter that tests the path sees the canonical path (<path>)
     When I send "GET" to "<path>"
     Then the status is 401

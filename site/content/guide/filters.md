@@ -8,7 +8,7 @@ description: Code that runs before and after every route.
 
 `Bond.before(app, filter)` runs a filter before the route and `Bond.after(app, filter)` after it. A filter is a handler too, a `Fn[Bond.Conn, Result[Bond.Conn]]`. Filters run in the order they were added.
 
-A `before` filter runs on the head of the request: `conn.body` is empty there, and Bond reads the body after the filters, once the route is found. A check that needs the body (a signature of a webhook) goes in the handler. A `before` filter that halts, or gives an error, skips the filters and the handler after it. The `after` filters still run, for a halted answer and for a 404 too. They do not run when a handler crashes.
+A `before` filter runs on the head of the request: `conn.body` is empty there, and Bond reads the body after the filters, once the route is found. A check that needs the body (a signature of a webhook) goes in the handler. A `before` filter that halts (`Bond.halt`, or `Bond.halt_json` for a JSON answer), or gives an error, skips the filters and the handler after it. The `after` filters still run, for a halted answer and for a 404 too. They do not run when a handler crashes.
 
 A filter passes a value to the handler with `Bond.assign` (see [Assigns](/guide/conn/#assigns)).
 

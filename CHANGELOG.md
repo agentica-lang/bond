@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Works with Agentica 0.33.0; CI runs it.
+
 ## [0.13.0] - 2026-11-16
 
 Needs Agentica 0.31.0 or later; works with Agentica 0.32.0.

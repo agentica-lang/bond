@@ -4,17 +4,24 @@
     site_versions.py build [--out DIR] [--cache DIR] [--base-url URL] [--tools DIR]
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
-`dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/).
+`dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/). Only
+the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the root when the
+root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their sitemaps are removed. A page
+built without the docs theme (an older tag, at its folder or at the root) gets the org icons in place of its own.
 
-Each tag is built from its own tree with `make site`, using the Hugo and Dart Sass versions that tag pins in its
-`.github/workflows/pages.yml`. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) and that is older than
-every built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than
-a built one) is tried once more and then fails the run, so a release never drops silently from the deploy; so does a run
+Each tag is built from its own tree, a detached git worktree (so Hugo's enableGitInfo dates its pages), with `make
+site`. A tag that uses the docs theme (it pins the submodule) is built with the theme commit and the Hugo and Dart Sass
+that the current checkout pins, not its own: the theme is only the look, so every version gets the current favicon,
+search tags and breadcrumbs, while the content stays the tag's; a tag that fails with them fails the run. An older tag,
+with its own layouts, keeps the Hugo and Dart Sass pinned in its `.github/workflows/pages.yml`, and the assembly gives
+its pages the org icons. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) and that is older than every
+built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than a
+built one) is tried once more and then fails the run, so a release never drops silently from the deploy; so does a run
 in which no tag built. The output of a tag is cached by its commit sha (and the base URL, which Hugo bakes into every
 link), so a run builds only `dev` and the tags it has not seen; the cache folder is pruned to the current builds. With
-GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth saving. The selector is not part of a
-cached build: the assembly adds its `<link>` and `<script>` tags to every page, so a build from the cache loads the
-current selector.
+GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth saving. The selector and the search tags
+are not part of a cached build: the assembly adds the selector's `<link>` and `<script>` tags and the canonical or
+noindex tag to every page, so a build from the cache gets the current ones.
 
 Python's standard library only.
 """
@@ -22,20 +29,28 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
+THEME = "site/themes/docs-theme"
+# The pauses between the tries of a download (5 tries, 220 s in all): GitHub answers 5xx (504 too) for a minute or two
+# now and then.
+DOWNLOAD_BACKOFF = (10, 30, 60, 120)
+REQUEST_TIMEOUT = 30
 FINAL_TAG = re.compile(r"^\d+\.\d+\.\d+$")
 PIN = re.compile(r"^\s+(HUGO_VERSION|HUGO_SHA256|DART_SASS_VERSION|DART_SASS_SHA256):\s*(\S+)\s*$", re.MULTILINE)
 SELECTOR_FILES = ("selector.js", "selector.css")
@@ -105,6 +120,63 @@ def inject_selector(site: Path, root_path: str) -> int:
     return changed
 
 
+ICON = re.compile(r'<link\b[^>]*\brel="?(?:shortcut )?(?:icon|apple-touch-icon)\b[^>]*>', re.I)
+ORG_ICONS = (
+    '<link rel="icon" href="https://www.agentica-lang.com/favicon.ico" sizes="48x48">'
+    '<link rel="icon" type="image/png" href="https://www.agentica-lang.com/favicon-32x32.png" sizes="32x32">'
+    '<link rel="apple-touch-icon" href="https://www.agentica-lang.com/apple-touch-icon.png">'
+)
+CANONICAL = re.compile(r'<link\b[^>]*\brel="?canonical\b[^>]*>', re.I)
+ROBOTS = re.compile(r'<meta\b[^>]*\bname="?robots\b[^>]*>', re.I)
+NOINDEX = '<meta name="robots" content="noindex,follow">'
+
+
+def page_url(rel: Path) -> str:
+    """The URL path of a built file under its site root: `a/b/index.html` is `a/b/`, `index.html` is ``."""
+    path = rel.as_posix()
+    return path[: -len("index.html")] if path == "index.html" or path.endswith("/index.html") else path
+
+
+def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str = "dev") -> tuple[int, int]:
+    """Make the root the only copy that search engines index. In the `<head>` of every page of a version folder, its own
+    canonical and robots tags give way to a canonical URL to the same page at the root when the root has that file, else
+    `noindex,follow`; every page of dev (unreleased) is `noindex,follow`. The sitemaps of these folders go. The body is
+    never touched. Returns (pages with a canonical, pages with noindex)."""
+    pointed = hidden = 0
+    for folder in [*versions, dev]:
+        site = out / folder
+        (site / "sitemap.xml").unlink(missing_ok=True)
+        for page in site.rglob("*.html"):
+            text = page.read_text(encoding="utf-8")
+            head, end, body = text.partition("</head>")
+            if not end:
+                continue
+            rel = page.relative_to(site)
+            head = ROBOTS.sub("", CANONICAL.sub("", head))
+            if folder != dev and rel.as_posix() != "404.html" and (out / rel).is_file():
+                tag = '<link rel="canonical" href="%s%s">' % (root_url, page_url(rel))
+                pointed += 1
+            else:
+                tag = NOINDEX
+                hidden += 1
+            page.write_text(head + tag + end + body, encoding="utf-8")
+    return pointed, hidden
+
+
+def use_org_icons(out: Path) -> int:
+    """Give every page whose `<head>` lacks the org icons (a tag from before the docs theme, with its own layouts and
+    icon; at the root too) the org icons in place of its own. Returns the pages changed."""
+    changed = 0
+    for page in out.rglob("*.html"):
+        text = page.read_text(encoding="utf-8")
+        head, end, body = text.partition("</head>")
+        if not end or "https://www.agentica-lang.com/favicon.ico" in head:
+            continue
+        page.write_text(ICON.sub("", head) + ORG_ICONS + end + body, encoding="utf-8")
+        changed += 1
+    return changed
+
+
 def versions_json(built: list[str], dev: bool) -> list[dict]:
     """Newest first, the first release marked `latest`; `dev` last. The selector reads this file from the root."""
     entries = [{"version": v, "path": v + "/"} for v in built]
@@ -163,6 +235,27 @@ def _sass_dir(pinned: dict[str, str], tools: Path) -> Path:
     return folder
 
 
+def _retryable(error: BaseException) -> bool:
+    """Whether a failed request may succeed when repeated: 5xx, 429, a timeout, a dropped connection, a body cut short.
+    Any other 4xx is an answer and a certificate that does not verify is no passing fault."""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500 or error.code == 429
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return False
+    if isinstance(error, urllib.error.URLError) and isinstance(error.reason, ssl.SSLCertVerificationError):
+        return False
+    return isinstance(error, (OSError, http.client.HTTPException))
+
+
+def _fetch(url: str, archive: Path) -> None:
+    """One try at url, into archive, with a timeout on every read; a body shorter than Content-Length is an error."""
+    with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT) as response, archive.open("wb") as out:
+        shutil.copyfileobj(response, out)
+        expected = response.headers.get("Content-Length")
+        if expected is not None and expected.isdigit() and int(expected) != out.tell():
+            raise http.client.IncompleteRead(b"", int(expected) - out.tell())
+
+
 def _download(url: str, sha256: str, folder: Path, strip: int) -> None:
     """Fetch a pinned archive, check its checksum and unpack it into folder (dropping `strip` leading path levels)."""
     if sys.platform != "linux" or os.uname().machine not in ("x86_64", "AMD64"):
@@ -170,14 +263,14 @@ def _download(url: str, sha256: str, folder: Path, strip: int) -> None:
     folder.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=folder.parent) as scratch:
         archive = Path(scratch) / "tool.tar.gz"
-        for attempt in range(5):
+        for attempt, delay in enumerate(DOWNLOAD_BACKOFF + (None,)):
             try:
-                urllib.request.urlretrieve(url, archive)
+                _fetch(url, archive)
                 break
-            except OSError:
-                if attempt == 4:
+            except (OSError, http.client.HTTPException) as error:
+                if delay is None or not _retryable(error):
                     raise
-                time.sleep(5)
+                time.sleep(delay)
         if hashlib.sha256(archive.read_bytes()).hexdigest() != sha256:
             raise BuildError("checksum mismatch for " + url)
         unpacked = Path(scratch) / "unpacked"
@@ -216,9 +309,28 @@ def sha_of(ref: str) -> str:
     return run(["git", "-C", str(ROOT), "rev-parse", ref + "^{commit}"], capture_output=True).stdout.strip()
 
 
+def current_theme() -> str | None:
+    """The docs theme commit that the current checkout pins, or None when it has no theme."""
+    entry = run(["git", "-C", str(ROOT), "ls-tree", "HEAD", THEME], capture_output=True).stdout.split()
+    return entry[2] if entry and entry[1] == "commit" else None
+
+
+def uses_theme(ref: str) -> bool:
+    """Whether a commit pins the docs theme: it is then built with the current theme and pins (current_theme)."""
+    return bool(run(["git", "-C", str(ROOT), "ls-tree", ref, THEME], capture_output=True).stdout.strip())
+
+
+def current_workflow() -> str:
+    return (ROOT / ".github" / "workflows" / "pages.yml").read_text()
+
+
 def cache_key(ref: str, base_url: str) -> str:
-    """The cache folder name of a commit built for a base URL."""
-    return "%s-%s" % (sha_of(ref), hashlib.sha256(with_slash(base_url).encode()).hexdigest()[:8])
+    """The cache folder name of a commit built for a base URL, and, for a tag that uses the docs theme, with the current
+    theme commit and Hugo and Dart Sass pins, which change its output too."""
+    inputs = with_slash(base_url)
+    if uses_theme(ref):
+        inputs += "\n%s\n%s" % (current_theme(), sorted(pins(current_workflow()).items()))
+    return "%s-%s" % (sha_of(ref), hashlib.sha256(inputs.encode()).hexdigest()[:8])
 
 
 def prune(cache: Path, keep: set[str]) -> None:
@@ -245,20 +357,43 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
         return done, True
     with tempfile.TemporaryDirectory(prefix="bond-site-") as scratch:
         tree = Path(scratch) / "tree"
-        tree.mkdir()
-        archive = subprocess.Popen(["git", "-C", str(ROOT), "archive", "--format=tar", sha], stdout=subprocess.PIPE)
+        added = subprocess.run(["git", "-C", str(ROOT), "worktree", "add", "-q", "--detach", str(tree), sha],
+                               capture_output=True, text=True)
+        if added.returncode:
+            raise BuildError("git worktree add failed (%s)" % " | ".join(added.stderr.strip().splitlines()[-3:])[:400])
         try:
-            with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
-                tar.extractall(tree, filter="data")
+            themed = uses_theme(sha)
+            if themed:
+                unpack_theme(current_theme(), tree)
+            public = _build_tree(tree, base_url, tools, logs / (label + ".log"), current_workflow() if themed else None)
+            _store(public, cache, key)
         finally:
-            # Close the pipe before waiting: git then stops at once if the extraction failed halfway.
-            archive.stdout.close()
-            status = archive.wait()
-        if status != 0:
-            raise BuildError("git archive failed")
-        public = _build_tree(tree, base_url, tools, logs / (label + ".log"))
-        _store(public, cache, key)
+            subprocess.run(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(tree)], capture_output=True)
     return done, False
+
+
+def unpack_theme(commit: str | None, tree: Path) -> None:
+    """Unpack a docs theme commit into the tree's theme folder (a submodule, empty in the tag's worktree). The commit
+    comes from the theme checkout, fetched when it is not there yet."""
+    if not commit:
+        raise BuildError("the current checkout pins no docs theme (%s)" % THEME)
+    checkout = ROOT / THEME
+    if not (checkout / ".git").exists():
+        raise BuildError("the docs theme is not checked out: git submodule update --init " + THEME)
+    if subprocess.run(["git", "-C", str(checkout), "cat-file", "-e", commit + "^{commit}"], capture_output=True).returncode:
+        fetched = subprocess.run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit],
+                                 capture_output=True, text=True)
+        if fetched.returncode:
+            raise BuildError("git fetch of theme %s failed (%s)" % (commit[:12], fetched.stderr.strip()[-300:]))
+    archive = subprocess.Popen(["git", "-C", str(checkout), "archive", "--format=tar", commit], stdout=subprocess.PIPE)
+    try:
+        with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+            tar.extractall(tree / THEME, filter="data")
+    finally:
+        # Close the pipe before waiting, also when the extraction failed halfway: git then stops at once.
+        archive.stdout.close()
+    if archive.wait() != 0:
+        raise BuildError("git archive of the docs theme failed")
 
 
 def build_tag(tag: str, base_url: str, cache: Path, tools: Path, logs: Path, label: str = "") -> tuple[Path, bool]:
@@ -284,11 +419,12 @@ def write_summary(built: dict, skipped: dict, failed: dict) -> None:
             out.write("\n".join(lines))
 
 
-def _build_tree(tree: Path, base_url: str, tools: Path, log: Path) -> Path:
-    workflow = tree / ".github" / "workflows" / "pages.yml"
-    if not (tree / "site" / "hugo.toml").exists() or not workflow.exists():
+def _build_tree(tree: Path, base_url: str, tools: Path, log: Path, workflow: str | None = None) -> Path:
+    """`make site` of a tree, with the Hugo and Dart Sass of `workflow` (a pages.yml), else of the tree's own."""
+    own = tree / ".github" / "workflows" / "pages.yml"
+    if not (tree / "site" / "hugo.toml").exists() or not own.exists():
         raise NoSite("the tree has no site (site/hugo.toml, pages.yml)")
-    return make_site(tree, base_url, tool_env(workflow.read_text(), tools), log)
+    return make_site(tree, base_url, tool_env(workflow or own.read_text(), tools), log)
 
 
 def _store(public: Path, cache: Path, key: str) -> None:
@@ -318,6 +454,7 @@ def build(args: argparse.Namespace) -> int:
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
 
+    run(["git", "-C", str(ROOT), "worktree", "prune"])  # the worktrees of a run that was killed
     built: dict[str, Path] = {}
     skipped: dict[str, str] = {}
     failed: dict[str, str] = {}
@@ -377,12 +514,16 @@ def build(args: argparse.Namespace) -> int:
     for name in SELECTOR_FILES:
         shutil.copy(ROOT / "site" / "versions" / name, selector / name)
     (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
+    pointed, hidden = point_copies_at_root(out, root_url, list(built))
+    icons = use_org_icons(out)
     pages = inject_selector(out, root_path)
 
     seconds = time.monotonic() - started
     print("\nversions: %s, dev" % ", ".join(built))
     print("left out: " + (", ".join("%s (%s)" % kv for kv in skipped.items()) or "none"))
     write_summary(built, skipped, failed)
+    print("version and dev pages: %d with a canonical URL at the root, %d noindex" % (pointed, hidden))
+    print("pages given the org icons: %d" % icons)
     print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, len(built) - len([f for f in fresh if f != "root"]), len(built)))
     print("time: %.1f s; size: %.1f MB (%s)" % (seconds, folder_size(out) / 1e6, out))
     return 0

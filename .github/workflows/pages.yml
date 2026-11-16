@@ -36,16 +36,18 @@ jobs:
       DART_SASS_VERSION: 1.105.1
       DART_SASS_SHA256: 9046fdd4a31a524a0020298c55d9e155d4c22363ef268e8992574335a72c6a6f
     steps:
-      # Full history and tags: every release is built from its own tree (git archive).
+      # Full history and tags: every release is built from its own tree (a git worktree, whose history dates the pages).
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
+      # The docs theme, with its history, so that tools/site_versions.py can unpack the commit this checkout pins.
+      - run: git submodule update --init site/themes/docs-theme
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: site/highlight/package-lock.json
+          cache-dependency-path: site/themes/docs-theme/highlight/package-lock.json
       - id: pages
         uses: actions/configure-pages@v6
       # The cache holds the output of each tag by commit sha and base URL (a sha never changes, so an entry is never

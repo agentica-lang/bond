@@ -1,37 +1,25 @@
+# The look, the layouts, the outputs and the highlighter come from the docs theme (themes/docs-theme, a submodule);
+# `_merge = "deep"` takes its [markup], [minify] and search output too. This file sets only what is Bond's own.
+_merge = "deep"
 baseURL = "https://www.agentica-lang.com/bond/"
 locale = "en"
 title = "Bond"
+theme = "docs-theme"
 disableKinds = ["taxonomy", "term", "rss"]
+# The sitemap dates each page by its last commit (pages.yml checks out the whole history).
+enableGitInfo = true
+
+[module.hugoVersion]
+  extended = true
+  min = "0.167.0"
 
 [params]
   description = "Bond is a small web framework for Agentica, in the spirit of Sinatra: routes, filters, custom error pages and a test helper that needs no socket."
+  tagline = "a small web framework for Agentica"
   repo = "https://github.com/agentica-lang/bond"
-  narrow = "50rem"
+  repoPublic = true
 
-[markup.highlight]
-  noClasses = false
-
-[markup.tableOfContents]
-  startLevel = 2
-  endLevel = 2
-
-[outputFormats.search]
-  mediaType = "application/json"
-  baseName = "search"
-  isPlainText = true
-  notAlternative = true
-
-[minify]
-  minifyOutput = true
-
-[[module.mounts]]
-  source = "content"
-  target = "content"
-
-[[module.mounts]]
-  source = "assets"
-  target = "assets"
-
+# No llms.txt or llms-full.txt: every page is still published as Markdown for the page actions, and search stays.
 [outputs]
   home = ["html", "markdown", "search"]
   section = ["html", "markdown"]

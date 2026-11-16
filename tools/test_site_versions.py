@@ -142,9 +142,12 @@ class SiteVersionsTest(unittest.TestCase):
             {"version": "dev", "path": "dev/"},
         ])
         # Each build bakes in its own base URL; the root is the latest release under the root URL.
-        self.assertIn("--baseURL https://example.org/docs/0.9.0/ 0.9.0", (out / "0.9.0" / "guide" / "index.html").read_text())
-        self.assertIn("--baseURL https://example.org/docs/ 0.11.0", (out / "guide" / "index.html").read_text())
-        self.assertIn("--baseURL https://example.org/docs/dev/", (out / "dev" / "index.html").read_text())
+        # A Hugo warning fails dev's build only: a released tag's content cannot change.
+        tag = "--baseURL https://example.org/docs/0.9.0/ --panicOnWarning=false 0.9.0"
+        self.assertIn(tag, (out / "0.9.0" / "guide" / "index.html").read_text())
+        root = "--baseURL https://example.org/docs/ --panicOnWarning=false 0.11.0"
+        self.assertIn(root, (out / "guide" / "index.html").read_text())
+        self.assertIn("--baseURL https://example.org/docs/dev/</body>", (out / "dev" / "index.html").read_text())
         self.assertFalse((out / "0.1.0").exists() or (out / "0.10.0-beta.1").exists())
         self.assertIn("`0.1.0`", (self.tmp / "summary.md").read_text())
         self.assertTrue((out / "_versions" / "selector.js").exists() and (out / "_versions" / "selector.css").exists())

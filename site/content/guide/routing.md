@@ -70,6 +70,6 @@ edit guide
 
 ## No route
 
-A path with no route is a 404 with the body `not found`; [Errors](/guide/errors/) shows how to answer it with your own page. A path with a route for other methods only is a 405 with an `Allow` header that lists the methods.
+A path with no route is a 404 with the body `not found`; [Errors](/guide/errors/) shows how to answer it with your own page. A path with a route for other methods only is a 405 with an `Allow` header that lists the methods; when an `after` filter answers that 405 with another status, the `Allow` header is dropped.
 
 `HEAD` uses the route of `GET` (the server drops the body), and `Allow` lists `HEAD` where it lists `GET`. `OPTIONS` is not answered by Bond: it is a 405 unless you add the route.

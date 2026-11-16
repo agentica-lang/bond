@@ -141,6 +141,22 @@ Feature: Server
 
   # The request timeout of the server (two seconds here) cuts the connection: no status is written, and the handler of
   # the route never runs.
+  # The head says that 8 bytes come and none does: a filter that halts, a path with no route and a method with no route
+  # are answered at once, and the connection closes; the request timeout of the server never comes into it.
+  Scenario Outline: A request that is refused before its body is answered without waiting for the body (<case>)
+    Given the server listens on a free port
+    When I send 0 bytes of a body of 8 bytes to "<path>" and wait over a raw socket
+    Then the status is <status>
+    And the header "connection" is "close"
+    When I get "/hello" over the socket
+    Then the body is "hello"
+
+    Examples:
+      | case                | path       | status |
+      | a filter halts      | /private   | 401    |
+      | a path with no route | /nowhere  | 404    |
+      | a method with no route | /hello  | 405    |
+
   Scenario: A client that stalls in the middle of a body gets no answer, and the server goes on
     Given the server with a small body limit listens on a free port
     When I send 4 bytes of a body of 8 bytes to "/todos" and wait over a raw socket

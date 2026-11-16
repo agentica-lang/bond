@@ -87,8 +87,8 @@ end
 ## the request reaches its route, and the folder of the files is removed after.
 def answer(app: App, options: UploadOptions, request: HTTP.Request, body: HTTP.RequestBody) -> HTTP.Answer
   dir = folder(options)
-  answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |_conn|
-    receive(options, dir, request, body)
+  answered = Apps.handle_answer_with(app, request.with(body: "".bytes)) do |conn|
+    formed(conn, receive(options, dir, request, body))
   end
 
   remove(dir)
@@ -108,14 +108,22 @@ def handle(app: App, options: UploadOptions, request: HTTP.Request, max_pieces: 
   done = Task.spawn do arrived() end
   body = HTTP.RequestBody(pieces: pieces, done: done)
   dir = folder(options)
-  response = Apps.handle_with(app, request.with(body: "".bytes), max_pieces, timeout_ms) do |_conn|
-    receive(options, dir, request, body)
+  response = Apps.handle_with(app, request.with(body: "".bytes), max_pieces, timeout_ms) do |conn|
+    formed(conn, receive(options, dir, request, body))
   end
 
   # The body may be left unread (a filter halted, no route); a test must not end with this task running.
   _ = Task.await(done)
   remove(dir)
   response
+end
+
+## The status of a body that the server cut: `http.too_large` has it as its code (413 over the limit, 431 for a chunk
+## line or a trailer section over the head limits); any other (a bad chunk, a client that left or stalled) is a 400.
+def refusal_status(e: Error) -> String
+  return e.code.unwrap!.to_s if e.kind == "http.too_large" and (e.code == some(413) or e.code == some(431))
+
+  BAD
 end
 
 private
@@ -220,13 +228,7 @@ def receive(options: UploadOptions, dir: String, request: HTTP.Request, body: HT
   ok(Form(fields: form.fields, files: form.files))
 end
 
-# The status for a body the server cut: `http.too_large` has it as its code (413 over the limit, 431 for a chunk line
-# or a trailer section over the head limits); any other (a bad chunk, a client that left or stalled) is a 400.
-def refusal_status(e: Error) -> String
-  return e.code.unwrap!.to_s if e.kind == "http.too_large" and (e.code == some(413) or e.code == some(431))
-
-  BAD
-end
+def formed(conn: Conn, read: Result[Form]) -> Result[Conn] = ok(conn.with(form: some(try read)))
 
 # One piece: its bytes count toward the total, then each event of the parser. The error is the status to answer; a
 # part opened by this piece is closed before it is returned.

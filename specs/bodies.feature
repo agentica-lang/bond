@@ -45,6 +45,12 @@ Feature: Request bodies
     And the header "content-type" is "application/octet-stream"
     And the body bytes are "255 254 0 128 10"
 
+  Scenario: A before filter sees no body, and the handler has all of it
+    When I post the bytes "104 105" to "/body-echo" as "application/octet-stream"
+    Then the status is 200
+    And the header "x-body-in-filter" is "0"
+    And the body is "hi"
+
   Scenario: A JSON body that is not UTF-8 is a 400 with the same message
     When I post the bytes "123 34 255 34 125" to "/users" as "application/json"
     Then the status is 400

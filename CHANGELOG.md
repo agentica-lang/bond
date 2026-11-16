@@ -4,6 +4,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-16
+
+### Changed
+
+- **Breaking:** the `before` filters and the route lookup run on the head of the request, and Bond reads the body only when the request goes on to its handler, as it already did for `Bond.uploads`. A request that a filter halts, or that has no route, is answered without its body: a client that declared a body and never sends it gets its 401, 404 or 405 at once, and the body of a refused request is never read. A `before` filter sees an empty `conn.body`, and so do the `not_found` and `on_error` handlers of a 404 or a 405 (they run before the body is read): checks that need the body go in the handler. `Testing.request` does the same.
+- A 405 that an `after` filter answers with another status no longer carries Bond's `Allow` header.
+
+## [0.13.1] - 2026-11-16
+
 ### Changed
 
 - Works with Agentica 0.33.0; CI runs it.
@@ -231,7 +240,9 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.13.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/agentica-lang/bond/compare/0.13.1...0.14.0
+[0.13.1]: https://github.com/agentica-lang/bond/compare/0.13.0...0.13.1
 [0.13.0]: https://github.com/agentica-lang/bond/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/agentica-lang/bond/compare/0.12.0-alpha.1...0.12.0
 [0.12.0-alpha.1]: https://github.com/agentica-lang/bond/compare/0.11.0...0.12.0-alpha.1

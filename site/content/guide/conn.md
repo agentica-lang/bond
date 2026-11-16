@@ -6,7 +6,7 @@ description: The Conn struct and the helpers that build an answer.
 
 # Conn and helpers
 
-`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase), `body` (the `Bytes` that the client sent) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`. `assigns` holds the values that a filter keeps for the handler (see [Assigns](#assigns)).
+`Bond.Conn` is an immutable struct. It holds the request: `method`, `path`, `query` (the raw text after `?`), `params`, `headers` (names in lowercase), `body` (the `Bytes` that the client sent; empty in a `before` filter, which runs before Bond reads the body) and `remote_addr` (the IP address of the client, see [Client address](#client-address)). It also holds the answer being built: `status` (200 at first), `response_headers`, `response_body` (`Bytes` too), `response_stream` (see [Streaming](/guide/streaming/)) and `halted`. `assigns` holds the values that a filter keeps for the handler (see [Assigns](#assigns)).
 
 Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 200, "hello"))` and a helper can wrap another.
 

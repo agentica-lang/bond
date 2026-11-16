@@ -388,7 +388,7 @@ def zipped_of(plain: Files.Rep, twin: File.Info) -> Files.Rep
   plain.with(
     etag: tag,
     modified: twin.modified_seconds,
-    last_modified: Dates.format(twin.modified_seconds),
+    last_modified: Dates.http_date(twin.modified_seconds),
     size: twin.size_bytes,
     encoding: "gzip",
   )

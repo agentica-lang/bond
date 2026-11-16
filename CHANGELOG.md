@@ -4,12 +4,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-16
+
+Needs Agentica 0.31.0 or later; works with Agentica 0.32.0.
+
 ### Changed
 
 - **Behavior change:** `conn.path` (and the `target` of a WebSocket upgrade) is the canonical path: no empty segments (`/session/` is `/session`), every escape decoded (`/a/%73` is `/a/s`, `/caf%C3%A9` is `/café`, and a param is the decoded text) except those of `/`, `\`, `%`, `:` and control characters, which stay escaped in capitals. A filter that compares it sees the path that the router and `Bond.static` read.
 
 ### Fixed
 
+- Bond checks with Agentica 0.32.0: the date writer of `Last-Modified` no longer takes the name of the new builtin `format` (`CHECK-REDEFINED-NAME`). CI tests with Agentica 0.32.0.
 - `conn.path` has no empty segments (`/session/` and `//session` are `/session`), so a filter that tests the path sees the route that the router reaches; a filter on a file of `Bond.static` is no longer skipped by an escaped spelling such as `/assets/%73ecret.txt`.
 
 ## [0.12.0] - 2026-11-13
@@ -222,7 +227,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.12.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.13.0...HEAD
+[0.13.0]: https://github.com/agentica-lang/bond/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/agentica-lang/bond/compare/0.12.0-alpha.1...0.12.0
 [0.12.0-alpha.1]: https://github.com/agentica-lang/bond/compare/0.11.0...0.12.0-alpha.1
 [0.11.0]: https://github.com/agentica-lang/bond/compare/0.10.1...0.11.0

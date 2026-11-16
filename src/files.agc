@@ -102,7 +102,7 @@ def describe(type_name: String, attachment: Optional[String], info: File.Info, c
     type: label,
     etag: etag_of(info),
     modified: info.modified_seconds,
-    last_modified: Dates.format(info.modified_seconds),
+    last_modified: Dates.http_date(info.modified_seconds),
     size: info.size_bytes,
     cache_control: cache,
     attachment: attachment,

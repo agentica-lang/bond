@@ -5,15 +5,15 @@ private
 def main() -> Void
   Test.run([
     Test.test("a date is written in the form of RFC 9110") do
-      try Test.eq(Dates.format(784_111_777), "Sun, 06 Nov 1994 08:49:37 GMT")
-      try Test.eq(Dates.format(0), "Thu, 01 Jan 1970 00:00:00 GMT")
-      try Test.eq(Dates.format(1_700_000_000), "Tue, 14 Nov 2023 22:13:20 GMT")
-      try Test.eq(Dates.format(951_782_400), "Tue, 29 Feb 2000 00:00:00 GMT")
-      Test.eq(Dates.format(-5), "Thu, 01 Jan 1970 00:00:00 GMT")
+      try Test.eq(Dates.http_date(784_111_777), "Sun, 06 Nov 1994 08:49:37 GMT")
+      try Test.eq(Dates.http_date(0), "Thu, 01 Jan 1970 00:00:00 GMT")
+      try Test.eq(Dates.http_date(1_700_000_000), "Tue, 14 Nov 2023 22:13:20 GMT")
+      try Test.eq(Dates.http_date(951_782_400), "Tue, 29 Feb 2000 00:00:00 GMT")
+      Test.eq(Dates.http_date(-5), "Thu, 01 Jan 1970 00:00:00 GMT")
     end,
-    Test.test("what format writes, parse reads back") do
+    Test.test("what http_date writes, parse reads back") do
       for seconds in [0, 59, 86_399, 951_782_400, 1_700_000_000, 4_102_444_799, 4_107_542_400]
-        try Test.eq(Dates.parse(Dates.format(seconds)), some(seconds))
+        try Test.eq(Dates.parse(Dates.http_date(seconds)), some(seconds))
       end
 
       Test.eq(Dates.parse("  Sun, 06 Nov 1994 08:49:37 GMT "), some(784_111_777))

@@ -193,8 +193,13 @@ class SiteVersionsTest(unittest.TestCase):
             head = (out / "dev" / page).read_text().split("</head>")[0]
             self.assertEqual(head.count(noindex), 1)
             self.assertNotIn("canonical", head.lower())
-        # The root keeps its own tags and its sitemap.
+        # The root keeps its own tags and its sitemap. Built from a tag from before the theme, a root page with no
+        # canonical URL gets its own (the 404 page none), and nothing else changes.
         self.assertIn("content=all", (out / "only-0.11.0" / "index.html").read_text())
+        self.assertNotIn("example.org", (out / "only-0.11.0" / "index.html").read_text())
+        self.assertEqual((out / "guide" / "index.html").read_text().count(canonical), 1)
+        self.assertIn('<link rel="canonical" href="https://example.org/docs/">', (out / "index.html").read_text())
+        self.assertNotIn("canonical", (out / "404.html").read_text())
         self.assertTrue((out / "sitemap.xml").exists())
         # Each tag ran make in a git checkout (Hugo's enableGitInfo needs one), and no worktree is left behind.
         self.assertEqual((out / "0.10.0" / "git.txt").read_text().strip(), "true")
@@ -238,6 +243,7 @@ class SiteVersionsTest(unittest.TestCase):
             self.assertIn("theme two", (out / "0.13.0" / "index.html").read_text())
             self.assertIn("0.13.0", (out / "0.13.0" / "guide" / "index.html").read_text())
             self.assertIn("theme two", (out / "index.html").read_text())
+            self.assertNotIn("canonical", (out / "index.html").read_text())  # a themed root has its own tags
             self.assertIn("theme two", (out / "dev" / "index.html").read_text())
             # A tag from before the theme keeps its own Hugo pins; one with the theme takes the current ones.
             self.assertEqual((used.count("2.0.0"), used.count("1.0.0")), (3, 3))

@@ -7,7 +7,8 @@ The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `
 `dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/). Only
 the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the root when the
 root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their sitemaps are removed. A page
-built without the docs theme (an older tag, at its folder or at the root) gets the org icons in place of its own.
+built without the docs theme (an older tag, at its folder or at the root) gets the org icons in place of its own, and
+a root page built so gets its own canonical URL when it has none.
 
 Each tag is built from its own tree, a detached git worktree (so Hugo's enableGitInfo dates its pages), with `make
 site`. A tag that uses the docs theme (it pins the submodule) is built with the theme commit and the Hugo and Dart Sass
@@ -161,6 +162,24 @@ def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str
                 hidden += 1
             page.write_text(head + tag + end + body, encoding="utf-8")
     return pointed, hidden
+
+
+def canonical_at_root(out: Path, root_url: str, folders: list[str]) -> int:
+    """Give every root page (outside `folders`, the version, dev and selector folders) with no canonical URL its own,
+    and change nothing else: a root built from a tag from before the docs theme has none. Returns the pages changed."""
+    changed = 0
+    for page in out.rglob("*.html"):
+        rel = page.relative_to(out)
+        if rel.parts[0] in folders or rel.as_posix() == "404.html":
+            continue
+        text = page.read_text(encoding="utf-8")
+        head, end, body = text.partition("</head>")
+        if not end or CANONICAL.search(head):
+            continue
+        tag = '<link rel="canonical" href="%s%s">' % (root_url, page_url(rel))
+        page.write_text(head + tag + end + body, encoding="utf-8")
+        changed += 1
+    return changed
 
 
 def use_org_icons(out: Path) -> int:
@@ -516,6 +535,7 @@ def build(args: argparse.Namespace) -> int:
     (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
     pointed, hidden = point_copies_at_root(out, root_url, list(built))
     icons = use_org_icons(out)
+    canonical = 0 if uses_theme(latest) else canonical_at_root(out, root_url, [*built, "dev", "_versions"])
     pages = inject_selector(out, root_path)
 
     seconds = time.monotonic() - started
@@ -524,6 +544,7 @@ def build(args: argparse.Namespace) -> int:
     write_summary(built, skipped, failed)
     print("version and dev pages: %d with a canonical URL at the root, %d noindex" % (pointed, hidden))
     print("pages given the org icons: %d" % icons)
+    print("root pages given their own canonical URL: %d" % canonical)
     print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, len(built) - len([f for f in fresh if f != "root"]), len(built)))
     print("time: %.1f s; size: %.1f MB (%s)" % (seconds, folder_size(out) / 1e6, out))
     return 0

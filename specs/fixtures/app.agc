@@ -147,6 +147,7 @@ def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.get("/todos/latest", &latest)
     |> Bond.get("/todos/:id", on_get_todos_id)
     |> Bond.get("/private", &private_page)
+    |> Bond.get("/api/private", &private_page)
     |> Bond.get("/boom", &boom)
     |> Bond.get("/crash", &crash)
     |> Bond.get("/not-modified", &not_modified)
@@ -290,11 +291,13 @@ def redirect_legacy(conn: Bond.Conn) -> Result[Bond.Conn]
 end
 
 def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
-  if (
-    (conn.path == "/private" or FILTERED.include?(conn.path)) and
-    Bond.request_header(conn, "X-Token").unwrap_or("") != TOKEN
-  )
+  token = Bond.request_header(conn, "X-Token").unwrap_or("")
+  if (conn.path == "/private" or FILTERED.include?(conn.path)) and token != TOKEN
     return ok(Bond.halt(conn, 401, "unauthorized"))
+  end
+
+  if conn.path == "/api/private" and token != TOKEN
+    return ok(Bond.halt_json(conn, 401, JSON.from({"error": "unauthorized"})))
   end
 
   ok(conn)

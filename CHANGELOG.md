@@ -4,9 +4,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `Bond.halt_json(conn, status, value)` answers JSON and halts, as `Bond.halt` does for plain text.
+
 ### Changed
 
 - The docs moved to https://www.agentica-lang.com/bond/; the old agentica-lang.github.io links redirect there.
+
+### Fixed
+
+- The install docs: after a hand edit of the dependencies, `agentica update` writes `agentica.lock` and `deps/`; `agentica install` only restores `deps/` from an existing lock.
 
 ## [0.14.0] - 2026-11-16
 

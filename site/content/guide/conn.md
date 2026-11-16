@@ -21,6 +21,7 @@ Every helper returns a new `Conn`, so a handler ends with `ok(Bond.text(conn, 20
 | `Bond.status(conn, code)` | sets the status and nothing else |
 | `Bond.redirect(conn, location)` | answers a 302 (or the status of a third argument) with `Location` and halts; see [Redirects](#redirects) |
 | `Bond.halt(conn, status, text)` | answers plain text and stops the filters and the handler that come after |
+| `Bond.halt_json(conn, status, value)` | answers a `JSON.Value` as JSON, like `json`, and stops the filters and the handler that come after, like `halt` |
 | `Bond.header(conn, name, value)` | sets a response header |
 | `Bond.body_text(conn)` | the body of the request as text, as a `Result[String]`, in the `charset` of the request (UTF-8 when it has none; UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252 too); a `charset` or a body that does not decode is a 400 |
 | `Bond.request_header(conn, name)` | the first value of a request header, as a `Result[String]` |

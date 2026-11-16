@@ -43,10 +43,10 @@ private
 
 # The `before` filters and the route lookup run on the head alone; the body is read whole only for a request that goes
 # on to its handler, as the app of Bond takes the request whole (`Conn` has the body as bytes). A request that a filter
-# halts, or that has no route, is answered without its body, and the connection closes after the answer. A body that is
-# over `limit`, or that did not arrive whole, is a 413, 431 or 400 that closes the connection, and the handler is not
-# called. The answer is the upgrade of a WebSocket route, or a stream: a body sent in pieces is sent as it is, and any
-# other is one closed piece with `Content-Length`.
+# halts, or that has no route, is answered without its body, and the connection closes after the answer when the body
+# has not arrived. A body that is over `limit`, or that did not arrive whole, is a 413, 431 or 400 that closes the
+# connection, and the handler is not called. The answer is the upgrade of a WebSocket route, or a stream: a body sent
+# in pieces is sent as it is, and any other is one closed piece with `Content-Length`.
 #
 # A `multipart/form-data` body of an app with uploads is read as it arrives instead (`Uploads.answer`).
 def answer(app: App, limit: Int, request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]

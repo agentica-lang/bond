@@ -106,4 +106,4 @@ hello nobody
 _bond_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT
 ```
 
-`sessions` adds a `before` and an `after` filter (see [Filters](../filters/)), so call it before the filters that read the session. Without it, `set_session` changes the `Conn` and nothing is sent.
+`sessions` adds a `before` and an `after` filter (see [Filters](filters.md)), so call it before the filters that read the session. Without it, `set_session` changes the `Conn` and nothing is sent.

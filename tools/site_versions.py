@@ -381,12 +381,17 @@ def unpack_theme(commit: str | None, tree: Path) -> None:
     if not (checkout / ".git").exists():
         raise BuildError("the docs theme is not checked out: git submodule update --init " + THEME)
     if subprocess.run(["git", "-C", str(checkout), "cat-file", "-e", commit + "^{commit}"], capture_output=True).returncode:
-        run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit])
+        fetched = subprocess.run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit],
+                                 capture_output=True, text=True)
+        if fetched.returncode:
+            raise BuildError("git fetch of theme %s failed (%s)" % (commit[:12], fetched.stderr.strip()[-300:]))
     archive = subprocess.Popen(["git", "-C", str(checkout), "archive", "--format=tar", commit], stdout=subprocess.PIPE)
-    with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
-        tar.extractall(tree / THEME, filter="data")
-    # Close the pipe before waiting: git then stops at once if the extraction failed halfway.
-    archive.stdout.close()
+    try:
+        with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+            tar.extractall(tree / THEME, filter="data")
+    finally:
+        # Close the pipe before waiting, also when the extraction failed halfway: git then stops at once.
+        archive.stdout.close()
     if archive.wait() != 0:
         raise BuildError("git archive of the docs theme failed")
 

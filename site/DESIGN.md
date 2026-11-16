@@ -18,8 +18,12 @@ code is right: fix this file in the same change.
   - no `llms.txt` or `llms-full.txt` output (`[outputs]` of `site/hugo.toml`).
     Every page is still published as Markdown for the page actions, and
     search stays.
-- Footer: `site/layouts/_partials/footer.html` links the repository, the
-  changelog and the Agentica site. It is the only layout of the site's own.
+- Footer: `site/layouts/_partials/footer.html` is the theme's (all releases,
+  page source, the repository) plus the changelog and the Agentica site. It is
+  the only layout of the site's own.
+- Links between pages name the `.md` file (`[Filters](filters.md)`): with
+  `repoPublic`, a relative link that Hugo cannot resolve becomes a link to the
+  source on GitHub, and `make site` fails on one.
 - Samples: every `agentica` block of `site/content/` is a whole program, run
   through `agentica check` by `tools/check-site-samples.sh` (`make
   site-samples`), and run when an `output` block follows it. The blocks take

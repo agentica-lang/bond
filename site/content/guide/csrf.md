@@ -65,4 +65,4 @@ end
 
 The last line is a request with no `Origin` and no `Sec-Fetch-Site`, as `curl` sends it. In a test, send the headers yourself, as above, to see how a browser is treated.
 
-This check does not replace `SameSite=Lax` on the session cookie (which [Sessions](../sessions/) sets by default); use both.
+This check does not replace `SameSite=Lax` on the session cookie (which [Sessions](sessions.md) sets by default); use both.

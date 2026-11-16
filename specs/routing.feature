@@ -116,6 +116,12 @@ Feature: Routing
     Then the status is 405
     And the header "allow" is "GET, HEAD"
 
+  Scenario: A 405 that an after filter answers with another status loses its Allow header
+    When I send "POST" to "/wrong-method-is-404"
+    Then the status is 404
+    And the body is "no such page"
+    And the header "allow" is not set
+
   Scenario Outline: A route that cannot be told from another stops the program when the app is built (<program>)
     Given the Agentica program "fixtures/<program>.agc"
     Then the program exits with code 1 within 5000 milliseconds

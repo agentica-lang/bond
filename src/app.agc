@@ -144,7 +144,8 @@ def static(
   app.with(statics: app.statics.push(mount))
 end
 
-## Adds a filter that runs before the route. A filter that halts, or gives an error, skips the filters and the
+## Adds a filter that runs before the route, on the head of the request: `conn.body` is empty there, as Bond reads the
+## body only when the request goes on to its handler. A filter that halts, or gives an error, skips the filters and the
 ## handler that come after it.
 def before(app: App, filter: Handler) -> App = app.with(before_filters: app.before_filters.push(filter))
 
@@ -201,8 +202,8 @@ end
 
 # The `Conn` that answers the request, before it is turned into a response.
 def answer(app: App, request: HTTP.Request, receive: Optional[Receiver]) -> Conn
-  conn = Conns.from_request(request)
-  task = Task.spawn do serve(app, conn, receive) end
+  conn = Conns.from_request(request.with(body: "".bytes))
+  task = Task.spawn do serve(app, conn, reader(request, receive)) end
   case Task.await(task)
     ok(done) -> done
     error(e) ->
@@ -229,17 +230,34 @@ def route(app: App, method: String, pattern: String, handler: Handler) -> App
   app.with(routes: added.unwrap!)
 end
 
-def serve(app: App, conn: Conn, receive: Optional[Receiver]) -> Result[Conn]
+# What reads the body once the request has its route: `receive` (the server reads the socket, `Bond.uploads` the form),
+# or none, for a request that already holds its body (`Testing`).
+def reader(request: HTTP.Request, receive: Optional[Receiver]) -> Receiver
+  case receive
+    some(read) -> read
+    none -> ->(conn: Conn) { ok(conn.with(body: request.body)) }
+  end
+end
+
+def serve(app: App, conn: Conn, receive: Receiver) -> Result[Conn]
   filtered = app.before_filters.reduce(conn) do |acc, filter| apply(app, acc, filter) end
   routed = dispatch(app, filtered, receive)
-  ok(app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end)
+  done = app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end
+  ok(unlisted(routed, done))
+end
+
+# A 405 that an `after` filter answers with another status has no use for the `Allow` header that listed the methods.
+def unlisted(routed: Conn, done: Conn) -> Conn
+  return done if routed.status != 405 or done.status == 405
+
+  done.with(response_headers: done.response_headers.select do |field| field.name.downcase != "allow" end)
 end
 
 # The node of the tree that holds the path (a literal segment before a param), then its handler for the method: a 405
 # when the node has routes for other methods only, a 404 when no node has the path. HEAD uses the route of GET (the
 # server drops the body). Paths are compared as written, without decoding. The body of `receive` is read only for a
 # request that has its handler, just before it runs.
-def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
+def dispatch(app: App, conn: Conn, receive: Receiver) -> Conn
   return conn if conn.halted
 
   found = Router.find(app.routes, conn.path)
@@ -261,14 +279,9 @@ def dispatch(app: App, conn: Conn, receive: Optional[Receiver]) -> Conn
   end
 
   routed = conn.with(params: hit.params)
-  case receive
-    some(read) ->
-      case read.call(routed)
-        ok(form) -> apply(app, routed.with(form: some(form)), hit.node.handlers[wanted])
-        error(e) -> refused(routed, e.message.to_i!)
-      end
-
-    none -> apply(app, routed, hit.node.handlers[wanted])
+  case receive.call(routed)
+    ok(read) -> apply(app, read, hit.node.handlers[wanted])
+    error(e) -> refused(routed, e.message.to_i!)
   end
 end
 

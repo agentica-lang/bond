@@ -121,10 +121,12 @@ def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.before(&track_visit)
     |> Bond.before(&redirect_legacy)
     |> Bond.before(&require_token)
+    |> Bond.before(&note_body)
     |> Bond.before(&trace_a)
     |> Bond.before(&trace_b)
     |> Bond.after(&trace_c)
     |> Bond.after(&sign)
+    |> Bond.after(&hide_wrong_method)
     |> Bond.get("/hello", &hello)
     |> Bond.get("/client", &client_address)
     |> Bond.get("/greet", &greet)
@@ -192,6 +194,7 @@ def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.post("/signup", &signup)
     |> Bond.post("/body-text", &body_text)
     |> Bond.post("/body-echo", &body_echo)
+    |> Bond.get("/wrong-method-is-404", &hello)
     |> Bond.post("/tags", &tags)
     |> Bond.post("/users", &create_user)
     |> Bond.post("/accounts", &create_account)
@@ -293,6 +296,20 @@ def require_token(conn: Bond.Conn) -> Result[Bond.Conn]
   )
     return ok(Bond.halt(conn, 401, "unauthorized"))
   end
+
+  ok(conn)
+end
+
+# A before filter sees the head of the request only: the size of its body there is 0, whatever the client sent.
+def note_body(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.header(conn, "x-body-in-filter", conn.body.size.to_s)) if conn.path == "/body-echo"
+
+  ok(conn)
+end
+
+# An after filter that answers a 405 of one path with a 404.
+def hide_wrong_method(conn: Bond.Conn) -> Result[Bond.Conn]
+  return ok(Bond.text(conn, 404, "no such page")) if conn.path == "/wrong-method-is-404" and conn.status == 405
 
   ok(conn)
 end

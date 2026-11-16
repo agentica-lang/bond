@@ -23,9 +23,9 @@ type Handler = Fn[Conn, Result[Conn]]
 
 type ErrorHandler = Fn[Conn, String, Result[Conn]]
 
-## Reads the `multipart/form-data` body of a request that passed the `before` filters and found its route
-## (`Bond.uploads`). Its error is the status of the refusal, such as "413" or "400".
-type Receiver = Fn[Conn, Result[Form]]
+## Reads the body of a request that passed the `before` filters and found its route, and gives the conn that holds it:
+## `body`, or `form` for `Bond.uploads`. Its error is the status of the refusal, such as "413" or "400".
+type Receiver = Fn[Conn, Result[Conn]]
 
 ## `query` is the raw text after `?`. `params` are the `:name` segments of the route that matched. Request header
 ## names are in lowercase. `body` is the request body as the client sent it, `Bytes` of any content (`body_text` reads

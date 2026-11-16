@@ -4,6 +4,7 @@ import HTTP from "std/http"
 import Apps from "app"
 import Uploads from "uploads"
 import {App} from "app"
+import {Conn} from "conn"
 
 ## Serves `app` in the background and returns at once. The server belongs to the task that calls this, so call it
 ## from the task that keeps it, such as `main`. Port 0 picks a free port (`local_port`). It uses the default
@@ -40,11 +41,12 @@ end
 
 private
 
-# The body is read whole before the app runs, as the app of Bond takes the request whole (`Conn` has the body as
-# bytes). A body that is over `limit`, or that did not arrive whole, is answered by `HTTP.body_refusal` (413, 431 or
-# 400, and the connection closes) and the app is not called. The answer is the upgrade of a WebSocket route, or a
-# stream: a body sent in pieces is sent as it is, and any other is one closed piece with `Content-Length`. The body is
-# read whole first, so the server accepts an upgrade (it refuses one before the body of the request was read).
+# The `before` filters and the route lookup run on the head alone; the body is read whole only for a request that goes
+# on to its handler, as the app of Bond takes the request whole (`Conn` has the body as bytes). A request that a filter
+# halts, or that has no route, is answered without its body, and the connection closes after the answer. A body that is
+# over `limit`, or that did not arrive whole, is a 413, 431 or 400 that closes the connection, and the handler is not
+# called. The answer is the upgrade of a WebSocket route, or a stream: a body sent in pieces is sent as it is, and any
+# other is one closed piece with `Content-Length`.
 #
 # A `multipart/form-data` body of an app with uploads is read as it arrives instead (`Uploads.answer`).
 def answer(app: App, limit: Int, request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
@@ -53,9 +55,13 @@ def answer(app: App, limit: Int, request: HTTP.Request, body: HTTP.RequestBody) 
     none -> nil
   end
 
+  ok(Apps.handle_answer_with(app, request.with(body: "".bytes)) do |conn| read(conn, limit, body) end)
+end
+
+def read(conn: Conn, limit: Int, body: HTTP.RequestBody) -> Result[Conn]
   case HTTP.read_all(body, limit)
-    ok(data) -> ok(Apps.handle_answer(app, request.with(body: data)))
-    error(e) -> ok(HTTP.body_refusal(e.message))
+    ok(data) -> ok(conn.with(body: data))
+    error(e) -> error(Uploads.refusal_status(e))
   end
 end
 

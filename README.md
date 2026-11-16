@@ -2,7 +2,7 @@
 
 A small web framework for [Agentica](https://github.com/agentica-lang/agentica), in the spirit of Sinatra: a router, filters, JSON and form bodies, cookies, signed sessions, static files, streaming, WebSockets, uploads, views and an in-process test helper.
 
-Documentation: https://agentica-lang.github.io/bond/
+Documentation: https://www.agentica-lang.com/bond/
 
 ## Install
 

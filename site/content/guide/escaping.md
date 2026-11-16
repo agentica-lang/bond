@@ -41,7 +41,7 @@ end
 
 ## Templates
 
-An EAG template (`<<~EAG`, [its page](https://agentica-lang.github.io/agentica/library/text-and-data/eag/)) writes the page as text with tags, and its `<%= value %>` inserts the value as it is. A first line `<%@ escape &Bond.escape %>` gives the template an escaper: every `<%= %>` is then escaped, in the text and in a quoted attribute, so a handler cannot forget one. `<%== value %>` is the raw form, for markup that you wrote yourself (there is no `Bond.raw`): never put a value of the client in it. The file needs `import EAG from "std/eag"`.
+An EAG template (`<<~EAG`, [its page](https://www.agentica-lang.com/agentica/library/text-and-data/eag/)) writes the page as text with tags, and its `<%= value %>` inserts the value as it is. A first line `<%@ escape &Bond.escape %>` gives the template an escaper: every `<%= %>` is then escaped, in the text and in a quoted attribute, so a handler cannot forget one. `<%== value %>` is the raw form, for markup that you wrote yourself (there is no `Bond.raw`): never put a value of the client in it. The file needs `import EAG from "std/eag"`.
 
 ```agentica
 import EAG from "std/eag"

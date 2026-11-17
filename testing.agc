@@ -109,12 +109,11 @@ def send(
     none -> path = target
   end
 
-  lowered = headers.map do |header| HTTP.Header(name: header.name.downcase, value: header.value) end
   request = HTTP.Request(
     method: method,
     target: target,
     path: path,
-    headers: lowered,
+    headers: headers,
     body: body,
     remote_addr: remote_addr,
   )

@@ -17,6 +17,9 @@ MIN_PIECE_BYTES = 4_096
 
 MAX_PIECE_BYTES = 16_777_216
 
+## What `describe` adds to the `Content-Type` of a text type.
+TEXT_CHARSET = "; charset=utf-8"
+
 ## The longest `max_age` that a cache is told to keep a file, one year in seconds (RFC 9111 section 1.2.2).
 MAX_AGE_SECONDS = 31_536_000
 
@@ -90,23 +93,35 @@ def send_file(
   respond(conn, rep, path, none)
 end
 
-## The `Rep` of the file with the `info` of `stat`, typed by `type_name` (a file name or an extension).
+## The `Rep` of the file with the `info` of `stat`, typed by `type_name` (a file name or an extension). The type and
+## validators of a name, size and time are kept in `DESCRIBED`, so a file that has not changed is not typed again.
 def describe(type_name: String, attachment: Optional[String], info: File.Info, cache: String) -> Rep
+  key = "#{info.size_bytes}/#{info.modified_seconds}/#{type_name}"
+  case DESCRIBED.get(key)
+    ok(known) -> return known.with(cache_control: cache, attachment: attachment)
+    error(_) -> nil
+  end
+
   type = MIME.mime_type(type_name)
   label = type
   if MIME.text?(type)
-    label = "#{type}; charset=utf-8"
+    label = "#{type}#{TEXT_CHARSET}"
   end
 
-  Rep(
+  rep = Rep(
     type: label,
     etag: etag_of(info),
     modified: info.modified_seconds,
     last_modified: Dates.http_date(info.modified_seconds),
     size: info.size_bytes,
-    cache_control: cache,
-    attachment: attachment,
   )
+
+  if DESCRIBED.size >= MAX_DESCRIBED
+    DESCRIBED.clear
+  end
+
+  DESCRIBED.put(key, rep)
+  rep.with(cache_control: cache, attachment: attachment)
 end
 
 ## Whether the request asks for a part of the file, which a compressed answer cannot give.
@@ -163,6 +178,12 @@ def read_whole(path: String, size: Int) -> Result[Bytes]
 end
 
 private
+
+# The `Rep`s that `describe` made, by size, time and name, without the policy (`cache_control`, `attachment`). When it
+# holds `MAX_DESCRIBED` it is emptied.
+DESCRIBED: ATS[String, Rep] = ATS.new()
+
+MAX_DESCRIBED = 4_096
 
 # The bytes before the part that a range starts at are read and dropped: `File` has no seek. A read is at most 1 MiB.
 SKIP_BYTES = 1_048_576

@@ -185,6 +185,9 @@ def build_in(public: String, producers: Producers) -> Bond.App
     |> Bond.static("/small", public, 10)
     |> Bond.static("/cached", public, 1_073_741_824, 3600)
     |> Bond.static("/versioned", public, 1_073_741_824, 0, true)
+    |> Bond.static("/early", public, early: true)
+    |> Bond.get("/early/route", &hello)
+    |> Bond.get("/early/hello.txt", &hello)
     |> Bond.get("/raw-cookie", &raw_cookie)
     |> Bond.get("/require-sid", &require_sid)
     |> Bond.get("/set-cookie", &set_from_query)
@@ -222,7 +225,7 @@ end
 
 private
 
-FILTERED = Set.new(["/assets/secret.txt", "/assets/a!b.txt", "/assets/é.txt"])
+FILTERED = Set.new(["/assets/secret.txt", "/assets/a!b.txt", "/assets/é.txt", "/early/secret.txt", "/early/route"])
 
 TOKEN = "letmein"
 

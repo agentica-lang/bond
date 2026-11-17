@@ -1,7 +1,13 @@
 import HTTP from "std/http"
+import Bond from "../bond"
+import Testing from "../testing"
 import Conns from "../src/conn"
 
 private
+
+SECRET = "a secret of at least thirty-two bytes, for the test"
+
+def handler(f: Bond.Handler) -> Bond.Handler = f
 
 def request(headers: List[HTTP.Header]) -> Conns.Conn
   Conns.from_request(
@@ -11,7 +17,7 @@ end
 
 def main() -> Void
   Test.run([
-    Test.test("a request header is found in any case of the name, and the first one wins") do
+    Test.test("a request header is found by a name in any case, and the first one wins") do
       conn = request([
         HTTP.Header(name: "host", value: "a"),
         HTTP.Header(name: "x-token", value: "1"),
@@ -23,6 +29,36 @@ def main() -> Void
       mixed = request([HTTP.Header(name: "X-Token", value: "m")])
       try Test.eq(Conns.request_header(mixed, "x-token").unwrap_or(""), "m")
       Test.assert(not Conns.request_header(conn, "x-token-2").ok?, "a longer name is another header")
+    end,
+    Test.test("Bond.handle reads the session and the headers of a request whose names are not in lowercase") do
+      options = Bond.SessionOptions(secret: SECRET)
+      shown = handler do |conn|
+        user = Bond.get_session(conn, "user").unwrap_or("")
+        token = Bond.request_header(conn, "x-token").unwrap_or("")
+        ok(Bond.text(conn, 200, "#{user} #{token}"))
+      end
+
+      app = (
+        Bond.app()
+        |> Bond.sessions(options)
+        |> Bond.get("/", shown)
+      )
+
+      cookie = try Testing.session_cookie(options, {"user": "ana"})
+      headers = [HTTP.Header(name: "Cookie", value: cookie), HTTP.Header(name: "X-Token", value: "t")]
+      response = Bond.handle(
+        app,
+        HTTP.Request(
+          method: "GET",
+          target: "/",
+          path: "/",
+          headers: headers,
+          body: "".bytes,
+          remote_addr: "127.0.0.1",
+        ),
+      )
+
+      Test.eq(Testing.text(response).unwrap_or(""), "ana t")
     end,
     Test.test("a response header replaces the one of the same name in any case, and keeps the others") do
       conn = request([])

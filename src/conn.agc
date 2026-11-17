@@ -82,7 +82,7 @@ struct Form
   files: List[UploadedFile]
 end
 
-## The `Conn` of a request, before any route or filter.
+## The `Conn` of a request, before any route or filter, with the header names in lowercase.
 def from_request(request: HTTP.Request) -> Conn
   query = ""
   case request.target.index_of("?")
@@ -95,7 +95,7 @@ def from_request(request: HTTP.Request) -> Conn
     path: Pattern.canonical(request.path),
     query: query,
     params: {},
-    headers: request.headers,
+    headers: request.headers.map do |header| HTTP.Header(name: header.name.downcase, value: header.value) end,
     body: request.body,
     status: 200,
     response_headers: [],
@@ -263,12 +263,10 @@ end
 
 ## The first value of a request header (the case of the name does not matter), or an error when there is none.
 def request_header(conn: Conn, name: String) -> Result[String]
+  # `from_request` lowercased the names of `conn.headers`, so one compare per header.
   lower = name.downcase
-  # The length shortcut assumes token (ASCII) names, as in `header`.
   for other in conn.headers
-    if other.name == lower or (other.name.length == lower.length and other.name.downcase == lower)
-      return ok(other.value)
-    end
+    return ok(other.value) if other.name == lower
   end
 
   error("no header #{name}")

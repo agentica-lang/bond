@@ -344,3 +344,21 @@ Feature: Sending a file
     Then the status is 200
     And the header "last-modified" is "Tue, 14 Nov 2023 22:13:21 GMT"
     And the body is "three"
+    When the file "a.txt" holds "seven" as of the time 1700000002
+    And I send "GET" to "/sent"
+    Then the header "last-modified" is "Tue, 14 Nov 2023 22:13:22 GMT"
+    And the header "etag" is "\"5-1700000002\""
+    And the body is "seven"
+
+  Scenario: Answers with the same file keep the policy of their own route
+    Given the todo app
+    When I send "GET" to "/download"
+    Then the header "content-disposition" is "attachment; filename=\"report.txt\""
+    When I send "GET" to "/download-kept"
+    Then the header "cache-control" is "private, max-age=600"
+    And the header "content-disposition" is not set
+    When I send "GET" to "/download-public"
+    Then the header "cache-control" is "public, max-age=600"
+    When I send "GET" to "/download-plain"
+    Then the header "cache-control" is "no-cache"
+    And the header "content-disposition" is not set

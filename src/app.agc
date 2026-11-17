@@ -96,6 +96,12 @@ def on_error(app: App, handler: ErrorHandler) -> App = app.with(on_error: handle
 ## file gets the `.gz` file next to it (`app.css.gz`) when there is one that is inside the folder by the same rules as
 ## the file and is not older than it, with `Content-Encoding: gzip` and `Vary: Accept-Encoding`. A `Range` request gets
 ## the file as it is.
+##
+## With `early: true` the folder answers its files first, before the `before` filters and the routes, as a front
+## server would: a `GET` or `HEAD` for a file of the folder runs no filter at all (no session, CSRF check or login, and
+## no `after` filter), and a file wins over a route of the same path. Anything else under the prefix (a missing file,
+## a folder, another method) goes through the filters and the routes as any request. Use it for public files such as a
+## fingerprinted stylesheet, never for files that a filter guards.
 def static(
   app: App,
   prefix: String,
@@ -105,6 +111,7 @@ def static(
   fingerprint: Bool = false,
   cache_bytes: Int = 16_777_216,
   piece_bytes: Int = 65_536,
+  early: Bool = false,
 ) -> App
   if not Pattern.valid?(prefix) or Pattern.segments(prefix).any? do |part| part.start_with?(":") end
     bad: Result[App] = error("bond: the static prefix #{prefix} must start with / and have no :param")
@@ -140,7 +147,7 @@ def static(
     return bad.unwrap!
   end
 
-  mount = Statics.make_mount(prefix, real.unwrap!, max_bytes, max_age, fingerprint, cache_bytes, piece_bytes)
+  mount = Statics.make_mount(prefix, real.unwrap!, max_bytes, max_age, fingerprint, cache_bytes, piece_bytes, early)
   app.with(statics: app.statics.push(mount))
 end
 
@@ -240,6 +247,11 @@ def reader(request: HTTP.Request, receive: Optional[Receiver]) -> Receiver
 end
 
 def serve(app: App, conn: Conn, receive: Receiver) -> Result[Conn]
+  case Statics.serve_early(app.statics, conn)
+    some(answered) -> return ok(answered)
+    none -> nil
+  end
+
   filtered = app.before_filters.reduce(conn) do |acc, filter| apply(app, acc, filter) end
   routed = dispatch(app, filtered, receive)
   done = app.after_filters.reduce(routed) do |acc, filter| run(app, acc, filter) end

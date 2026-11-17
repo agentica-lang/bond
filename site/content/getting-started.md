@@ -9,14 +9,14 @@ description: Add Bond to a project, write a first app and run it.
 Install [Agentica](https://www.agentica-lang.com/agentica/getting-started/) 0.31.0 or later (the [changelog](https://github.com/agentica-lang/bond/blob/main/CHANGELOG.md) has the version each release needs). Bond is a package: pin a release by its tag in the `agentica.toml` of your project.
 
 ```sh
-agentica add bond https://github.com/agentica-lang/bond --tag 0.14.0
+agentica add bond https://github.com/agentica-lang/bond --tag 0.15.0
 ```
 
 This writes the dependency in `agentica.toml` and `agentica.lock`, and puts the files of Bond in `deps/bond/`. To write the dependency by hand instead, add it to `agentica.toml` and run `agentica update`, which writes `agentica.lock` and `deps/bond/` (run it again after each edit of the dependencies):
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.14.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.15.0" }
 ```
 
 `agentica install` does not write the lock: it puts back `deps/` from the `agentica.lock` you have, as in a fresh clone of your project.

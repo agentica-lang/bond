@@ -14,7 +14,8 @@ code is right: fix this file in the same change.
   URL).
 - Trimmed features, which Bond does not need:
   - no version badge in the header, no version in the footer, and no release
-    links (the version selector below is not part of the theme);
+    links (the version selector below comes from the theme,
+    `params.versions`);
   - no `llms.txt` or `llms-full.txt` output (`[outputs]` of `site/hugo.toml`).
     Every page is still published as Markdown for the page actions, and
     search stays.
@@ -43,10 +44,11 @@ it is the first row of the menu.
   it with `python3 -m http.server PORT -d build/site-versions/public`, and pass
   `SITE_BASE_URL=http://localhost:PORT/`). Each `X.Y.Z` tag is built in a git
   worktree with its own `make site`. A tag that uses the docs theme is built
-  with the theme commit and the Hugo and Dart Sass that the current checkout
-  pins (the theme is only the look); an older tag, with its own layouts, uses
-  the pins of its own `pages.yml` (keep the four `env` names of the `build`
-  job). Only a tree with no site that is older than every built tag is left
+  with the theme commit that HEAD pins (not the one checked out in the working
+  tree, so commit a theme bump before `make site-versions`) and the Hugo and
+  Dart Sass of the current checkout (the theme is only the look); an older
+  tag, with its own layouts, uses the pins of its own `pages.yml` (keep the
+  four `env` names of the `build` job). Only a tree with no site that is older than every built tag is left
   out; any other failure is tried once more and then fails the run.
   Pre-releases are not versions.
 - Search engines see only the root: every page under `/bond/VERSION/` gets a
@@ -55,7 +57,8 @@ it is the first row of the menu.
   and their sitemaps are removed. A page built without the theme gets the org
   icons in place of its own.
 - The output of a tag is cached by commit sha, base URL and, for a tag with
-  the theme, the current theme commit and pins; `dev` is never cached.
+  the theme, the theme commit that HEAD pins and the pins; `dev` is never
+  cached.
 - The selector and the banner are the theme's. `tools/site_versions.py` turns
   them on in every build with the theme (`HUGO_PARAMS_VERSIONS_*`), the root
   build publishes them at `/_versions/`, and every page of every version loads

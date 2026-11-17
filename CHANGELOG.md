@@ -4,20 +4,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-17
+
+Needs Agentica 0.31.0 or later; works with Agentica 0.33.0.
+
 ### Added
 
-- `Bond.halt_json(conn, status, value)` answers JSON and halts, as `Bond.halt` does for plain text.
-- `Bond.static(..., early: true)` answers the files of a folder before the filters and the routes; any other request under the prefix still runs every filter.
+- `Bond.halt_json(conn, status, value)` answers JSON and halts.
+- `Bond.static(..., early: true)` serves the files of a folder before the filters and the routes.
 
 ### Changed
 
-- The docs moved to https://www.agentica-lang.com/bond/; the old agentica-lang.github.io links redirect there.
-- The docs site takes the shared Agentica docs theme (the org icon, breadcrumbs, search tags, a sitemap with dates), and search engines index only the latest release: older versions point to it, and dev is noindex.
-- Faster answers: `Bond.request_header` does one compare per header, and `Bond.send_file` and `Bond.static` keep the type and validators of a file until its size or time changes.
+- Faster `Bond.request_header`, and `Bond.send_file` and `Bond.static` reuse the headers of a file that has not changed.
+- The docs moved to https://www.agentica-lang.com/bond/; the old links redirect there.
+- The docs site uses the shared Agentica docs theme; search engines index only the latest release.
 
 ### Fixed
 
-- The install docs: after a hand edit of the dependencies, `agentica update` writes `agentica.lock` and `deps/`; `agentica install` only restores `deps/` from an existing lock.
+- The install docs: `agentica update` writes `agentica.lock` after a hand edit; `agentica install` only restores `deps/`.
 
 ## [0.14.0] - 2026-11-16
 
@@ -255,7 +259,8 @@ First release. Needs Agentica 0.16.0 or later.
 - A documentation site with a guide page for each part, including one on HTML escaping with `HTML.escape`; `make site-samples` checks every sample.
 - The behavior is specified as Gherkin features in `specs/`, run by `agentica test`.
 
-[unreleased]: https://github.com/agentica-lang/bond/compare/0.14.0...HEAD
+[unreleased]: https://github.com/agentica-lang/bond/compare/0.15.0...HEAD
+[0.15.0]: https://github.com/agentica-lang/bond/compare/0.14.0...0.15.0
 [0.14.0]: https://github.com/agentica-lang/bond/compare/0.13.1...0.14.0
 [0.13.1]: https://github.com/agentica-lang/bond/compare/0.13.0...0.13.1
 [0.13.0]: https://github.com/agentica-lang/bond/compare/0.12.0...0.13.0

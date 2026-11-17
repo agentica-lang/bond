@@ -117,7 +117,10 @@ def describe(type_name: String, attachment: Optional[String], info: File.Info, c
   )
 
   if DESCRIBED.size >= MAX_DESCRIBED
-    DESCRIBED.clear
+    # `ATS.clear` is newer than the oldest Agentica that Bond supports.
+    for old in DESCRIBED.keys
+      DESCRIBED.delete(old)
+    end
   end
 
   DESCRIBED.put(key, rep)

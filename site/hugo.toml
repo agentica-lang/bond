@@ -19,6 +19,10 @@ enableGitInfo = true
   repo = "https://github.com/agentica-lang/bond"
   repoPublic = true
 
+  # The theme's version selector; tools/site_versions.py turns it on for every version and passes the root.
+  [params.versions]
+    enabled = true
+
 # No llms.txt or llms-full.txt: every page is still published as Markdown for the page actions, and search stays.
 [outputs]
   home = ["html", "markdown", "search"]

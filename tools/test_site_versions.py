@@ -4,16 +4,16 @@
 `make site-versions-test` (and CI) runs it; the standard library only. The real Hugo build runs in `make site-versions`
 and pages.yml. This test runs the whole assembly on a small git repository whose `make site` writes two pages: the tags
 that become versions (and the ones that do not), the tag with no site left out, a tag that fails (or no tag built at
-all) failing the run, the latest release served at the root, the selector tags added to every page once and to nothing
-else, a second run that builds only what is not cached, the canonical or noindex tags of the version and dev pages,
-and a tag with the docs theme built with the current theme and pins.
+all) failing the run, the latest release served at the root, the selector loaded once by every page (the docs theme's
+own tags, or the assembly's on a page built without the theme) and by nothing else, a second run that builds only what
+is not cached, the canonical or noindex tags of the version and dev pages, and a tag with the docs theme built with the
+current theme and pins.
 """
 import contextlib
 import importlib.util
 import io
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -22,8 +22,12 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Each tag's `make site` records its own base URL and version in its pages; a tree with a FAIL file fails.
+# Each tag's `make site` records its own base URL and version in its pages; a tree with a FAIL file fails. With the
+# selector on (HUGO_PARAMS_VERSIONS_*), it does what the docs theme does: the selector's two files under _versions/, and
+# its two tags, minified, in the head of every page.
 MAKEFILE = (
+    "HEAD = $(if $(HUGO_PARAMS_VERSIONS_ENABLED),<link rel=stylesheet href=$(HUGO_PARAMS_VERSIONS_ROOT)_versions/"
+    "selector.css><script src=$(HUGO_PARAMS_VERSIONS_ROOT)_versions/selector.js defer></script>)\n"
     ".PHONY: site\n"
     "site:\n"
     "\t@test ! -e FAIL\n"
@@ -31,15 +35,17 @@ MAKEFILE = (
     "\t@if [ -e FLAKY ] && [ ! -e $(ONCE) ]; then touch $(ONCE); exit 1; fi\n"
     "\t@echo run >> $(RUNS)\n"
     "\tmkdir -p site/public/guide\n"
-    "\tprintf '<html><head></head><body>%s %s</body></html>' '$(HUGO_FLAGS)' \"$$(cat VERSION)\""
+    "\tprintf '<html><head>$(HEAD)</head><body>%s %s</body></html>' '$(HUGO_FLAGS)' \"$$(cat VERSION)\""
     " > site/public/guide/index.html\n"
-    "\tprintf '<html><head></head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
+    "\tprintf '<html><head>$(HEAD)</head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
     "\tprintf 'see <head></head> /bond/' > site/public/llms.txt\n"
     "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
     "\tmkdir -p site/public/only-$$(cat VERSION)\n"
     "\tprintf '<html><head><link href=x REL=canonical><meta content=all name=robots><link rel=icon href=data:x></head>"
     "<body><link rel=canonical href=body></body></html>' > site/public/only-$$(cat VERSION)/index.html\n"
-    "\tprintf '<html><head></head><body>not found</body></html>' > site/public/404.html\n"
+    "\tprintf '<html><head>$(HEAD)</head><body>not found</body></html>' > site/public/404.html\n"
+    "\t@if [ -n '$(HUGO_PARAMS_VERSIONS_ENABLED)' ]; then mkdir -p site/public/_versions;"
+    " echo js > site/public/_versions/selector.js; echo css > site/public/_versions/selector.css; fi\n"
     "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
     "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
@@ -86,20 +92,29 @@ class SiteVersionsTest(unittest.TestCase):
         self.addCleanup(scratch.cleanup)
         self.tmp = Path(scratch.name)
         self.repo = repo = self.tmp / "repo"
-        (repo / "site" / "versions").mkdir(parents=True)
+        (repo / "site").mkdir(parents=True)
         (repo / ".github" / "workflows").mkdir(parents=True)
         (repo / "Makefile").write_text(MAKEFILE)
         git(repo, "init", "-q")
         release(repo, "0.1.0", "0.1.0")  # before the site existed: no site/hugo.toml, no pages.yml
         (repo / "site" / "hugo.toml").write_text("")
-        for name in tool.SELECTOR_FILES:
-            shutil.copy(ROOT / "site" / "versions" / name, repo / "site" / "versions" / name)
         pins = "HUGO_VERSION: 1.0.0\n  HUGO_SHA256: a\n  DART_SASS_VERSION: 1.0.0\n  DART_SASS_SHA256: b\n"
         (repo / ".github" / "workflows" / "pages.yml").write_text("env:\n  " + pins)
         release(repo, "0.9.0", "0.9.0")
         release(repo, "0.10.0-beta.1", "0.10.0-beta.1")
         release(repo, "0.10.0", "0.10.0")
         release(repo, "0.11.0", "0.11.0")
+        # The checkout then takes the docs theme (its `mark` is "theme one"): the tags above are from before it.
+        self.theme = theme = self.tmp / "theme"
+        theme.mkdir()
+        git(theme, "init", "-q")
+        (theme / "mark").write_text("theme one")
+        (theme / "assets" / "versions").mkdir(parents=True)
+        for name in ("selector.js", "selector.css"):
+            (theme / "assets" / "versions" / name).write_text("theme " + name)
+        git(theme, "add", "-A")
+        git(theme, "commit", "-q", "-m", "one")
+        git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
         release(repo, "0.12.0", "not-a-version")
         for patcher in (
             mock.patch.object(tool, "ROOT", repo),
@@ -150,20 +165,30 @@ class SiteVersionsTest(unittest.TestCase):
         self.assertIn("--baseURL https://example.org/docs/dev/</body>", (out / "dev" / "index.html").read_text())
         self.assertFalse((out / "0.1.0").exists() or (out / "0.10.0-beta.1").exists())
         self.assertIn("`0.1.0`", (self.tmp / "summary.md").read_text())
-        self.assertTrue((out / "_versions" / "selector.js").exists() and (out / "_versions" / "selector.css").exists())
+        # A root built without the theme gets the selector of the current theme checkout.
+        self.assertEqual((out / "_versions" / "selector.js").read_text(), "theme selector.js")
+        self.assertEqual((out / "_versions" / "selector.css").read_text(), "theme selector.css")
 
     def test_every_html_page_loads_the_selector_once_and_the_cache_skips_builds(self):
         _, _, out, first = self.build()
         pages = list(out.rglob("*.html"))
         self.assertTrue(pages)
-        self.assertTrue(all(page.read_text().count(SELECTOR_TAGS) == 1 for page in pages))
+        self.assertTrue(all(page.read_text().count("_versions/selector.js") == 1 for page in pages))
+        # dev, with the theme, loads it with the theme's tags, from the root of all versions; a page built without the
+        # theme gets the assembly's.
+        for page in ("dev/index.html", "dev/guide/index.html", "dev/404.html"):
+            text = (out / page).read_text()
+            self.assertIn("<script src=/docs/_versions/selector.js defer>", text)
+            self.assertNotIn(SELECTOR_TAGS, text)
+        for page in ("0.9.0/guide/index.html", "guide/index.html", "0.10.0/only-0.10.0/index.html", "404.html"):
+            self.assertEqual((out / page).read_text().count(SELECTOR_TAGS), 1)
         # Other files are not touched, even when they look like a page.
         self.assertEqual((out / "llms.txt").read_text(), "see <head></head> /bond/")
         # 0.9.0, 0.10.0 and 0.11.0 (versioned and at the root) and dev; 0.1.0 has no site and never runs make.
         self.assertEqual(first, 5)
         code, _, out, total = self.build()
         self.assertEqual((code, total - first), (0, 1))  # only dev builds again: the working tree is never cached
-        self.assertTrue(all(page.read_text().count(SELECTOR_TAGS) == 1 for page in out.rglob("*.html")))
+        self.assertTrue(all(page.read_text().count("_versions/selector.js") == 1 for page in out.rglob("*.html")))
 
     def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(self):
         code, _, out, _ = self.build()
@@ -210,16 +235,9 @@ class SiteVersionsTest(unittest.TestCase):
         self.assertEqual(len(worktrees.stdout.splitlines()), 1)
 
     def tag_with_theme(self):
-        """Add the docs theme submodule (its `mark` is "theme one") and tag 0.13.0 with it; returns the theme repo."""
-        theme = self.tmp / "theme"
-        theme.mkdir()
-        git(theme, "init", "-q")
-        (theme / "mark").write_text("theme one")
-        git(theme, "add", "-A")
-        git(theme, "commit", "-q", "-m", "one")
-        git(self.repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
+        """Tag 0.13.0, with the docs theme of the checkout; returns the theme repo."""
         release(self.repo, "0.13.0", "0.13.0")
-        return theme
+        return self.theme
 
     def bump_theme(self, theme, mark, version):
         """Commit a new theme `mark` and pin it in a new commit of the checkout (not a tag)."""
@@ -247,6 +265,8 @@ class SiteVersionsTest(unittest.TestCase):
             self.assertIn("0.13.0", (out / "0.13.0" / "guide" / "index.html").read_text())
             self.assertIn("theme two", (out / "index.html").read_text())
             self.assertNotIn("canonical", (out / "index.html").read_text())  # a themed root has its own tags
+            # A themed root publishes the selector that every version loads.
+            self.assertEqual((out / "_versions" / "selector.js").read_text(), "js\n")
             self.assertIn("theme two", (out / "dev" / "index.html").read_text())
             # A tag from before the theme keeps its own Hugo pins; one with the theme takes the current ones.
             self.assertEqual((used.count("2.0.0"), used.count("1.0.0")), (3, 3))

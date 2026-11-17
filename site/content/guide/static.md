@@ -10,6 +10,12 @@ description: Serve the files of a folder under a path, with the type from std/mi
 
 Only `GET` and `HEAD` read a file. Any other method on a path under the prefix is a 405 with `Allow: GET, HEAD`. A route of the app wins over a file. Call `Bond.static` more than once for more folders: the first prefix that holds the path decides, so a second folder under the same prefix is never read. Put the longer prefix first (`/assets/vendor` before `/assets`, or `/assets/vendor/x.js` is looked up in `public/vendor/`).
 
+## Before the filters
+
+A folder is read after the `before` filters and the routes, so every file request pays for them: a session cookie that is unsealed, a CSRF check, a login. `Bond.static(app, "/assets", "public", early: true)` answers the files of the folder first, as a front server would: a `GET` or `HEAD` for a file of the folder runs no `before` or `after` filter, and the file wins over a route of the same path. Any other request under the prefix (a missing file, a folder, a way out of the folder, another method) goes through the filters and the routes as usual, so a filter still sees it.
+
+Use it for public files only, such as the fingerprinted stylesheet of a build: a filter that guards a file of an early folder never runs for it. An early folder answers before the folders that are not early, whatever the order of the calls.
+
 ## What the answer has
 
 The answer is built as [`Bond.send_file`](/guide/files/) builds it, so these work as described there: `Content-Type` from `std/mime` (an unknown extension, or none, is `application/octet-stream`), `X-Content-Type-Options: nosniff`, `Content-Length`, ranges (206, 416), `HEAD`, and the `ETag` and `Last-Modified` of a [conditional request](/guide/files/#conditional-requests). Bond reads no `If-Range`. What is its own is below: `Cache-Control`, the cache of small files and gzip.

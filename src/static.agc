@@ -1,7 +1,6 @@
 ## Static files: a folder served under a path, answered by `Files.respond` (typed with `std/mime`), with the small
 ## files kept in memory.
 
-import MIME from "std/mime"
 import URI from "std/uri"
 import Conns from "conn"
 import Dates from "dates"
@@ -18,7 +17,8 @@ MISS = "not a static file"
 ## The files of the folder `root` (a real path) are served under the path `prefix`; a file over `max_bytes` is not
 ## served. `max_age` is the seconds that a cache may keep a file (0 is "ask each time"). With `fingerprint`, a name that
 ## has a fingerprint is kept for a year, whatever `max_age` is. A file of at most `piece_bytes` is read in one call,
-## and kept in `entries` while `cache_bytes` (0: not at all) allows it, with `used` counting the bytes.
+## and kept in `entries` while `cache_bytes` (0: not at all) allows it, with `used` counting the bytes. An `early` mount
+## answers its files before the filters and the routes (`serve_early`).
 struct Mount
   prefix: String
   root: String
@@ -29,6 +29,7 @@ struct Mount
   piece_bytes: Int
   entries: ATS[String, Entry]
   used: ATS[String, Int]
+  early: Bool = false
 end
 
 ## A small file in memory: the path that `stat` checks (the folder joined with the names of the request), the `size`
@@ -59,6 +60,7 @@ def make_mount(
   fingerprint: Bool,
   cache_bytes: Int,
   piece_bytes: Int,
+  early: Bool = false,
 ) -> Mount
   entries: ATS[String, Entry] = ATS.new()
   used: ATS[String, Int] = ATS.new()
@@ -72,6 +74,7 @@ def make_mount(
     piece_bytes: piece_bytes,
     entries: entries,
     used: used,
+    early: early,
   )
 end
 
@@ -94,6 +97,27 @@ def serve(mounts: List[Mount], conn: Conn) -> Result[Conn]
   end
 
   error(MISS)
+end
+
+## The answer of an `early` mount to a `GET` or `HEAD` for one of its files, before any filter or route; none for
+## anything else (another method, a path under no early mount, a miss, a file that cannot be sent), which goes on as
+## any request does.
+def serve_early(mounts: List[Mount], conn: Conn) -> Optional[Conn]
+  return none if conn.method != "GET" and conn.method != "HEAD"
+
+  for mount in mounts
+    next if not mount.early
+
+    inside = below(mount, conn.path)
+    next if not inside.ok?
+
+    case answer(mount, inside.unwrap!, conn)
+      ok(answered) -> return some(answered)
+      error(_) -> return none
+    end
+  end
+
+  none
 end
 
 private
@@ -240,8 +264,8 @@ def send_found(mount: Mount, found: Located, name: String, canonical: Bool, conn
   size = found.info.size_bytes
   return error("the static file #{name} is over #{mount.max_bytes} bytes") if size > mount.max_bytes
 
-  text = MIME.text?(MIME.mime_type(name))
   described = Files.describe(name, none, found.info, cache_control(mount, name))
+  text = described.type.end_with?(Files.TEXT_CHARSET)
   plain = described.with(vary: text, piece_bytes: mount.piece_bytes)
   gzip = text and accepts_gzip?(conn) and not Files.ranged?(conn)
   if size <= mount.piece_bytes and size + ENTRY_OVERHEAD <= mount.cache_bytes / 2 and conn.method == "GET"

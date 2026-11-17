@@ -7,11 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - `Bond.halt_json(conn, status, value)` answers JSON and halts, as `Bond.halt` does for plain text.
+- `Bond.static(..., early: true)` answers the files of a folder before the filters and the routes; any other request under the prefix still runs every filter.
 
 ### Changed
 
 - The docs moved to https://www.agentica-lang.com/bond/; the old agentica-lang.github.io links redirect there.
 - The docs site takes the shared Agentica docs theme (the org icon, breadcrumbs, search tags, a sitemap with dates), and search engines index only the latest release: older versions point to it, and dev is noindex.
+- Faster answers: `Bond.request_header` does one compare per header, and `Bond.send_file` and `Bond.static` keep the type and validators of a file until its size or time changes. `Bond.request_header` reads the names of `conn.headers` as lowercase, as `Conn` says they are: a header put there by hand in another case is not found.
 
 ### Fixed
 

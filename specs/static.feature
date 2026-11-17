@@ -135,6 +135,40 @@ Feature: Static files
     Then the status is 200
     And the body is "hello"
 
+  Scenario Outline: A folder with early: true answers its files before the filters and the routes (<method> <path>)
+    When I send "<method>" to "<path>"
+    Then the status is 200
+    And the header "content-type" is "text/plain; charset=utf-8"
+    And the header "x-trace" is not set
+
+    Examples:
+      | method | path              |
+      | GET    | /early/hello.txt  |
+      | HEAD   | /early/hello.txt  |
+      | GET    | /early/secret.txt |
+
+  Scenario: A file of an early folder wins over a route
+    When I send "GET" to "/early/hello.txt"
+    Then the body is "hello from a file"
+
+  Scenario Outline: A request of an early folder that is not for a file runs every filter (<method> <path>)
+    When I send "<method>" to "<path>"
+    Then the status is <status>
+    And the header "x-trace" is "<trace>"
+
+    Examples:
+      | method | path                       | status | trace |
+      | GET    | /early/missing.txt         | 404    | abc   |
+      | GET    | /early/sub                 | 404    | abc   |
+      | GET    | /early/%2e%2e/secret.txt   | 404    | abc   |
+      | GET    | /early/.hidden             | 404    | abc   |
+      | POST   | /early/hello.txt           | 405    | abc   |
+      | GET    | /early/route               | 401    | c     |
+      | GET    | /early                     | 404    | abc   |
+      | GET    | /earlyx/hello.txt          | 404    | abc   |
+      | GET    | /hello                     | 200    | abc   |
+      | GET    | /private                   | 401    | c     |
+
   Scenario Outline: A file over max_bytes is a 500 (<path>)
     When I send "GET" to "<path>"
     Then the status is <status>

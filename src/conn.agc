@@ -263,12 +263,10 @@ end
 
 ## The first value of a request header (the case of the name does not matter), or an error when there is none.
 def request_header(conn: Conn, name: String) -> Result[String]
+  # The names of `conn.headers` are in lowercase (the server and `Testing` lower them), so one compare per header.
   lower = name.downcase
-  # The length shortcut assumes token (ASCII) names, as in `header`.
   for other in conn.headers
-    if other.name == lower or (other.name.length == lower.length and other.name.downcase == lower)
-      return ok(other.value)
-    end
+    return ok(other.value) if other.name == lower
   end
 
   error("no header #{name}")

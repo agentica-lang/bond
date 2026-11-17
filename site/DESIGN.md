@@ -48,8 +48,9 @@ it is the first row of the menu.
   tree, so commit a theme bump before `make site-versions`) and the Hugo and
   Dart Sass of the current checkout (the theme is only the look); an older
   tag, with its own layouts, uses the pins of its own `pages.yml` (keep the
-  four `env` names of the `build` job). Only a tree with no site that is older than every built tag is left
-  out; any other failure is tried once more and then fails the run.
+  four `env` names of the `build` job). Only a tree with no site that is
+  older than every built tag is left out; any other failure is tried once
+  more and then fails the run.
   Pre-releases are not versions.
 - Search engines see only the root: every page under `/bond/VERSION/` gets a
   canonical URL to the same page at the root (or `noindex,follow` when the

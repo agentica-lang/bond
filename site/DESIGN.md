@@ -34,10 +34,10 @@ code is right: fix this file in the same change.
 ## Versions
 
 Pages serves one site per final release (`/bond/0.7.0/`, ...), `/bond/dev/`
-(`main`) and the latest release again at the root. It is a copy of the version
-selector of Agentica (`tools/site_versions.py`, `site/versions/`), with one
-change: Bond's header has no version badge, so the selector goes after the
-brand.
+(`main`) and the latest release again at the root, with the version selector
+of the docs theme (`params.versions`; the theme's README, Versions). Bond's
+header has no version badge, so the selector goes after the brand; on a phone
+it is the first row of the menu.
 
 - `make site-versions` builds them all into `build/site-versions/public` (serve
   it with `python3 -m http.server PORT -d build/site-versions/public`, and pass
@@ -56,10 +56,12 @@ brand.
   icons in place of its own.
 - The output of a tag is cached by commit sha, base URL and, for a tag with
   the theme, the current theme commit and pins; `dev` is never cached.
-- The selector and the banner (`site/versions/selector.{js,css}`) are not part
-  of a build: the assembly copies them to `/_versions/` and adds their tags to
-  every page, so a cached old build loads the current ones. They use only
-  `.site-header`, its `.brand` link and the tokens of the theme.
+- The selector and the banner are the theme's. `tools/site_versions.py` turns
+  them on in every build with the theme (`HUGO_PARAMS_VERSIONS_*`), the root
+  build publishes them at `/_versions/`, and every page of every version loads
+  that copy, so a theme bump applies to every version at the next deploy. A
+  tag from before the theme (0.14.0 and older) gets the same two tags from the
+  assembly.
 - `make site-versions-test` runs the assembly on a small git repository
   (`tools/test_site_versions.py`, the standard library only; CI runs it).
 - A deploy comes only from `main` (no tag trigger), so a new release shows up

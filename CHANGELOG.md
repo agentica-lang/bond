@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The docs moved to https://www.agentica-lang.com/bond/; the old agentica-lang.github.io links redirect there.
 - The docs site takes the shared Agentica docs theme (the org icon, breadcrumbs, search tags, a sitemap with dates), and search engines index only the latest release: older versions point to it, and dev is noindex.
-- Faster answers: `Bond.request_header` does one compare per header, and `Bond.send_file` and `Bond.static` keep the type and validators of a file until its size or time changes. `Bond.request_header` reads the names of `conn.headers` as lowercase, as `Conn` says they are: a header put there by hand in another case is not found.
+- Faster answers: `Bond.request_header` does one compare per header, and `Bond.send_file` and `Bond.static` keep the type and validators of a file until its size or time changes.
 
 ### Fixed
 

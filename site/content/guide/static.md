@@ -14,7 +14,7 @@ Only `GET` and `HEAD` read a file. Any other method on a path under the prefix i
 
 A folder is read after the `before` filters and the routes, so every file request pays for them: a session cookie that is unsealed, a CSRF check, a login. `Bond.static(app, "/assets", "public", early: true)` answers the files of the folder first, as a front server would: a `GET` or `HEAD` for a file of the folder runs no `before` or `after` filter, and the file wins over a route of the same path. Any other request under the prefix (a missing file, a folder, a way out of the folder, another method) goes through the filters and the routes as usual, so a filter still sees it.
 
-Use it for public files only, such as the fingerprinted stylesheet of a build: a filter that guards a file of an early folder never runs for it. An early folder answers before the folders that are not early, whatever the order of the calls.
+Use it for public files only, such as the fingerprinted stylesheet of a build: no filter runs for a file of an early folder, so it is not guarded, rate limited or banned, and `Bond.log_request` does not log it. An early folder answers before the folders that are not early, whatever the order of the calls, so it wins over a longer prefix that is not early (an early `/assets` serves `/assets/vendor/x.js` before a `/assets/vendor` folder that is not early).
 
 ## What the answer has
 

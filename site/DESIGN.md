@@ -16,9 +16,6 @@ code is right: fix this file in the same change.
   - no version badge in the header, no version in the footer, and no release
     links (the version selector below comes from the theme,
     `params.versions`);
-  - no `llms.txt` or `llms-full.txt` output (`[outputs]` of `site/hugo.toml`).
-    Every page is still published as Markdown for the page actions, and
-    search stays.
 - Footer: `site/layouts/_partials/footer.html` is the theme's (all releases,
   page source, the repository, the org home) plus the changelog and the
   Agentica site. It is the only layout of the site's own.

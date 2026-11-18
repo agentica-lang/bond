@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-18
+
+Needs Agentica 0.31.0 or later; works with Agentica 0.33.0.
+
+### Changed
+
+- The docs site publishes `llms.txt` and `llms-full.txt`, and takes its version selector from the shared docs theme.
+
 ## [0.15.0] - 2026-11-17
 
 Needs Agentica 0.31.0 or later; works with Agentica 0.33.0.

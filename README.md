@@ -10,10 +10,10 @@ Bond needs Agentica 0.31.0 or later; with Agentica 0.30, use Bond 0.11.0. The [c
 
 ```toml
 [dependencies]
-bond = { git = "https://github.com/agentica-lang/bond", tag = "0.15.0" }
+bond = { git = "https://github.com/agentica-lang/bond", tag = "0.15.1" }
 ```
 
-Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.15.0`, which writes that line, `agentica.lock` and `deps/bond/`. After you write or edit the dependencies by hand, run `agentica update` to write `agentica.lock` and `deps/`. `agentica install` does not write the lock: it puts back `deps/` from the `agentica.lock` you have, as in a fresh clone.
+Or run `agentica add bond https://github.com/agentica-lang/bond --tag 0.15.1`, which writes that line, `agentica.lock` and `deps/bond/`. After you write or edit the dependencies by hand, run `agentica update` to write `agentica.lock` and `deps/`. `agentica install` does not write the lock: it puts back `deps/` from the `agentica.lock` you have, as in a fresh clone.
 
 ## Example
 

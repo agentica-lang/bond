@@ -4,6 +4,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- CI and the specs run on Agentica 0.35.0; the `the body is JSON` step compares the parsed values with `==`, since JSON key order is kept.
+
 ## [0.15.1] - 2026-11-18
 
 Needs Agentica 0.31.0 or later; works with Agentica 0.33.0.

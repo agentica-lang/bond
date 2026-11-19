@@ -764,8 +764,7 @@ def json_body_is(ctx: BDD.Context, args: List[String]) -> BDD.Context
   reply = last_reply(ctx)
   body = JSON.parse(reply.body)
   expected = JSON.parse(BDD.doc_string(ctx)).unwrap!
-  # The canonical text of a parsed value has sorted keys, so the key order does not matter.
-  BDD.assert(ctx, body.ok? and JSON.encode(body.unwrap!) == JSON.encode(expected), "the body is #{reply.body}")
+  BDD.assert(ctx, body.ok? and body.unwrap! == expected, "the body is #{reply.body}")
 end
 
 def start_server(ctx: BDD.Context, args: List[String]) -> BDD.Context = start_program(ctx, "fixtures/server.agc")

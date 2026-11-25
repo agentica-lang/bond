@@ -6,14 +6,12 @@ on:
       - 'site/**'
       - '.github/workflows/pages.yml'
       - 'Makefile'
-      - 'tools/site_versions.py'
   push:
     branches: [main]
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
       - 'Makefile'
-      - 'tools/site_versions.py'
   workflow_dispatch:
 
 permissions:
@@ -28,8 +26,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # The pins of Hugo and Dart Sass. tools/site_versions.py reads them from this file in each tag's tree, so an old
-    # tag builds with its own versions; keep the four names and the one-line form.
+    # The pins of Hugo and Dart Sass. The theme's tools/site_versions.py reads them from this file in each tag's tree,
+    # so an old tag builds with its own versions; keep the four names and the one-line form.
     env:
       HUGO_VERSION: 0.167.0
       HUGO_SHA256: 0163f5c3deddac1f494a1629ddc40c65d18de9d5794facd98f7f96ac2c7d8957
@@ -41,7 +39,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # The docs theme, with its history, so that tools/site_versions.py can unpack the commit this checkout pins.
+      # The docs theme, with its history, so that the theme's tools/site_versions.py can unpack the commit this checkout
+      # pins.
       - run: git submodule update --init site/themes/docs-theme
       - uses: actions/setup-node@v7
         with:
@@ -54,20 +53,20 @@ jobs:
       # wrong). Each run restores the newest entry of the script's version. Only a run that is not a pull request and
       # built something new saves one (also after a failed build, so the tags that did build are kept); the script
       # prunes the folder to the current builds first. Hugo and Dart Sass come from the pins of each tag's pages.yml,
-      # which tools/site_versions.py downloads and checks.
+      # which the theme's tools/site_versions.py downloads and checks.
       - uses: actions/cache/restore@v5
         with:
           path: build/site-versions/cache
-          key: site-versions-${{ hashFiles('tools/site_versions.py') }}-${{ github.run_id }}
+          key: site-versions-${{ hashFiles('site/themes/docs-theme/tools/site_versions.py') }}-${{ github.run_id }}
           restore-keys: |
-            site-versions-${{ hashFiles('tools/site_versions.py') }}-
+            site-versions-${{ hashFiles('site/themes/docs-theme/tools/site_versions.py') }}-
       - id: build
-        run: python3 -I tools/site_versions.py build --base-url "${{ steps.pages.outputs.base_url }}/"
+        run: python3 -I site/themes/docs-theme/tools/site_versions.py build --dev last --base-url "${{ steps.pages.outputs.base_url }}/"
       - uses: actions/cache/save@v5
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.build.outputs.fresh == 'true' }}
         with:
           path: build/site-versions/cache
-          key: site-versions-${{ hashFiles('tools/site_versions.py') }}-${{ github.run_id }}
+          key: site-versions-${{ hashFiles('site/themes/docs-theme/tools/site_versions.py') }}-${{ github.run_id }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: build/site-versions/public

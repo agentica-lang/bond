@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The docs site takes the newer docs theme, and builds its versions with the theme's own script.
 - CI and the specs run on Agentica 0.35.0; the `the body is JSON` step compares the parsed values with `==`, since JSON key order is kept.
 
 ## [0.15.1] - 2026-11-18

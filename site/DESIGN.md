@@ -37,7 +37,8 @@ of the docs theme (`params.versions`; the theme's README, Versions). Bond's
 header has no version badge, so the selector goes after the brand; on a phone
 it is the first row of the menu.
 
-- `make site-versions` builds them all into `build/site-versions/public` (serve
+- `make site-versions` (the docs theme's `tools/site_versions.py`, with
+  `--dev last`) builds them all into `build/site-versions/public` (serve
   it with `python3 -m http.server PORT -d build/site-versions/public`, and pass
   `SITE_BASE_URL=http://localhost:PORT/`). Each `X.Y.Z` tag is built in a git
   worktree with its own `make site`. A tag that uses the docs theme is built
@@ -57,14 +58,13 @@ it is the first row of the menu.
 - The output of a tag is cached by commit sha, base URL and, for a tag with
   the theme, the theme commit that HEAD pins and the pins; `dev` is never
   cached.
-- The selector and the banner are the theme's. `tools/site_versions.py` turns
-  them on in every build with the theme (`HUGO_PARAMS_VERSIONS_*`), the root
+- The selector and the banner are the theme's. Its `tools/site_versions.py`
+  turns them on in every build with the theme (`HUGO_PARAMS_VERSIONS_*`), the root
   build publishes them at `/_versions/`, and every page of every version loads
   that copy, so a theme bump applies to every version at the next deploy. A
   tag from before the theme (0.14.0 and older) gets the same two tags from the
   assembly.
-- `make site-versions-test` runs the assembly on a small git repository
-  (`tools/test_site_versions.py`, the standard library only; CI runs it).
+- The script and its tests are in the docs theme (its README, Versions).
 - A deploy comes only from `main` (no tag trigger), so a new release shows up
   with the next run of `pages.yml`. A Bond release does not run it: after
   tagging, run `gh workflow run pages.yml --ref main`.
